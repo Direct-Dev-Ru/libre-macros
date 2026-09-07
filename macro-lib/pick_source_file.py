@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.690"
+MACRO_VERSION = "3.10.691"
 # Выбор файла для строки «Файлы-Источники»
 # Кнопка на листе -> макрос pick_source_file.select_source_file
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.690"
+MACRO_VERSION = "3.10.691"
 import re
 
 try:
@@ -2943,13 +2943,12 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"анкета_в_таблицу": {
         "title": u"Анкета → таблица",
         "hint": (
-            u"Вертикальные пары «вопрос → ответ» превращаются в широкую таблицу "
-            u"(строка = одна анкета).\n"
-            u"Режим нарезки: по ключевому вопросу (ФИО…), пустой строке, фиксированному "
-            u"числу вопросов или циклу.\n"
-            u"Опционально: шапка листа (строки from–to + forms_start_row) и шапка блока."
+            u"Вертикальные пары «вопрос → ответ» → широкая таблица (строка = анкета).\n"
+            u"Нарезка: ключевой вопрос / пустая строка / fixed / цикл. "
+            u"Опционально шапка листа (from–to + forms_start_row) и шапка блока."
         ),
-        "hint_lines": 4,
+        "hint_lines": 2,
+        "compact_fields": True,
         "fields": (
             {"id": "question_column", "label": u"Колонка вопросов", "default": u"A"},
             {"id": "answer_column", "label": u"Колонка ответов", "default": u"B"},
@@ -2977,23 +2976,31 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
             },
             {
                 "id": "sheet_preamble_row_from",
-                "label": u"Шапка листа: строка с",
+                "label": u"Шапка листа: с",
                 "default": u"",
+                "row_group": u"sheet_preamble_rows",
+                "row_group_slot": 0,
             },
             {
                 "id": "sheet_preamble_row_to",
-                "label": u"Шапка листа: строка по",
+                "label": u"по",
                 "default": u"",
+                "row_group": u"sheet_preamble_rows",
+                "row_group_slot": 1,
             },
             {
                 "id": "forms_start_row",
                 "label": u"Строка начала анкет",
                 "default": u"",
+                "row_group": u"forms_block_preamble",
+                "row_group_slot": 0,
             },
             {
                 "id": "block_preamble_rows",
                 "label": u"Строк шапки блока",
                 "default": u"0",
+                "row_group": u"forms_block_preamble",
+                "row_group_slot": 1,
             },
             {
                 "id": "output",
@@ -3001,23 +3008,32 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "combo",
                 "choices": tuple(lab for _c, lab in FORM_TABLE_OUTPUT_CHOICES),
                 "default": u"Новый лист",
+                "row_group": u"output_dest",
+                "row_group_slot": 0,
+                "row_group_frac": 0.48,
             },
             {
                 "id": "dest_sheet",
                 "label": u"Лист назначения",
                 "default": u"Анкеты_wide",
+                "row_group": u"output_dest",
+                "row_group_slot": 1,
             },
             {
                 "id": "add_block_index",
                 "label": u"Колонка #Блок",
                 "type": "bool",
                 "default": True,
+                "row_group": u"form_flags",
+                "row_group_slot": 0,
             },
             {
                 "id": "add_source_row",
-                "label": u"Колонка source_start_row",
+                "label": u"source_start_row",
                 "type": "bool",
                 "default": False,
+                "row_group": u"form_flags",
+                "row_group_slot": 1,
             },
             {
                 "id": "as_values",

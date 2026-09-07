@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Headless-точка входа сбора: job JSON → collect_workbooks_for_param_sheet."""
-MACRO_VERSION = "3.10.690"
+MACRO_VERSION = "3.10.691"
 from libre_macros_qa_lib import entry as _entry
 
 
