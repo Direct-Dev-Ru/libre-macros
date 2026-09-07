@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE image:imagecontainer PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "image.dtd">
+<image:imagescontainer xmlns:image="http://openoffice.org/2001/image" xmlns:xlink="http://www.w3.org/1999/xlink">
+ <image:images xlink:type="simple">
+  <image:entry image:command="vnd.sun.star.script:collect_workbooks.py$collect_pack?language=Python&amp;location=user"/>
+  <image:entry image:command="vnd.sun.star.script:param_wizard.py$set_merge_param?language=Python&amp;location=user"/>
+  <image:entry image:command="vnd.sun.star.script:param_wizard.py$merge_param_go_up?language=Python&amp;location=user"/>
+  <image:entry image:command="vnd.sun.star.script:param_wizard.py$merge_param_go_down?language=Python&amp;location=user"/>
+  <image:entry image:command="vnd.sun.star.script:param_wizard.py$toggle_merge_param_disabled?language=Python&amp;location=user"/>
+  <image:entry image:command="vnd.sun.star.script:pick_source_file.py$select_source_file?language=Python&amp;location=user"/>
+  <image:entry image:command="vnd.sun.star.script:copy_param_rows.py$copy_param_rows?language=Python&amp;location=user"/>
+ </image:images>
+</image:imagescontainer>

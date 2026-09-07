@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Worksheet ss:Name="Отчет_январь">
+  <Table>
+   <Row>
+    <Cell><Data ss:Type="String">ФИО</Data></Cell>
+    <Cell><Data ss:Type="String">Отдел</Data></Cell>
+    <Cell><Data ss:Type="String">Сумма_руб</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">Фам_x01</Data></Cell>
+    <Cell><Data ss:Type="String">IT</Data></Cell>
+    <Cell><Data ss:Type="Number">71100</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">Фам_x02</Data></Cell>
+    <Cell><Data ss:Type="String">Склад</Data></Cell>
+    <Cell><Data ss:Type="Number">71200</Data></Cell>
+   </Row>
+   <Row>
+    <Cell><Data ss:Type="String">Фам_x03</Data></Cell>
+    <Cell><Data ss:Type="String">Продажи</Data></Cell>
+    <Cell><Data ss:Type="Number">71300</Data></Cell>
+   </Row>
+  </Table>
+ </Worksheet>
+</Workbook>

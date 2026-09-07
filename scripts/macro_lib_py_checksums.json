@@ -1,0 +1,328 @@
+{
+  "root": "/home/su/projects/python/libre-macros/macro-lib",
+  "generated_at": "2026-07-16T18:03:05Z",
+  "algo": "sha256",
+  "count": 64,
+  "files": [
+    {
+      "path": "aoffice_compat_check.py",
+      "sha256": "e04515e4e42a7cf9f3bfa7e3c1d107ce94abb38b19c42d3b923bfcbdf558836b",
+      "size": 12464
+    },
+    {
+      "path": "aoffice_flatten_defs.py",
+      "sha256": "e5b96834f730e05d0427da0abbcad7395ba159f4ded94b1e13a7169fa91319e9",
+      "size": 9366
+    },
+    {
+      "path": "bundle_odfpy.py",
+      "sha256": "8627ad83c1c53476a5ac58aa4f2546d4a83503677bc74308f5b3e3fb02d6fa14",
+      "size": 962
+    },
+    {
+      "path": "bundle_openpyxl.py",
+      "sha256": "d9c1d2a963a4be389c05b6eb84e5411fa1118d17e50f60d42047ea46fec28f70",
+      "size": 905
+    },
+    {
+      "path": "bundle_python_lib.py",
+      "sha256": "b638ddb9de8e9f848249e26989140b1842c082a1e3fda2af940d49d4299b3240",
+      "size": 6930
+    },
+    {
+      "path": "bundle_segno.py",
+      "sha256": "2c2084bd27c1cebbe9a026dbee1828f8d28f703081819ac267e6760ef3825ee1",
+      "size": 866
+    },
+    {
+      "path": "collect_workbooks.py",
+      "sha256": "e50fd428208544a6f23a42fa175307b6c6deabe2dafc74fab1d184e562eb197f",
+      "size": 733781
+    },
+    {
+      "path": "collect_workbooks_no_docstrings.py",
+      "sha256": "1eadee5c05dbd3b2b243c097928d0e539b55e3c72362f688c0bab2f6247e9831",
+      "size": 552368
+    },
+    {
+      "path": "context_menu.py",
+      "sha256": "d8421593727b108d695767e1f75ee5a2e0a21adc6f07e4841b1866309c2933df",
+      "size": 51831
+    },
+    {
+      "path": "file_list_macro.py",
+      "sha256": "bc9706e36032625c4a95c76911b49d70fd4d4a5ad2afb5bd539b69e328f756f5",
+      "size": 49210
+    },
+    {
+      "path": "functions_final.py",
+      "sha256": "3c2bd5c094dc66e45edcaac59feed636044239cd6013bf47dec9ab7fe6e788c1",
+      "size": 14414
+    },
+    {
+      "path": "functions_pp.py",
+      "sha256": "c7b4543046eb0b09b489f295ae0dfb8c8548906dbea7649cc159ad302b82f334",
+      "size": 29683
+    },
+    {
+      "path": "generate_no_docstrings.py",
+      "sha256": "910c5166f9bfff76cbe326c90597ca214792730c91934f427f811acc4cea15b9",
+      "size": 4037
+    },
+    {
+      "path": "generate_py2_version.py",
+      "sha256": "115d2dd55b9e260c2ed37d41161da66dcf632a25920990f7ba02be51dc623de8",
+      "size": 2428
+    },
+    {
+      "path": "macro_ui.py",
+      "sha256": "e55858aae467708933ceb73a6338322978edb31d65101abcfec462f4a844842d",
+      "size": 4124
+    },
+    {
+      "path": "param_wizard.py",
+      "sha256": "11f6c1283f6f138cc3af1500af7a1eeb2e2ceb8d1caeb3807cb0e0f58e86c1b9",
+      "size": 630023
+    },
+    {
+      "path": "pick_source_file.py",
+      "sha256": "4d50271f4a07b974bfae040770a6122c33f11e13d50ea2cb59b9b9c5ce847a2e",
+      "size": 13980
+    },
+    {
+      "path": "py2/collect_workbooks.py",
+      "sha256": "79f39648e97d38798f246ed0a078eb349affa79317bdf37546428d0847a4f91f",
+      "size": 846047
+    },
+    {
+      "path": "py2/context_menu.py",
+      "sha256": "a0bb872dd1620652cc373f05570817de3acef2361267cc5f6789056fe1ec48e4",
+      "size": 55009
+    },
+    {
+      "path": "py2/file_list_macro.py",
+      "sha256": "17ee05e3822755b4fe54a7c5d94210f29875672e0f15e42ac09bb470eacee20b",
+      "size": 49838
+    },
+    {
+      "path": "py2/functions_final.py",
+      "sha256": "ae80866a53f21dedb5d0dab321eaac8d0e4dda999f07c8241e812c5019441a2a",
+      "size": 14631
+    },
+    {
+      "path": "py2/functions_pp.py",
+      "sha256": "ec8c014a572814f0f85abfc471f15dce50d5d78a83aa0386d067a913dbaa6d4d",
+      "size": 29880
+    },
+    {
+      "path": "py2/macro_ui.py",
+      "sha256": "399afe58b6f5117c72d5d70998da6de4fbcaf3457608caf53be1329af26fedc9",
+      "size": 4361
+    },
+    {
+      "path": "py2/param_wizard.py",
+      "sha256": "a1d3fd279437960409cd99e9480bb6775db9807e8284a0821a50a88410bba073",
+      "size": 742958
+    },
+    {
+      "path": "py2/pick_source_file.py",
+      "sha256": "3b558ef090945282ff0c3430a9606df319cddb2aa09906f02924f98f76dd44ac",
+      "size": 14435
+    },
+    {
+      "path": "py2/pythonpath/inner_dialogs.py",
+      "sha256": "e40821199065a82edb3aeaa882b60241aa60e5e7afd4ba5072cc9e86c4e28230",
+      "size": 9100
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_bundle_paths.py",
+      "sha256": "aa58a7872ab74b3c8c3490580db8908f76ec7aa37ab102ef67a53f6aec150363",
+      "size": 5919
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_consent_lib.py",
+      "sha256": "9e77d892a9d82169f6ff9d225a61372319739b97de789fecd00db4e073f2f734",
+      "size": 26280
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_direct_lib.py",
+      "sha256": "7f8b59dd1083e8c55af08ab2e16f65765e52c0d0a924cf28028af32dd0b2428e",
+      "size": 489092
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_final_lib.py",
+      "sha256": "de0693e53b9cbebf62eae02ce0fed7d8c88025694189088750118cf4bd520ca9",
+      "size": 26166
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_global_settings_lib.py",
+      "sha256": "347d087272d989a983c7ce8dd886e52ac56c9bf9f410a3a0d985738d3c03e5f1",
+      "size": 7709
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_lib.py",
+      "sha256": "a0cf1c554597924c2727ff94e500856501e7f4c59d58dc238690240e492bbf8c",
+      "size": 547706
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_param_codec.py",
+      "sha256": "30fca11ffa723db0ea9af2bb334d12a8f6dc3113c0296d0590b7a2f35994abe1",
+      "size": 60536
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_pivot_lib.py",
+      "sha256": "9cc6d8065b90b63bcba200a37b2855f87d693b7d1ce74a2ffc6a47bf09777d87",
+      "size": 75364
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_sanitize_lib.py",
+      "sha256": "472006d825760afacff435cec75d85866f3d93c29025fa297f680a188d918727",
+      "size": 43349
+    },
+    {
+      "path": "py2/pythonpath/libre_macros_values_lib.py",
+      "sha256": "e74f2eec9226c03f5b0578fa949523b9378ffe457ddb3cda3a3977d70540aa27",
+      "size": 31769
+    },
+    {
+      "path": "py2/pythonpath/odf_bundled.py",
+      "sha256": "067948a8944b7f1d16e0df51fd5a5f1c511b0e99bbc59f9c2737c3a934c9d373",
+      "size": 566114
+    },
+    {
+      "path": "py2/pythonpath/openpyxl_bundled.py",
+      "sha256": "f1fa64d0fdc0272a6969c12a59d7511a1691e297d989ddbe13fab709fdd2aef6",
+      "size": 873692
+    },
+    {
+      "path": "pythonpath/inner_dialogs.py",
+      "sha256": "a910e3bc2ae732eb02da82bca1017f6f2f4dd7fbfaefd5af7324ec20ab2ec1ae",
+      "size": 8995
+    },
+    {
+      "path": "pythonpath/libre_macros_bundle_paths.py",
+      "sha256": "f3e86b9347600ae90f4cd21356f498484476ee90afe44ce614f107676e77c1be",
+      "size": 5856
+    },
+    {
+      "path": "pythonpath/libre_macros_collect_cfg.py",
+      "sha256": "d57d260f80fd147e5659b56842439fc24eccbe34f2e4afcbbb53c68f4c448662",
+      "size": 49886
+    },
+    {
+      "path": "pythonpath/libre_macros_consent_lib.py",
+      "sha256": "7a8a94beb22e7ac418a1e9fbda026e73a1db62baea366bbea117af1779590fef",
+      "size": 26165
+    },
+    {
+      "path": "pythonpath/libre_macros_context_menu_cfg.py",
+      "sha256": "397cfb09cc052b8fabaac40c1a111a8353765701f29b7a4001b9fcd663e22649",
+      "size": 4786
+    },
+    {
+      "path": "pythonpath/libre_macros_direct_lib.py",
+      "sha256": "a2952b251800f419638f241c365f95e96f418a67ef7ed5f5a288dd315f7d54a7",
+      "size": 492289
+    },
+    {
+      "path": "pythonpath/libre_macros_file_list_cfg.py",
+      "sha256": "812b43e5fbf28d60f90ab6042f49da70b228f0f4b4de7938831a28ce4a0dedad",
+      "size": 1063
+    },
+    {
+      "path": "pythonpath/libre_macros_final_lib.py",
+      "sha256": "df5e3fbd28e80f78f70ac8162b88f48f410fc327240e1878105470567211f7cc",
+      "size": 26570
+    },
+    {
+      "path": "pythonpath/libre_macros_global_settings_lib.py",
+      "sha256": "67de9cf5af402ee54591409780a3e88cdda8062fac7473655f4b3fcbc73cd56c",
+      "size": 7655
+    },
+    {
+      "path": "pythonpath/libre_macros_lib.py",
+      "sha256": "58dc52ce2c1340bffe814f153e62d34d824ba5b62c5f5a897a19853e16b4cd5a",
+      "size": 557250
+    },
+    {
+      "path": "pythonpath/libre_macros_param_codec.py",
+      "sha256": "0162432c27e2c2a85afd2e8860cc69601d6f6dcd4cbdb1e9a5f40b47e8fb269d",
+      "size": 61159
+    },
+    {
+      "path": "pythonpath/libre_macros_param_wizard_cfg.py",
+      "sha256": "c355d8e2a28a5777449df665a8701e00ee9f31121cbee298068ac65ecd36e60e",
+      "size": 82925
+    },
+    {
+      "path": "pythonpath/libre_macros_pick_source_cfg.py",
+      "sha256": "f61c61d1791b470f882af73bc36ab23e0bd7ffcc6522943114ee68a988b6ede1",
+      "size": 697
+    },
+    {
+      "path": "pythonpath/libre_macros_pivot_lib.py",
+      "sha256": "f513c48df3675d3a6de9017989984d4b8457e970fcc47fb9ab8ef302b522e234",
+      "size": 75244
+    },
+    {
+      "path": "pythonpath/libre_macros_sanitize_lib.py",
+      "sha256": "e6de2201ffc72d6f5490a199a15b28ecf1a93ca9708638c600b199fc83a37f0f",
+      "size": 43145
+    },
+    {
+      "path": "pythonpath/libre_macros_values_lib.py",
+      "sha256": "4fe8701661cd2039f314e69fda2dd8bfb77792e87eb610211d1a557a5bac8395",
+      "size": 31671
+    },
+    {
+      "path": "pythonpath/odf_bundled.py",
+      "sha256": "7a08bc2da2fa0d39c1a71e1e95a4a4cb258ef8d9dbef9c45d8f0a8c8a9063eab",
+      "size": 599275
+    },
+    {
+      "path": "pythonpath/openpyxl_bundled.py",
+      "sha256": "60cb693a3f97abdb16f822bc0b241022924a70d0c041851a993d12d619f8c5cf",
+      "size": 904732
+    },
+    {
+      "path": "pythonpath/segno_bundled.py",
+      "sha256": "798bedbef6d1f7f421d98525479e7a2847a3d97b5f8a66c8e9af1d9d0792dc9f",
+      "size": 270436
+    },
+    {
+      "path": "pythonpath/terms_of_use_ru.txt",
+      "sha256": "7decc25ac1b01281bf2db9bd916221b4719355fd21bcbc54200b5c4378f06f7b",
+      "size": 4666
+    },
+    {
+      "path": "sync_macro_version.py",
+      "sha256": "31d0295a7b022038ee22ede0cae3993271350e7ea80fa474540b2ed5835aa2af",
+      "size": 3283
+    },
+    {
+      "path": "test_odf.py",
+      "sha256": "5f7b778087e30fc19b7d8e069d66af7574690acc15931888174602f8a0c862f0",
+      "size": 3797
+    },
+    {
+      "path": "test_openpyxl.py",
+      "sha256": "840d92396d339b821e4a5f9f64a55ba51f275f46837cb56c1867696ed95619ca",
+      "size": 9188
+    },
+    {
+      "path": "test_segno.py",
+      "sha256": "fb25854ed61ef8ad5a8922841c6bdb63e2433c859b695016c940257d61ce3e30",
+      "size": 8815
+    },
+    {
+      "path": "test_sort.py",
+      "sha256": "220a598317c1ee3481b07cec7b118fd8c932b11b3b9c6b688e91cfaeee3c591f",
+      "size": 10662
+    },
+    {
+      "path": "test_vertical_alignment.py",
+      "sha256": "be9a8ed7b7e9cb8d91a965277d16f312ce2b14b37ca4b59b8778231e99d5de2d",
+      "size": 4077
+    }
+  ]
+}

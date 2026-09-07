@@ -1,0 +1,77 @@
+---
+description: UX визардов параметров — columns_pick, combo, user-friendly
+alwaysApply: true
+---
+
+# Визарды параметров (user-friendly)
+
+## Принцип
+
+Визарды должны быть **максимально удобными для пользователя**: минимум ручного JSON, понятные подписи на русском, выбор из списков там, где набор значений ограничен.
+
+## Столбцы (обязательно `columns_pick`)
+
+Любое поле, которое задаёт **имена/список столбцов** (не формулу и не одно «куда вставить»), в `_SHEET_BLOCK_FORM_SCHEMAS` (`libre_macros_param_wizard_cfg.py`) — **`type: "columns_pick"`**, не обычный edit и не голый combo без накопления.
+
+Типичные `id`: `columns`, `key_columns`, `exclude_columns`, `markers`, `marker` (если это столбец), и аналоги.
+
+### UI
+
+- выпадающий список заголовков текущего листа (`choices_from_headers` по умолчанию);
+- **накопительный** выбор: каждый пункт из списка добавляется к уже выбранным;
+- из списка — токен в **одинарных кавычках** `'…'` (по умолчанию exact; внутри кавычек допустим шаблон `*`/`?`);
+- ручной ввод через **`,`** или **`;`** (если в имени есть запятая — разделитель **`;`** или кавычки);
+- справа кнопки **`×`** (удалить последний) и **`××`** (очистить всё).
+
+Эталоны: `градиент.marker`, `подсветка_по_порогу.columns`, `замена_значений.columns`, `удалить_дубликаты.key_columns`, `удаление_строк.columns`, `конкатенация_столбцов.columns`, `заполнение_вниз.columns`, `ширина_столбцов.columns`, `группировка_по_столбцу.marker`.
+
+Реализация UI: `_show_sheet_block_form_dialog` в `param_wizard.py`.
+
+### JSON — кавычки сохраняются как ввели
+
+В колонке C / блоке JSON токены столбцов пишутся **как в визарде** (с кавычками или без).
+`canonicalize_column_token_list_for_store` **не** добавляет кавычки насильно к голым именам.
+
+```json
+"columns":["'Руководитель'","сумм","'Итого*'"]
+```
+
+- выбор из списка заголовков → всегда `'…'` (по умолчанию exact, если нет `*`/`?`);
+- ручной ввод без кавычек → подстрока (`*часть*`); индексы `1` и буквы `A` — без кавычек;
+- сериализация: `_text_to_block_field` + `canonicalize_column_token_list_for_store`;
+- отображение: `_block_field_to_text` → `join_column_name_tokens` (кавычки сохраняются);
+- разбор/поиск: `column_header_matches_token` (`libre_macros_param_codec.py`).
+
+**Кавычки и поиск столбца (единая логика):**
+- `'Имя'` — полное совпадение;
+- `'Имя*'` / `'*Имя'` — fnmatch-шаблон внутри кавычек;
+- `часть` без кавычек — как `'*часть*'`;
+- `часть*` без кавычек — fnmatch как написано.
+
+### Чеклист при новой / правке sheet-block формы
+
+1. Поле столбцов → `"type": "columns_pick"`, при необходимости `"choices_from_headers": True`.
+2. Hint на русском: накопление, кавычки, × / ××.
+3. Нормализация блока гоняет список через `_normalize_column_token_list` (или canonicalize).
+4. Не парсить списки столбцов через голый `split(",")` / `re.split(r"[,;]")` без учёта `'…'`.
+5. Ручной ввод индексов (`1`) и букв (`A`) без кавычек — ок; выбор из заголовков — всегда `'…'`.
+
+## Ограниченные наборы значений
+
+Поля с фиксированным набором (`keep`, `output`, режимы, цвета и т.п.) — **`type: "combo"`**, не текстовое поле.
+
+- подписи в combo — **на русском** (код JSON хранится отдельно);
+- пары `(code, label)` и словари `*_LABEL` / `*_CODE` — в `libre_macros_param_wizard_cfg.py` (как `DEDUP_KEEP_CHOICES`, `NORMALIZE_NON_TEXT_CHOICES`);
+- маппинг label↔code — в `_block_field_to_text` / `_text_to_block_field` (`param_wizard.py`).
+
+## Регистрация функции в визарде
+
+Новая постобработка / финал должна быть:
+
+1. в `_PP_RANGE_MAP_SPEC` / `_FINAL_MAP_SPEC` (`libre_macros_collect_cfg.py`);
+2. в `_FALLBACK_PP_RANGE_CHOICES` / `_FALLBACK_FINAL_CHOICES` и `_FALLBACK_*_REST_HINTS`;
+3. в `_SHEET_BLOCK_FORM_FNS` и `_SHEET_BLOCK_FORM_SCHEMAS` (`libre_macros_param_codec.py`, `libre_macros_param_wizard_cfg.py`);
+4. при необходимости — в пресетах сценариев `_wp_scenario_body_*` (`param_wizard.py`).
+5. для **финальной** обработки — запись в `_LM_FINAL_RANGE_SPEC` (`libre_macros_values_lib.py`) **и** импорт `lm_final_*` в `libre_macros_lib.py` (иначе `merge_final_*` не попадёт в карту и B-combo).
+
+После правок entry-скриптов: `aoffice_flatten_defs.py` + `aoffice_compat_check.py`.

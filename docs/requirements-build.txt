@@ -1,0 +1,2 @@
+# Сборка Word (.docx) из Markdown: docs/build_docx.py
+pypandoc-binary>=1.13

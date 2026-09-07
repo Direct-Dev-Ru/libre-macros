@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.venv/*
+.venv
+# OS
+.DS_Store
+Thumbs.db
+openpyxl-offline
+openpyxl-offline/*
+venv
+venv/*
+installer/Macro*.ods
+installer/Macro*.xls*
+
+macro-lib/collect_workbooks_no_docstrings.py
+macro-lib/collect_workbooks_py2.py
+test/collect_workbooks/workbooks/.openpyxl_cache/
+test/collect_workbooks/workbooks/ODF/.openpyxl_cache/
+installer/installer_password.txt
+installer/.bundled_debug_snapshot.json
+todo/for_bar_code_macros.xl*
+
+**/~*.*
+test/collect_workbooks/workbooks/results/headless/
+qa/collect_headless/.profile/
+

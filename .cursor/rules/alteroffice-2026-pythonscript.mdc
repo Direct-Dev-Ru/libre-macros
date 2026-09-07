@@ -1,0 +1,113 @@
+---
+description: Совместимость Python-макросов с фильтром AlterOffice 2026 pythonscript
+alwaysApply: true
+---
+
+# AlterOffice 2026 — фильтр `pythonscript.py`
+
+Перед `compile()` AO 2026 **переписывает** скрипт из `Scripts/python/*.py`
+(копия в `Temp/AlterOfficeScripts/`): остаются только строки `import`/`from` и
+тела `def`/`class` (строки с ведущим пробелом). Всё остальное на уровне модуля
+**выкидывается** (`MACRO_VERSION = …`, константы, `g_exportedScripts = …`,
+декораторы `@…`, «голые» `):`, комментарии вне тел).
+
+**Важно:** обычный `import соседний_модуль` читает файл **с диска целиком**
+(фильтр не применяется). Фильтр срабатывает только при загрузке макроса через
+`getModuleByUrl` (меню / «Выполнить макрос» / кнопка листа).
+
+Модули в **`pythonpath/`** фильтром **не** проходят — их грузит обычный
+`import`. LibreOffice / AO 2025 обычно компилируют исходник целиком.
+
+Эталон фильтра: `test/pythonscript.py` → `getModuleByUrl`.
+
+Проверка:
+
+```bash
+PYTHONPATH=macro-lib/pythonpath python3 macro-lib/aoffice_compat_check.py --tree macro-lib --warn-assigns
+```
+
+`install.sh` гоняет flatten + compat check перед копированием.
+
+## Константы — только в `pythonpath/`
+
+**Жёсткое правило:** любые константы, кортежи выборов, словари подписей, XML/JSON-шаблоны,
+флаги по умолчанию — **определять в `macro-lib/pythonpath/*.py`** (обычно `*_cfg.py`),
+**не** на уровне модуля entry-скрипта (`param_wizard.py`, `collect_workbooks.py`, …).
+
+| Где | Что будет |
+|-----|-----------|
+| `param_wizard.py`: `_FOO = (…)` на уровне модуля | AO вырежет → `NameError: _FOO is not defined` в UI |
+| `libre_macros_param_wizard_cfg.py`: `_FOO = (…)` | ОК, читается через `_pw_cfg._FOO` |
+
+Пример из практики: `_SOURCE_EXTRA_DELIM_CHOICES` в `param_wizard.py` → ошибка визарда
+«Доп_Параметры_Источника»; перенос в `libre_macros_param_wizard_cfg.py` + обращение
+`_pw_cfg._SOURCE_EXTRA_DELIM_CHOICES` (или локальная копия **внутри** `def`).
+
+Дополнительно:
+
+- `from libre_macros_xxx_cfg import *` **не** импортирует имена с ведущим `_`
+  (если нет `__all__`). Для `_CONST` всегда: `import … as _cfg` → `_cfg._CONST`.
+- Литералы/кортежи **внутри тела** `def` (с отступом) фильтр сохраняет — допустимы
+  как fallback, но эталон — cfg в pythonpath.
+- Не возвращать модульные константы в entry после рефакторинга «удобства ради».
+
+## Правила для `Scripts/python/*.py` (точки входа)
+
+1. **`def` / `async def` / `class` — сигнатура в одну строку**  
+   Строка `):` без ведущего пробела обрывает «тело» и склеивает со следующим `def`.  
+   Перед установкой: `aoffice_flatten_defs.py --in-place --tree macro-lib`.
+
+2. **`from … import (` — тоже в одну строку**  
+   Продолжения с отступом при `isInside=False` отбрасываются → `SyntaxError: '(' was never closed`.
+
+3. **Не полагаться на модульные присваивания в скрипте**  
+   Константы, XML-шаблоны, флаги, счётчики — в **`pythonpath/*.py`** и  
+   `from libre_macros_xxx_cfg import …` / `import libre_macros_xxx_cfg as _cfg`.  
+   Иначе defaults вроде `size_unit=_DEFAULT` и обращения в теле → `NameError`,  
+   а макрос «пропадает» из `mod.__dict__` (если ошибка на этапе `exec`).
+
+4. **Defaults в сигнатурах — только литералы / `None` / `True`/`False` или имена из import**  
+   Не ссылаться на имена, которые появятся только из вырезанных присваиваний.
+
+5. **Мутабельное состояние** (`global`-счётчики, кэш) — в модуле pythonpath  
+   (`_cfg.yield_counter = …`), не `global X` к вырезанной переменной скрипта.
+
+6. **Декораторы на уровне модуля (`@decorator`)** фильтр выкидывает — не использовать  
+   на entry-point скриптах; при необходимости — внутри класса или без декоратора.
+
+7. **Многострочные строки на уровне модуля** (тройные кавычки с продолжением с колонки 0)  
+   отбрасываются. Большие литералы — в pythonpath.
+
+8. **Исключение для метаданных меню:** `CONTEXT_CELL_MENU` / `CONTEXT_CELL_MENU_KEY`  
+   могут остаться в entry-скрипте — `context_menu` читает их через AST **с диска**.  
+   Не использовать эти имена в runtime-логике того же файла под фильтром.
+
+9. **`pythonpath/`** — нормальный Python (многострочные def/import ок), пока модуль  
+   только импортируют, а не запускают как макрос из меню.
+
+10. **Предпочтительный шаблон новой точки входа — тонкая обёртка:**
+    ```python
+    from libre_macros_foo_lib import entry as _entry
+    def my_macro(*args):
+        return _entry(*args)
+    g_exportedScripts = (my_macro,)
+    ```
+    Вся логика и константы — в `pythonpath/`.
+
+11. После правок entry-скриптов:
+    ```bash
+    python3 macro-lib/aoffice_flatten_defs.py --in-place --tree macro-lib
+    PYTHONPATH=macro-lib/pythonpath python3 macro-lib/aoffice_compat_check.py --tree macro-lib --warn-assigns
+    ```
+
+12. Не путать с LibreOffice: там фильтр обычно отсутствует; регрессии ловит AO check.
+
+## Что править в первую очередь (если есть WARN)
+
+| Файл | Риск | Действие |
+|------|------|----------|
+| `file_list_macro.py`, `context_menu.py`, `pick_source_file.py` | cfg уже вынесен | не возвращать модульные константы |
+| `param_wizard.py` | cfg: `libre_macros_param_wizard_cfg.py` | писать/читать через `_pw_cfg` / star-import (имена без `_`); для `_CONST` — только `_pw_cfg._CONST` |
+| `collect_workbooks.py` | cfg: `libre_macros_collect_cfg.py` | state через `_cw_cfg` / `_cw_set` / `_cw_get` |
+| `macro_ui.py` | константы диалогов | лучше жить в `pythonpath/` |
+| `test_odf.py` | `ODF_VERSION` | cfg или литерал в теле |

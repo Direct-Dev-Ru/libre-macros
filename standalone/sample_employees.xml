@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Employees>
+  <Employee dept="IT" branch="Северный">
+    <Name>Фам_xml_01</Name>
+    <Salary>71200</Salary>
+  </Employee>
+  <Employee dept="Склад" branch="Северный">
+    <Name>Фам_xml_02</Name>
+    <Salary>72300</Salary>
+  </Employee>
+  <Employee dept="Продажи" branch="Южный">
+    <Name>Фам_xml_03</Name>
+    <Salary>73400</Salary>
+  </Employee>
+  <Employee dept="IT" branch="Южный">
+    <Name>Фам_xml_04</Name>
+    <Salary>74500</Salary>
+  </Employee>
+</Employees>

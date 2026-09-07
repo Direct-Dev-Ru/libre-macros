@@ -1,0 +1,46 @@
+{
+  "v": 1,
+  "office": "auto",
+  "templates_dir": "test/collect_workbooks/workbooks/ODF",
+  "sources_dir": "test/collect_workbooks/sources",
+  "results_dir": "test/collect_workbooks/workbooks/results/headless",
+  "report_path": "test/collect_workbooks/workbooks/results/headless/report.md",
+  "timeout_sec": 300,
+  "copy_template": true,
+  "cases": [
+    {
+      "id": "01_merge_one_sheet",
+      "template": "01_merge_one_sheet.ots",
+      "save_as": "01_merge_one_sheet.ods",
+      "checks": [
+        {"type": "log_exists"},
+        {"type": "log_macro_version"},
+        {"type": "log_no_status", "values": ["ошибка", "error", "critical"]},
+        {"type": "sheet_exists", "name": "Merge"},
+        {"type": "header_contains", "sheet": "Merge", "names": ["ФИО"]},
+        {"type": "min_data_rows", "sheet": "Merge", "n": 1},
+        {"type": "cell_not_empty", "sheet": "Merge", "cell": "B2"}
+      ]
+    },
+    {
+      "id": "02_merge_many_sheets",
+      "template": "02_merge_many_sheets.ots",
+      "save_as": "02_merge_many_sheets.ods",
+      "checks": [
+        {"type": "log_exists"},
+        {"type": "log_no_status", "values": ["ошибка", "error", "critical"]},
+        {"type": "min_data_rows", "n": 1},
+        {"type": "sheet_exists", "name": "Отчет_январь"},
+        {"type": "sheet_exists", "name": "Отчет_февраль"},
+        {"type": "sheet_exists", "name": "Отчет_март"},
+        {"type": "sheet_exists", "name": "Отчет_апрель"},
+        {"type": "sheet_exists", "name": "Отчет_май"},
+        {"type": "sheet_exists", "name": "Отчет_июнь"},
+        {"type": "sheet_exists", "name": "Сводка2024"},
+        {"type": "sheet_exists", "name": "Архив"},
+        {"type": "sheet_exists", "name": "Данные2024"},
+        {"type": "sheet_exists", "name": "Прочее"}
+      ]
+    }
+  ]
+}

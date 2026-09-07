@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Catalog>
+  <Product id="P001">
+    <Name>Товар_A</Name>
+    <Price>1200</Price>
+    <Qty>3</Qty>
+  </Product>
+  <Product id="P002">
+    <Name>Товар_B</Name>
+    <Price>2400</Price>
+    <Qty>1</Qty>
+  </Product>
+  <Product id="P003">
+    <Name>Товар_C</Name>
+    <Price>800</Price>
+    <Qty>7</Qty>
+  </Product>
+</Catalog>

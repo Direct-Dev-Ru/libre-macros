@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Orders>
+  <Order order_id="O-100">
+    <Customer>Клиент_A</Customer>
+    <Line><Sku>SKU-1</Sku><Amount>500</Amount></Line>
+    <Line><Sku>SKU-2</Sku><Amount>300</Amount></Line>
+  </Order>
+  <Order order_id="O-101">
+    <Customer>Клиент_B</Customer>
+    <Line><Sku>SKU-3</Sku><Amount>900</Amount></Line>
+  </Order>
+</Orders>

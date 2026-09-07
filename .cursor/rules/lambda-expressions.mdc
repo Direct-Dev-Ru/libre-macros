@@ -1,0 +1,121 @@
+---
+description: Правила sugar-лямбд rows / upd_rows во всех визардах и исполнителях
+globs:
+  - macro-lib/**/*.py
+alwaysApply: false
+---
+
+# Лямбды: rows, upd_rows, компиляция
+
+## Область
+
+Единые правила для лямбд в:
+
+- `текстовые_операции` — `row_filter` / `row_filter_lambda` per-op;
+- `замена_значений` — `row_filter`, `match_expr`;
+- `столбец_по_лямбде` — `expr`, `new_column_expr`, `sheet_expr`.
+
+Исполнение: in-memory, без UNO внутри лямбды. Sugar → rewrite → санация → `eval` с ограниченным namespace.
+
+Библиотека: `libre_macros_lambda_column_lib.py`.
+
+## rows — текущая матрица
+
+| Sugar | Смысл |
+|-------|--------|
+| `rows("Col")` | значение столбца в **текущей** строке |
+| `rows("Col")[-1]` | то же в **предыдущей** строке листа |
+| `rows("Col")[1]` | в следующей строке (если есть) |
+| `rows(1)` / `rows("A")` | столбец по индексу / букве |
+
+Rewrite: `rows("X")[-1]` → `_lm_rows(_ri, "X", -1)`.
+
+## upd_rows — уже обработанные строки
+
+Накопитель заполняется при **последовательном** проходе сверху вниз. После обработки строки `ri` вызывается `upd_store.commit(ri)`.
+
+Для текущей строки `ri` в `upd_rows` доступны только строки **выше** (`index < ri`), уже прошедшие обработку в текущем проходе (обычно — в рамках текущего столбца).
+
+| Sugar | Смысл |
+|-------|--------|
+| `upd_rows("Col")` | столбец `Col` в **последней** обработанной строке выше текущей |
+| `upd_rows("Col")[-1]` | в **предпоследней** обработанной |
+| `upd_rows_len()` | сколько строк уже в `upd_rows` |
+| `upd_rows_seen("Col", value)` | было ли такое значение выше (сравнение trim+casefold) |
+| `upd_rows_count("Col", value)` | сколько раз встречалось выше |
+
+Rewrite: `upd_rows("X")` → `_lm_upd_rows(_ri, "X", 0)`.
+
+Значения читаются из **актуальной** in-memory матрицы (после применения ops к ячейкам выше).
+
+## Сигнатура и legacy
+
+- Предпочтительно: `lambda rows: …`
+- Legacy: `lambda row: row.get("Col")` — dict заголовков + `row_id`
+- Допустимы `def fn(...): return …` (как у фильтра листов)
+
+Запрещено в sugar-лямбдах: `import`, UNO, обращения к `doc` / `sheet`.
+
+## Компиляция и вызов
+
+1. `rewrite_lambda_column_sugar(code)` — `rows` и `upd_rows`
+2. `lm_sanitize_code_or_raise` (policy `standard`)
+3. `compile_rows_lambda` → `(fn, glo)`
+4. На каждый вызов: `call_rows_lambda(fn, glo, ri, rows_accessor=…, upd_store=…)`
+
+При `row_filter=lambda` исполнитель **обязан** передавать `rows_accessor` и при последовательном проходе — `upd_store`.
+
+## Примеры
+
+```python
+# только непустые
+lambda rows: str(rows("Отдел") or "").strip() != ""
+
+# отличие от предыдущей строки листа
+lambda rows: rows("Статус") != rows("Статус")[-1]
+
+# первое вхождение ИНН (не было выше среди обработанных)
+lambda rows: str(rows("ИНН") or "").strip() != "" and not upd_rows_seen("ИНН", rows("ИНН"))
+
+# изменилось относительно последней обработанной
+lambda rows: upd_rows_len() == 0 or rows("Сумма") != upd_rows("Сумма")
+
+# блок только если отдел ещё не встречался
+lambda rows: upd_rows_count("Отдел", rows("Отдел")) == 0
+```
+
+Рабочий JSON-пример:
+
+```json
+[{
+  "v": 1,
+  "fn": "столбец_по_лямбде",
+  "new_column": "Первый_ИНН",
+  "expr": "lambda rows: rows(\"ИНН\") if not upd_rows_seen(\"ИНН\", rows(\"ИНН\")) else \"\"",
+  "position": "_конец_",
+  "on_error": "empty",
+  "result_type": "auto",
+  "output_policy": "new"
+}]
+```
+
+Кратко по полям `столбец_по_лямбде`:
+
+- `expr` — обязательная лямбда `lambda rows: ...` для значения строки;
+- `new_column_expr` — опциональная лямбда `lambda sheet, headers: ...` для имени столбца;
+- `sheet_expr` — опциональная лямбда `lambda sheets: ...` для выбора листов;
+- `on_error` — `empty`, `keep`, `fail`;
+- `result_type` — `auto`, `text`, `number`;
+- `output_policy` — `new` или `replace`.
+
+## Визард
+
+- Подсказки и примеры — на русском; код в JSON — как выше.
+- Поля лямбд — `lambda_pick` + edit + «Сохранить» (профиль `merge_wizard_profile.json`).
+- В hint диалога «Текстовые операции» упоминать и `rows`, и `upd_rows`.
+
+## Новый код
+
+- Sugar только через `libre_macros_lambda_column_lib` (не дублировать rewrite).
+- Новые helper-функции для лямбд — в `rows_lambda_eval_namespace` / `attach_upd_rows_helpers`.
+- После правок entry-скриптов: `aoffice_flatten_defs.py` + `aoffice_compat_check.py`.

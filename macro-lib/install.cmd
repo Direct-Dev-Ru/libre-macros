@@ -1,0 +1,5 @@
+@echo off
+REM Wrapper: install macros into LibreOffice and AlterOffice (see install.ps1).
+cd /d "%~dp0"
+chcp 65001 >nul
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1" %*

@@ -1,0 +1,77 @@
+{
+  "v": 1,
+  "office": "auto",
+  "templates_dir": "test/collect_workbooks/workbooks/ODF",
+  "sources_dir": "test/collect_workbooks/sources",
+  "results_dir": "test/collect_workbooks/workbooks/results/headless",
+  "report_path": "test/collect_workbooks/workbooks/results/headless/report.md",
+  "timeout_sec": 300,
+  "copy_template": true,
+  "cases": [
+    {
+      "id": "01_merge_one_sheet",
+      "template": "01_merge_one_sheet.ots",
+      "save_as": "01_merge_one_sheet.ods",
+      "checks": [
+        {"type": "log_exists"},
+        {"type": "log_macro_version"},
+        {"type": "log_no_status", "values": ["ошибка", "error", "critical"]},
+        {"type": "sheet_exists", "name": "Merge"},
+        {"type": "header_contains", "sheet": "Merge", "names": ["ФИО"]},
+        {"type": "min_data_rows", "sheet": "Merge", "n": 1}
+      ]
+    },
+    {
+      "id": "02_merge_many_sheets",
+      "template": "02_merge_many_sheets.ots",
+      "save_as": "02_merge_many_sheets.ods",
+      "checks": [
+        {"type": "log_exists"},
+        {"type": "log_no_status", "values": ["ошибка", "error", "critical"]},
+        {"type": "min_data_rows", "n": 1}
+      ]
+    },
+    {
+      "id": "03_columns_filter",
+      "template": "03_columns_filter.ots",
+      "save_as": "03_columns_filter.ods",
+      "checks": [
+        {"type": "log_exists"},
+        {"type": "log_no_status", "values": ["ошибка", "error", "critical"]},
+        {"type": "sheet_exists", "name": "Merge"},
+        {"type": "header_contains", "sheet": "Merge", "names": ["ФИО", "Отдел"]},
+        {"type": "min_data_rows", "sheet": "Merge", "n": 1}
+      ]
+    },
+    {
+      "id": "11_direct_xml_excel_ods",
+      "template": "11_direct_xml_excel_ods.ots",
+      "save_as": "11_direct_xml_excel_ods.ods",
+      "checks": [
+        {"type": "log_exists"},
+        {"type": "log_macro_version"},
+        {"type": "log_no_status", "values": ["ошибка", "error", "critical"]},
+        {"type": "min_data_rows", "n": 1}
+      ]
+    },
+    {
+      "id": "11_vlookup_1to1_low",
+      "template": "11_vlookup_1to1_low.ots",
+      "save_as": "11_vlookup_1to1_low.ods",
+      "checks": [
+        {"type": "log_exists"},
+        {"type": "log_no_status", "values": ["ошибка", "error", "critical"]},
+        {"type": "min_data_rows", "n": 1}
+      ]
+    },
+    {
+      "id": "12_postprocess_json",
+      "template": "12_postprocess_json.ots",
+      "save_as": "12_postprocess_json.ods",
+      "checks": [
+        {"type": "log_exists"},
+        {"type": "min_data_rows", "n": 1}
+      ]
+    }
+  ]
+}
