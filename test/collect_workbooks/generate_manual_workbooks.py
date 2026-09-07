@@ -57,6 +57,10 @@ from generate_vlookup_sources import (
     vlookup_json_for_tier,
     generate_all_tiers as generate_vlookup_sources,
 )
+from generate_form_sources import (
+    FORMS_XLSX,
+    generate_form_sources,
+)
 from help_sheet_content import (
     HELP_SHEET_NAME,
     collect_help_sheet_content,
@@ -89,6 +93,10 @@ def abs_large_source(name):
 
 def abs_vlookup_source(tier):
     return os.path.join(SOURCES, "vlookup", tier_filename(tier))
+
+
+def abs_form_source():
+    return FORMS_XLSX
 
 
 def vlookup_row(tier):
@@ -1011,6 +1019,32 @@ def scenario_13_merge_sheets_pivot():
     ]
 
 
+def scenario_14_form_to_table():
+    """Копирование листов Q/A → анкета_в_таблицу (ФИО / пустая строка / шапка)."""
+    return [
+        ("Файлы-Источники", (abs_form_source(),)),
+        ("Листы", ("Анкета_ФИО", "Анкета_пусто", "Анкета_шапка")),
+    ] + block_rows(start_row="2", header_row="1") + [
+        ("Режим", ("Копирование листов",)),
+        pp_range("анкета_в_таблицу"),
+        pp_range("тонкая_сетка"),
+        pp_range("авто_ширина"),
+    ]
+
+
+def scenario_15_table_to_form():
+    """Копирование wide → таблица_в_анкету."""
+    return [
+        ("Файлы-Источники", (abs_form_source(),)),
+        ("Листы", ("Wide_анкеты",)),
+    ] + block_rows(start_row="2", header_row="1") + [
+        ("Режим", ("Копирование листов",)),
+        pp_range("таблица_в_анкету"),
+        pp_range("тонкая_сетка"),
+        pp_range("авто_ширина"),
+    ]
+
+
 VLOOKUP_SCENARIOS = [
     ("11_vlookup_1to1_low.xltx",) + scenario_vlookup("1to1_low") + (5,),
     ("11_vlookup_1to1_middle.xltx",) + scenario_vlookup("1to1_middle") + (5,),
@@ -1043,6 +1077,19 @@ SCENARIOS = [
         "13_merge_sheets_pivot.xltx",
         "Сценарий 13: На разные листы → объединить_листы_в_один (строка A) → сводная Отдел×Квартал.",
         scenario_13_merge_sheets_pivot(),
+        3,
+    ),
+    (
+        "14_form_to_table.xltx",
+        "Сценарий 14: Копирование анкет (Q/A) → анкета_в_таблицу "
+        "(by_repeat_key / by_blank_row / шапка листа+блока).",
+        scenario_14_form_to_table(),
+        3,
+    ),
+    (
+        "15_table_to_form.xltx",
+        "Сценарий 15: Копирование wide → таблица_в_анкету (тело + шапка блока).",
+        scenario_15_table_to_form(),
         3,
     ),
 ] + VLOOKUP_SCENARIOS
@@ -1111,6 +1158,20 @@ def write_manual_check():
             "На разные листы (`source_pivot.xlsx`) → строка A **`объединить_листы_в_один`** "
             "(JSON → `Отчет_Q123`, не ключ B Постобработка_Диапазон) → сводная Отдел×Квартал.",
             "Ожидание: лист `Отчет_Q123`, лист `Сводная_Отдел`; в логе нет ошибок merge_sheets.",
+            "",
+            "## 14_form_to_table.xltx / 15_table_to_form.xltx",
+            "",
+            "Источник `sources/forms/source_forms.xlsx`, режим «Копирование листов».",
+            "",
+            "| Шаблон | Листы | Ожидание |",
+            "|--------|-------|----------|",
+            "| 14_form_to_table | Анкета_ФИО, Анкета_пусто, Анкета_шапка | "
+            "листы `Wide_из_ФИО` (3 строки), `Wide_из_пусто` (2), `Wide_из_шапка` "
+            "(2 + столбцы шапки листа/блока) |",
+            "| 15_table_to_form | Wide_анкеты | лист `Анкета_из_wide`: пары Q/A, "
+            "блоки через пустую строку, шапка блока Бланк/Дата |",
+            "",
+            "В логе: `анкета_в_таблицу` / `таблица_в_анкету` — ok, без ошибок JSON.",
         ]
     )
     lines.append("")
@@ -1219,6 +1280,7 @@ def main():
         help="Не создавать sources/large/source_server_logs.xlsx (3×200k+ строк, долго)",
     )
     ap.add_argument("--skip-vlookup", action="store_true", help="Не пересоздавать sources/vlookup/*.xlsx")
+    ap.add_argument("--skip-forms", action="store_true", help="Не пересоздавать sources/forms/source_forms.xlsx")
     ap.add_argument("--odf", action="store_true", help="Конвертировать в workbooks/ODF/*.ots")
     args = ap.parse_args()
     if not args.skip_sources:
@@ -1231,6 +1293,9 @@ def main():
     if not args.skip_vlookup:
         print("Источники ВПР:")
         generate_vlookup_sources()
+    if not args.skip_forms:
+        print("Источники анкет:")
+        generate_form_sources()
     for fn, comment, body, cols in SCENARIOS:
         path = write_workbook(fn, comment, body, value_cols=cols)
         print("  %s" % path)

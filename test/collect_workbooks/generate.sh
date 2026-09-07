@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Генерация ручных шаблонов (JSON в колонке C). См. docs/12_MANUAL_TESTING.md
 # Включает сценарий прямого переноса: Способ_переноса=xml_excel_ods (сценарий 11).
-# Источники: source_01..03, source_products, source_pivot, vlookup/*, csv/*.
+# Источники: source_01..03, source_products, source_pivot, vlookup/*, csv/*, forms/*.
+# sources/forms/source_forms.xlsx — анкета_в_таблицу / таблица_в_анкету (сценарии 14–15).
 # sources/large/source_server_logs.xlsx — 3×200k+ строк логов + справочник серверов (ВПР).
 # set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

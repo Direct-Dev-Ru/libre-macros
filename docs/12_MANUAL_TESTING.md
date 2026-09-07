@@ -54,13 +54,15 @@ test/collect_workbooks/
 ├── generate_manual_workbooks.py   ← генератор (источники + .xltx)
 ├── manual_json_presets.py         ← примеры JSON для колонки C
 ├── generate.sh                    ← обёртка
-├── sources/                       ← source_01..03, source_products
+├── sources/                       ← source_01..03, source_products, forms/, vlookup/
 ├── start_param_file.xlsx          ← основа шаблонов (кнопка «Обзор»)
 └── workbooks/
     ├── MANUAL_CHECK.md            ← чек-лист сценариев (генерируется)
     ├── 01_merge_one_sheet.xltx    ← в каждом .xltx есть лист «Справка_макроса»
     ├── …
     ├── 12_postprocess_json.xltx ← матрица всех JSON-функций
+    ├── 14_form_to_table.xltx    ← анкета → таблица
+    ├── 15_table_to_form.xltx    ← таблица → анкета
     ├── ODF/*.ots                  ← опционально (--odf)
     └── results/                   ← сюда сохранять результат после макроса
 ```
@@ -150,6 +152,8 @@ python3 qa/collect_headless/run.py --templates-dir test/collect_workbooks/workbo
 | **`11_direct_xml_excel_ods.xltx`** | **xml_excel_ods**: direct-перенос, источники .xlsm/.xls/.ods |
 | **`12_postprocess_json.xltx`** | **Матрица всех основных JSON-функций** |
 | **`13_merge_sheets_pivot.xltx`** | **На разные листы → `объединить_листы_в_один` (A) → сводная** |
+| **`14_form_to_table.xltx`** | **Анкеты Q/A → wide (`анкета_в_таблицу`)** |
+| **`15_table_to_form.xltx`** | **Wide → анкеты (`таблица_в_анкету`)** |
 
 ---
 
@@ -172,6 +176,19 @@ python3 qa/collect_headless/run.py --templates-dir test/collect_workbooks/workbo
 2. На листе параметров: **Режим** = «На разные листы»; строка A **`объединить_листы_в_один`** с JSON в C (не B в «Постобработка_Диапазон»).
 3. Ожидание: `Отчет_Q123`, сводная `Сводная_Отдел` (Отдел × Квартал).
 4. Аналог пресета визарда **Я05 / Я14**.
+
+---
+
+## Сценарии анкета ↔ таблица (`14` / `15`)
+
+Источник: `sources/forms/source_forms.xlsx` (генератор `generate_form_sources.py`).
+
+| Шаблон | Режим | Ожидание |
+|--------|-------|----------|
+| `14_form_to_table.xltx` | Копирование листов `Анкета_*` | листы `Wide_из_ФИО`, `Wide_из_пусто`, `Wide_из_шапка` |
+| `15_table_to_form.xltx` | Копирование `Wide_анкеты` | лист `Анкета_из_wide` (пары Q/A + шапка блока) |
+
+Перегенерация только форм: `python test/collect_workbooks/generate_form_sources.py`.
 
 ---
 
