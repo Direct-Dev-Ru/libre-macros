@@ -61,6 +61,10 @@ from generate_form_sources import (
     FORMS_XLSX,
     generate_form_sources,
 )
+from generate_transpose_sources import (
+    OUT_XLSX as TRANSPOSE_XLSX,
+    generate_transpose_sources,
+)
 from help_sheet_content import (
     HELP_SHEET_NAME,
     collect_help_sheet_content,
@@ -97,6 +101,10 @@ def abs_vlookup_source(tier):
 
 def abs_form_source():
     return FORMS_XLSX
+
+
+def abs_transpose_source():
+    return TRANSPOSE_XLSX
 
 
 def vlookup_row(tier):
@@ -1045,6 +1053,68 @@ def scenario_15_table_to_form():
     ]
 
 
+def scenario_16_transpose_table():
+    """Копирование → транспонировать_таблицу (обычный + headers_from_column + result_headers)."""
+    import json
+
+    j_plain = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "транспонировать_таблицу",
+                "sheet": "Матрица",
+                "output": "new_sheet",
+                "dest_sheet": "Матрица_T",
+                "as_values": True,
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    j_hfc = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "транспонировать_таблицу",
+                "sheet": "Метки_колонка",
+                "output": "new_sheet",
+                "dest_sheet": "Метки_T",
+                "headers_from_column": True,
+                "as_values": True,
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    j_custom = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "транспонировать_таблицу",
+                "sheet": "Матрица",
+                "output": "new_sheet",
+                "dest_sheet": "Матрица_H",
+                "headers_from_column": False,
+                "result_headers": ["Метка", "Строка1", "Строка2"],
+                "as_values": True,
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return [
+        ("Файлы-Источники", (abs_transpose_source(),)),
+        ("Листы", ("Матрица", "Метки_колонка")),
+    ] + block_rows(start_row="2", header_row="1") + [
+        ("Режим", ("Копирование листов",)),
+        (P_RANGE, "транспонировать_таблицу", j_plain),
+        (P_RANGE, "транспонировать_таблицу", j_hfc),
+        (P_RANGE, "транспонировать_таблицу", j_custom),
+        pp_range("тонкая_сетка"),
+        pp_range("авто_ширина"),
+    ]
+
+
 VLOOKUP_SCENARIOS = [
     ("11_vlookup_1to1_low.xltx",) + scenario_vlookup("1to1_low") + (5,),
     ("11_vlookup_1to1_middle.xltx",) + scenario_vlookup("1to1_middle") + (5,),
@@ -1090,6 +1160,12 @@ SCENARIOS = [
         "15_table_to_form.xltx",
         "Сценарий 15: Копирование wide → таблица_в_анкету (тело + шапка блока).",
         scenario_15_table_to_form(),
+        3,
+    ),
+    (
+        "16_transpose_table.xltx",
+        "Сценарий 16: транспонировать_таблицу (обычный + headers_from_column).",
+        scenario_16_transpose_table(),
         3,
     ),
 ] + VLOOKUP_SCENARIOS
@@ -1281,6 +1357,11 @@ def main():
     )
     ap.add_argument("--skip-vlookup", action="store_true", help="Не пересоздавать sources/vlookup/*.xlsx")
     ap.add_argument("--skip-forms", action="store_true", help="Не пересоздавать sources/forms/source_forms.xlsx")
+    ap.add_argument(
+        "--skip-transpose",
+        action="store_true",
+        help="Не пересоздавать sources/transpose/source_transpose.xlsx",
+    )
     ap.add_argument("--odf", action="store_true", help="Конвертировать в workbooks/ODF/*.ots")
     args = ap.parse_args()
     if not args.skip_sources:
@@ -1296,6 +1377,9 @@ def main():
     if not args.skip_forms:
         print("Источники анкет:")
         generate_form_sources()
+    if not args.skip_transpose:
+        print("Источники transpose:")
+        generate_transpose_sources()
     for fn, comment, body, cols in SCENARIOS:
         path = write_workbook(fn, comment, body, value_cols=cols)
         print("  %s" % path)

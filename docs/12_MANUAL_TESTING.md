@@ -1,6 +1,6 @@
 # Ручное тестирование collect_workbooks
 
-**Версия макроса:** `MACRO_VERSION` в `macro-lib/collect_workbooks.py` и `macro-lib/version.txt` (актуально: **3.10.523**).
+**Версия макроса:** `MACRO_VERSION` в `macro-lib/collect_workbooks.py` и `macro-lib/version.txt` (актуально: **3.10.696**).
 
 Автоматические pytest-скрипты в проекте **не используются**. Проверка — вручную в LibreOffice Calc по шаблонам сценариев.
 
@@ -63,6 +63,7 @@ test/collect_workbooks/
     ├── 12_postprocess_json.xltx ← матрица всех JSON-функций
     ├── 14_form_to_table.xltx    ← анкета → таблица
     ├── 15_table_to_form.xltx    ← таблица → анкета
+    ├── 16_transpose_table.xltx  ← транспонировать_таблицу
     ├── ODF/*.ots                  ← опционально (--odf)
     └── results/                   ← сюда сохранять результат после макроса
 ```
@@ -154,6 +155,7 @@ python3 qa/collect_headless/run.py --templates-dir test/collect_workbooks/workbo
 | **`13_merge_sheets_pivot.xltx`** | **На разные листы → `объединить_листы_в_один` (A) → сводная** |
 | **`14_form_to_table.xltx`** | **Анкеты Q/A → wide (`анкета_в_таблицу`)** |
 | **`15_table_to_form.xltx`** | **Wide → анкеты (`таблица_в_анкету`)** |
+| **`16_transpose_table.xltx`** | **Транспонирование (`транспонировать_таблицу`)** |
 
 ---
 
@@ -192,12 +194,25 @@ python3 qa/collect_headless/run.py --templates-dir test/collect_workbooks/workbo
 
 ---
 
+## Сценарий транспонирования (`16_transpose_table.xltx`)
+
+Источник: `sources/transpose/source_transpose.xlsx` (генератор `generate_transpose_sources.py`).
+
+| Шаблон | Режим | Ожидание |
+|--------|-------|----------|
+| `16_transpose_table.xltx` | Копирование `Матрица`, `Метки_колонка` | листы `Матрица_T` (обычный), `Метки_T` (`headers_from_column`), `Матрица_H` (`result_headers`) |
+
+Перегенерация источника: `python test/collect_workbooks/generate_transpose_sources.py`.  
+Поля JSON: [13_JSON_PARAMS.md](13_JSON_PARAMS.md); описание — [05_POSTPROCESS.md](05_POSTPROCESS.md).
+
+---
+
 ## Сценарий xml_excel_ods (`11_direct_xml_excel_ods.xltx`)
 
 1. Книга результата **сохранена** (`.ods` или `.xlsx`).
 2. Запустите `collect_workbooks`; во время direct-фазы книга может быть закрыта — это нормально.
 3. После сбора окно книги **появляется**, затем идёт UNO-оформление и `Постобработка_Диапазон` / `Строка` (статус — строка состояния).
-4. Сверьте версию в «Сбор_книг_лог» (**≥ 3.10.523** рекомендуется; **≥ 3.10.81** — числа с разрядами при copy; **≥ 3.10.79** — отложенная UNO-фаза).
+4. Сверьте версию в «Сбор_книг_лог» (**≥ 3.10.696** рекомендуется; **≥ 3.10.81** — числа с разрядами при copy; **≥ 3.10.79** — отложенная UNO-фаза).
 5. Многоэтажные заголовки: источники `test/collect_workbooks/sources/multilevel_headers/`, параметр `Строка_Заголовков` + JSON в C ([04](04_DATA_COLLECTION.md) §6.0.2).
 
 Дополнительно для **Копирование листов + xml**: текстовые числа (`1 000 000,00`) и даты с апострофом, `MERGE_XML_CONVERT_TO_NUMBERS=Да` — см. [17_POSTPROCESS_XML.md](17_POSTPROCESS_XML.md).

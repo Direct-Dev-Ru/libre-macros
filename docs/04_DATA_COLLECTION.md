@@ -1,6 +1,6 @@
 # Описание логики сбора данных из источников
 
-**Версия макроса**: **3.10.581** (`macro-lib/version.txt` / `MACRO_VERSION` в `collect_workbooks.py`).
+**Версия макроса**: **3.10.696** (`macro-lib/version.txt` / `MACRO_VERSION` в `collect_workbooks.py`).
 
 **Актуальность**: документ синхронизирован с кодом `collect_workbooks.py` и `pythonpath/`. Ключевые возможности:
 

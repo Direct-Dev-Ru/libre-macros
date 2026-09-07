@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.693"
+MACRO_VERSION = "3.10.696"
 import json
 import re
 
@@ -55,6 +55,9 @@ _FN_ALIASES = {
     "unpivot": "развернуть_столбцы",
     "unpivot_columns": "развернуть_столбцы",
     "развернуть столбцы": "развернуть_столбцы",
+    "transpose": "транспонировать_таблицу",
+    "transpose_table": "транспонировать_таблицу",
+    "транспонировать таблицу": "транспонировать_таблицу",
     "table_to_form": "таблица_в_анкету",
     "wide_to_form": "таблица_в_анкету",
     "таблица → анкета": "таблица_в_анкету",
@@ -107,6 +110,7 @@ _SHEET_BLOCK_FORM_FNS = frozenset(
         "заполнение_вниз",
         "заполнить_вверх",
         "развернуть_столбцы",
+        "транспонировать_таблицу",
         "таблица_в_анкету",
         "анкета_в_таблицу",
         "копировать_значения",
@@ -273,6 +277,8 @@ def _normalize_block_for_fn(fn_key, block):
         return _normalize_fill_up_block(block)
     if fn_key == "развернуть_столбцы":
         return _normalize_unpivot_columns_block(block)
+    if fn_key == "транспонировать_таблицу":
+        return _normalize_transpose_table_block(block)
     if fn_key == "таблица_в_анкету":
         return _normalize_table_to_form_block(block)
     if fn_key == "анкета_в_таблицу":
@@ -484,6 +490,8 @@ def _decode_json_blocks(fn_key, items):
         return [_normalize_fill_up_block(b) for b in items]
     if fn_key == "развернуть_столбцы":
         return [_normalize_unpivot_columns_block(b) for b in items]
+    if fn_key == "транспонировать_таблицу":
+        return [_normalize_transpose_table_block(b) for b in items]
     if fn_key == "таблица_в_анкету":
         return [_normalize_table_to_form_block(b) for b in items]
     if fn_key == "анкета_в_таблицу":
@@ -2219,8 +2227,89 @@ def _normalize_unpivot_columns_block(block):
             out["as_values"] = True
     except Exception:
         out["drop_empty_rows"] = bool(out.get("drop_empty_rows"))
-        out["as_values"] = True if "as_values" not in out else bool(out.get("as_values"))
-    out.pop("skip_header_row", None)
+        out.setdefault("as_values", True)
+    return _attach_sheet(out, out.get("sheet"))
+
+
+def _normalize_transpose_table_block(block):
+    out = _normalize_block("транспонировать_таблицу", block)
+    output = unicode(out.get("output") or u"inplace").strip().casefold()
+    aliases = {
+        u"новый_лист": u"new_sheet",
+        u"лист": u"new_sheet",
+        u"на_месте": u"inplace",
+        u"рядом": u"offset",
+        u"смещение": u"offset",
+    }
+    output = aliases.get(output, output)
+    if output not in (u"inplace", u"new_sheet", u"offset"):
+        output = u"inplace"
+    out["output"] = output
+    dest = unicode(out.get("dest_sheet") or out.get("dest") or u"").strip()
+    if dest:
+        out["dest_sheet"] = dest
+    else:
+        out.pop("dest_sheet", None)
+        out.pop("dest", None)
+    dc = unicode(out.get("dest_cell") or u"").strip()
+    if dc:
+        out["dest_cell"] = dc
+    else:
+        out.pop("dest_cell", None)
+    rng = unicode(out.get("range") or u"").strip()
+    if rng:
+        out["range"] = rng
+    else:
+        out.pop("range", None)
+    out["columns"] = _normalize_column_token_list(out.get("columns"))
+    hc = out.get("header_column")
+    if hc is None or unicode(hc).strip() == u"":
+        out.pop("header_column", None)
+    else:
+        out["header_column"] = unicode(hc).strip()
+    # кастомные имена столбцов результата (не headers_from_column)
+    rh_raw = out.get("result_headers")
+    if rh_raw is None:
+        rh_raw = out.get("new_headers")
+    out.pop("new_headers", None)
+    names = []
+    if isinstance(rh_raw, (list, tuple)):
+        for item in rh_raw:
+            s = unicode("" if item is None else item).strip()
+            if s != "":
+                names.append(s)
+    elif rh_raw is not None:
+        s = unicode(rh_raw).strip()
+        if s != "":
+            names = [p.strip() for p in re.split(r"[,;]", s) if p.strip()]
+    if names:
+        out["result_headers"] = names
+    else:
+        out.pop("result_headers", None)
+    for opt_key in ("header_row", "data_start"):
+        raw = out.get(opt_key)
+        if raw is None or unicode(raw).strip() == u"":
+            out.pop(opt_key, None)
+        else:
+            try:
+                out[opt_key] = int(unicode(raw).strip())
+            except Exception:
+                out[opt_key] = unicode(raw).strip()
+    try:
+        from libre_macros_lib import lm_parse_bool_param
+
+        for key, default in (
+            (u"skip_header_row", False),
+            (u"skip_first_column", False),
+            (u"headers_from_column", False),
+            (u"overwrite_overlap", False),
+            (u"clear_source", False),
+            (u"with_formatting", False),
+            (u"as_values", True),
+        ):
+            out[key] = bool(lm_parse_bool_param(out.get(key), default=default))
+    except Exception:
+        pass
     return _attach_sheet(out, out.get("sheet"))
 
 

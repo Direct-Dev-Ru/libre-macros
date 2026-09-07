@@ -2,7 +2,7 @@
 
 Единый реестр всех имён параметров, допустимых значений и колонок. Канонический источник имён в коде: `param_wizard._build_wizard_catalog()` и константы `P_MERGE_*` в `collect_workbooks.py`.
 
-**Версия макроса**: `MACRO_VERSION` в `macro-lib/collect_workbooks.py` / `macro-lib/version.txt` (**3.10.523**).
+**Версия макроса**: `MACRO_VERSION` в `macro-lib/collect_workbooks.py` / `macro-lib/version.txt` (**3.10.696**).
 
 Подробные описания поведения — в [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md), оркестратор — [18_ORCHESTRATOR.md](18_ORCHESTRATOR.md), постобработка — [05_POSTPROCESS.md](05_POSTPROCESS.md), JSON — [13_JSON_PARAMS.md](13_JSON_PARAMS.md).
 
@@ -499,6 +499,9 @@ Legacy B–F (если ещё записан):
 | `удалить_дубликаты` | `dedup`, `убрать_повторы_строк` | блок (`key_columns`, `keep`, `output`, …) |
 | `копировать_лист` | `копировать_переместить_лист` | блок (`source_sheet`, `dest_sheet`) |
 | `копирование_диапазонов` | `копировать_диапазон`, `copy_ranges`, `copy_range`, `вставить_диапазон` | блок (`source_sheet`, `source_range` / rows/cols, `dest_sheet(s)`, `dest_cell`, `mode`, `insert_axis`, `content`, `with_formatting`, `clear_source`, `create_missing_dest`, `involve_dest`, `header_row`) — см. [13_JSON_PARAMS.md](13_JSON_PARAMS.md) |
+| `транспонировать_таблицу` | `transpose`, `transpose_table` | блок (`output`, `dest_sheet` / `dest_cell`, `range`, `header_row`, `columns`, `headers_from_column`, `header_column`, `result_headers`, `skip_*`, `as_values`) — [13_JSON_PARAMS.md](13_JSON_PARAMS.md), [05_POSTPROCESS.md](05_POSTPROCESS.md) |
+| `анкета_в_таблицу` | `form_to_table`, `form_to_wide` | блок (Q/A → wide: `question_column`, `answer_column`, `block_mode`, …) |
+| `таблица_в_анкету` | `table_to_form`, `wide_to_form` | блок (wide → Q/A: `body_columns`, `question_header`, `answer_header`, …) |
 | `разделить_по_столбцам` | — | блок (`column`, `delimiter`, `position`, `source_policy`, …) |
 | `условный_столбец` | — | блок (`new_column`, `rules[]`, `otherwise`, …) |
 | `столбец_по_лямбде` | `lambda_column`, … | блок (`expr`, `new_column`, `on_error`, `result_type`, …) |
@@ -536,6 +539,8 @@ Legacy B–F (если ещё записан):
 | `скрытие_листов` | Скрыть листы (те же спецификации и `filter`) |
 | `активировать_лист` | Сделать активным лист результата (`target_sheet`); опционально `tab_color` — цвет ярлычка |
 | `копирование_диапазонов` | Копировать блок ячеек между листами (`source_*` → `dest_*`; `mode` replace/insert; `content` values/formulas; флаги `with_formatting` / `clear_source` / `create_missing_dest` / `involve_dest`) — [13_JSON_PARAMS.md](13_JSON_PARAMS.md), [05_POSTPROCESS.md](05_POSTPROCESS.md) |
+| `транспонировать_таблицу` | Строки ↔ столбцы (`output`, `headers_from_column`, `result_headers`, …) — [13](13_JSON_PARAMS.md), [05](05_POSTPROCESS.md) |
+| `анкета_в_таблицу` / `таблица_в_анкету` | Форма ↔ wide-таблица |
 | `отправить_по_почте` | Вложение (вся книга / выбранные листы / без файла) во временный файл + окно compose почтового клиента; алиасы `email`, `mailto`, `почта` |
 | `только_значения` | Преобразовать в значения (список листов в C) |
 | `вертикаль_центр` | Вертикальное выравнивание по центру (данные) |

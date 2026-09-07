@@ -1,6 +1,6 @@
 # Оркестратор `collect_pack`
 
-**Версия:** **3.10.523** (`macro-lib/version.txt`).  
+**Версия:** **3.10.696** (`macro-lib/version.txt`).  
 **Код:** `collect_workbooks.collect_pack` → `pythonpath/libre_macros_pack_orchestrator_lib.py` (+ `…_cfg.py`).
 
 Имя экспорта и пункт меню **не менялись**: макрос по-прежнему называется `collect_pack`, по смыслу это **оркестратор** запусков сбора по листам группы `Параметры_Объединения*`.

@@ -1,6 +1,6 @@
 # Руководство по функциям постобработки collect_workbooks
 
-**Версия макроса**: **3.10.523** (`macro-lib/version.txt`). Постобработка настраивается на листе группы `Параметры_Объединения*` (см. [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md); при `collect_pack` — на каждом листе плана).
+**Версия макроса**: **3.10.696** (`macro-lib/version.txt`). Постобработка настраивается на листе группы `Параметры_Объединения*` (см. [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md); при `collect_pack` — на каждом листе плана).
 
 ### Формат параметров (колонка C)
 
@@ -1021,6 +1021,52 @@ Legacy (без JSON): имена через `,` / `;`. JSON с `sheets` обра
 
 ---
 
+### `транспонировать_таблицу` — merge_pp_range_transpose_table / merge_final_transpose_table
+
+**Назначение:** перевернуть прямоугольный диапазон (строки ↔ столбцы). Только **значения** (стили в v1 не копируются). **Не** в `Постобработка_xml` (UNO RANGE / Финал; xml — этап 2).
+
+**Ключ в B:** `транспонировать_таблицу` (алиасы: `transpose`, `transpose_table`).
+
+**JSON в C** (визард «Параметры…» + кнопка «Справка»):
+
+| Поле | Описание |
+|------|----------|
+| `output` | `inplace` (по умолчанию) \| `new_sheet` (+ `dest_sheet`) \| `offset` (+ `dest_cell`) |
+| `range` | явный A1; пусто = авто (used / диапазон сбора) |
+| `header_row` | якорь авто-диапазона и имён столбцов (1…) |
+| `columns` | ограничить столбцы (`columns_pick`) |
+| `headers_from_column` | шапка результата = значения колонки меток; строка 0 источника отбрасывается |
+| `header_column` | колонка меток (индекс / буква / имя); пусто = первая в диапазоне |
+| `result_headers` | кастомные имена столбцов результата (массив или строка через `,`/`;`); **добавляются сверху** после транспонирования; алиас `new_headers`; при `headers_from_column` игнорируется |
+| `skip_header_row` / `skip_first_column` | вырезать до транспонирования; с `inplace` без `headers_from_column` — ошибка; с `headers_from_column` флаг `skip_first_column` запрещён |
+| `as_values` | материализовать формулы перед чтением (default true) |
+
+Обычный transpose: `R×C → C×R`. При `headers_from_column`: `C` строк × `(R−1)` столбцов.
+
+```json
+[{"v":1,"fn":"транспонировать_таблицу","sheet":"Матрица","output":"new_sheet","dest_sheet":"Матрица_T"}]
+```
+
+```json
+[{"v":1,"fn":"транспонировать_таблицу","sheet":"Метки_колонка","output":"new_sheet","dest_sheet":"Метки_T","headers_from_column":true}]
+```
+
+```json
+[{"v":1,"fn":"транспонировать_таблицу","sheet":"Матрица","output":"new_sheet","dest_sheet":"Матрица_H","result_headers":["Метка","Строка1","Строка2"]}]
+```
+
+Поля и примеры подробно — [13_JSON_PARAMS.md](13_JSON_PARAMS.md). Ручной сценарий: `16_transpose_table.xltx` (`sources/transpose/`).
+
+---
+
+### `анкета_в_таблицу` / `таблица_в_анкету` — form ↔ table
+
+**Назначение:** вертикальные пары вопрос/ответ ↔ широкая таблица (и обратно). RANGE / Финал; UNO. Алиасы: `form_to_table` / `table_to_form`.
+
+Сценарии: `14_form_to_table.xltx`, `15_table_to_form.xltx` (`sources/forms/`). Схема полей — визард + [13_JSON_PARAMS.md](13_JSON_PARAMS.md).
+
+---
+
 ### `отправить_по_почте` — merge_final_send_mail (только финал)
 
 **Назначение:** после сбора подготовить вложение (ODS/XLSX) во временный каталог и открыть окно «Новое сообщение» в почтовом клиенте ОС. Письмо **не отправляется** автоматически.
@@ -1508,7 +1554,7 @@ Legacy-пары:
 
 ## Быстрый справочник по псевдонимам
 
-### RANGE функции (28 шт.)
+### RANGE функции (основные)
 | Псевдоним | Функция | Параметры в C |
 |-----------|---------|---------------|
 | `сетка` | merge_pp_range_grid_borders | `толщина/цвет` или `лист \| 25/#CCCCCC ; …` |
@@ -1544,6 +1590,9 @@ Legacy-пары:
 | `сортировка` | merge_pp_range_sort_data | `колонка -> +/-` или `лист \| ключи ; …` |
 | `раскрасить_блоки` | merge_pp_range_colorize_data | `лист \| ключи -> цвета` ; `!граница` |
 | `копирование_диапазонов` | merge_pp_range_copy_ranges / merge_final_copy_ranges | JSON: `source_*` → `dest_*`; `mode`, `content`, `involve_dest` |
+| `транспонировать_таблицу` | merge_pp_range_transpose_table / merge_final_transpose_table | JSON: `output`, `headers_from_column`, `result_headers`, … |
+| `анкета_в_таблицу` | merge_pp_range_form_to_table / merge_final_form_to_table | JSON: Q/A → wide |
+| `таблица_в_анкету` | merge_pp_range_table_to_form / merge_final_table_to_form | JSON: wide → Q/A |
 
 ### ROW функции (9 шт.)
 | Псевдоним | Функция | Параметры в C |

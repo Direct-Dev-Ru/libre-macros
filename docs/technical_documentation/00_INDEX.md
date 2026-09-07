@@ -5,7 +5,7 @@
 | Параметр | Значение |
 |----------|----------|
 | Проект | **libre-macros** |
-| Версия макросов | **3.10.523** (`MACRO_VERSION`, `macro-lib/version.txt`) |
+| Версия макросов | **3.10.696** (`MACRO_VERSION`, `macro-lib/version.txt`) |
 | Git-ревизия | `215511dbcea8b1aa62164d15f3aec19c6e35a1b1` (2026-07-24) |
 | Среда исполнения | LibreOffice Calc / AlterOffice ACell (PyUNO, Python 3.x) |
 

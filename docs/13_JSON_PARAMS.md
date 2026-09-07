@@ -1,5 +1,7 @@
 # JSON-параметры постобработки (колонка C)
 
+**Версия макроса:** **3.10.696** (`macro-lib/version.txt`).
+
 **Только JSON.** Строки `Постобработка_Диапазон` / `Постобработка_Строка` / `Финальная_обработка` / `Постобработка_xml`, а также отдельные параметры pipeline **`объединить_листы_в_один`**, **`разделить_листы`**, **`ВПР`** (если выбран JSON) хранят в **колонке C** компактный JSON:
 
 ```json
@@ -794,6 +796,57 @@ Lib: `lm_final_copy_ranges` / `merge_final_copy_ranges` (+ RANGE: `lm_pp_range_c
 ```
 
 Ограничения v1: при `source_sheet == dest_sheet` и пересечении диапазонов + `clear_source=true` — ошибка; cut / мульти-диапазоны / внешние книги — вне scope. Подробнее — [05_POSTPROCESS.md](05_POSTPROCESS.md) (`копирование_диапазонов`).
+
+---
+
+## RANGE / Финал: `транспонировать_таблицу`
+
+Алиасы: `transpose`, `transpose_table`. Только UNO (не `Постобработка_xml` в v1). Ядро: `libre_macros_transpose_lib.py`.
+
+```json
+[{"v":1,"fn":"транспонировать_таблицу","sheet":"Матрица","output":"new_sheet","dest_sheet":"Матрица_T","as_values":true}]
+```
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `output` | string | `inplace` \| `new_sheet` \| `offset` |
+| `dest_sheet` / `dest` | string | обязателен при `new_sheet` |
+| `dest_cell` | string | якорь A1 при `offset` |
+| `range` | string | A1-диапазон; пусто = авто |
+| `header_row` / `data_start` | int | якоря авто-диапазона |
+| `columns` | list | `columns_pick` |
+| `headers_from_column` | bool | шапка из колонки меток |
+| `header_column` | int/string | колонка меток |
+| `result_headers` | list/string | кастомные имена столбцов результата (prepend); алиас `new_headers` |
+| `skip_header_row` / `skip_first_column` | bool | вырез до транспонирования (ограничения с `inplace`) |
+| `as_values` | bool | default true |
+| `overwrite_overlap` / `clear_source` / `with_formatting` | bool | см. справку визарда |
+
+```json
+[{"v":1,"fn":"транспонировать_таблицу","sheet":"Метки_колонка","output":"new_sheet","dest_sheet":"Метки_T","headers_from_column":true}]
+```
+
+```json
+[{"v":1,"fn":"транспонировать_таблицу","sheet":"Матрица","output":"new_sheet","dest_sheet":"Матрица_H","result_headers":["Метка","Строка1","Строка2"]}]
+```
+
+Сценарий: `16_transpose_table.xltx`. Подробности — [05_POSTPROCESS.md](05_POSTPROCESS.md), встроенная «Справка» визарда.
+
+---
+
+## RANGE / Финал: `анкета_в_таблицу` / `таблица_в_анкету`
+
+Алиасы: `form_to_table` / `form_to_wide`; `table_to_form` / `wide_to_form`. Ядро: `libre_macros_form_table_lib.py`.
+
+```json
+[{"v":1,"fn":"анкета_в_таблицу","question_column":"A","answer_column":"B","block_mode":"by_repeat_key","block_start_question":"ФИО","output":"new_sheet","dest_sheet":"Анкеты_wide"}]
+```
+
+```json
+[{"v":1,"fn":"таблица_в_анкету","body_columns":["'ФИО'","'Возраст'"],"question_header":"Вопрос","answer_header":"Ответ","has_header_in_output":true,"dest_sheet":"Анкеты"}]
+```
+
+Сценарии: `14_form_to_table.xltx`, `15_table_to_form.xltx`.
 
 ---
 

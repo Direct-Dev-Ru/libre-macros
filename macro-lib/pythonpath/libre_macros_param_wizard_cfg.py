@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.693"
+MACRO_VERSION = "3.10.696"
 import re
 
 try:
@@ -182,6 +182,7 @@ _FALLBACK_PP_RANGE_CHOICES = [
     u"формат_столбцы",     u"ширина_столбцов", u"шрифт", u"заполнение_вниз",
     u"заполнить_вверх",
     u"развернуть_столбцы",
+    u"транспонировать_таблицу",
     u"анкета_в_таблицу",
     u"таблица_в_анкету",
     u"заполнение_вниз_вычислить", u"копировать_значения", u"замена_значений", u"текстовые_операции", u"переименовать_лист",
@@ -204,7 +205,7 @@ _FALLBACK_PP_XML_CHOICES = [
     u"зебра_диапазон", u"формат_деньги", u"формат_даты", u"формат_столбцы",
     u"применить_формулу", u"удалить_столбцы", u"конкатенация_столбцов",
     u"разделить_по_столбцам", u"условный_столбец",
-    u"замена_значений", u"текстовые_операции", u"заполнение_вниз", u"заполнить_вверх", u"развернуть_столбцы", u"анкета_в_таблицу", u"таблица_в_анкету", u"сортировка",
+    u"замена_значений", u"текстовые_операции", u"заполнение_вниз", u"заполнить_вверх", u"развернуть_столбцы", u"транспонировать_таблицу", u"анкета_в_таблицу", u"таблица_в_анкету", u"сортировка",
     u"переименовать_лист", u"переименовать_столбцы", u"переставить_столбцы",
     u"копировать_переместить_лист", u"закрепить_заголовок",
     u"автофильтр", u"сводная_таблица",
@@ -227,6 +228,7 @@ _FALLBACK_FINAL_CHOICES = [
     u"отправить_по_почте",
     u"заполнение_вниз", u"заполнить_вверх",
     u"развернуть_столбцы",
+    u"транспонировать_таблицу",
     u"анкета_в_таблицу",
     u"таблица_в_анкету",
     u"замена_значений", u"текстовые_операции",
@@ -558,6 +560,10 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u"Unpivot: unpivot_columns или exclude_columns; attribute/value; inplace|new_sheet",
         u'[{"v":1,"fn":"развернуть_столбцы","unpivot_columns":["\'Январь\'","\'Февраль\'"],'
         u'"attribute_column":"Месяц","value_column":"Сумма","drop_empty_rows":true}]',
+    ),
+    u"транспонировать_таблицу": (
+        u"Транспонирование: inplace|new_sheet|offset; headers_from_column; result_headers",
+        u'[{"v":1,"fn":"транспонировать_таблицу","output":"new_sheet","dest_sheet":"Матрица_T","result_headers":["A","B"]}]',
     ),
     u"анкета_в_таблицу": (
         u"Пары Q/A → wide: block_mode + block_start_question; new_sheet",
@@ -1866,6 +1872,16 @@ UNPIVOT_OUTPUT_CODE = {label.casefold(): code for code, label in UNPIVOT_OUTPUT_
 for _up_out_code, _up_out_label in UNPIVOT_OUTPUT_CHOICES:
     UNPIVOT_OUTPUT_CODE[_up_out_code.casefold()] = _up_out_code
 
+TRANSPOSE_OUTPUT_CHOICES = (
+    (u"inplace", u"На месте"),
+    (u"new_sheet", u"Новый лист"),
+    (u"offset", u"Рядом (offset)"),
+)
+TRANSPOSE_OUTPUT_LABEL = {code: label for code, label in TRANSPOSE_OUTPUT_CHOICES}
+TRANSPOSE_OUTPUT_CODE = {label.casefold(): code for code, label in TRANSPOSE_OUTPUT_CHOICES}
+for _tr_out_code, _tr_out_label in TRANSPOSE_OUTPUT_CHOICES:
+    TRANSPOSE_OUTPUT_CODE[_tr_out_code.casefold()] = _tr_out_code
+
 FORM_TABLE_OUTPUT_CHOICES = (
     (u"new_sheet", u"Новый лист"),
     (u"inplace", u"На месте"),
@@ -2942,6 +2958,92 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"unpivot_columns": {
         "alias_of": u"развернуть_столбцы",
     },
+    u"транспонировать_таблицу": {
+        "title": u"Транспонировать таблицу",
+        "hint": (
+            u"Строки ↔ столбцы. Куда писать: на месте / новый лист / рядом.\n"
+            u"Заголовки: из колонки меток ИЛИ вручную («Имена столбцов результата»).\n"
+            u"Подробности, примеры и ограничения — кнопка «Справка»."
+        ),
+        "hint_lines": 3,
+        "compact_fields": True,
+        "fields": (
+            {
+                "id": "output",
+                "label": u"Куда писать",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in TRANSPOSE_OUTPUT_CHOICES),
+                "default": u"На месте",
+            },
+            {
+                "id": "dest_sheet",
+                "label": u"Лист назначения (new_sheet)",
+                "default": u"Матрица_T",
+            },
+            {
+                "id": "dest_cell",
+                "label": u"Якорь записи (offset), A1",
+                "default": u"",
+            },
+            {
+                "id": "range",
+                "label": u"Диапазон (пусто = авто)",
+                "default": u"",
+            },
+            {
+                "id": "header_row",
+                "label": u"Строка заголовка (1…)",
+                "default": u"1",
+            },
+            {
+                "id": "columns",
+                "label": u"Столбцы (пусто = все)",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"",
+            },
+            {
+                "id": "headers_from_column",
+                "label": u"Заголовки из колонки",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "header_column",
+                "label": u"Колонка меток (пусто = первая)",
+                "default": u"",
+            },
+            {
+                "id": "result_headers",
+                "label": u"Имена столбцов результата",
+                "default": u"",
+                "hint": (
+                    u"Через запятую или «;». Добавляются сверху после транспонирования. "
+                    u"Пусто = без доп. шапки. Не используется при «Заголовки из колонки»."
+                ),
+            },
+            {
+                "id": "skip_header_row",
+                "label": u"Без первой строки (не inplace)",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "skip_first_column",
+                "label": u"Без первого столбца (не inplace)",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "as_values",
+                "label": u"Как значения (формулы)",
+                "type": "bool",
+                "default": True,
+            },
+        ),
+    },
+    u"transpose": {"alias_of": u"транспонировать_таблицу"},
+    u"transpose_table": {"alias_of": u"транспонировать_таблицу"},
     u"анкета_в_таблицу": {
         "title": u"Анкета → таблица",
         "hint": (

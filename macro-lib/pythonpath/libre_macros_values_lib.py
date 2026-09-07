@@ -5,7 +5,7 @@ from __future__ import print_function
 
 Используется финальной обработкой (Только_значения) и постобработкой сводных (as_values).
 """
-MACRO_VERSION = "3.10.693"
+MACRO_VERSION = "3.10.696"
 import re
 import time
 
@@ -984,6 +984,7 @@ _LM_FINAL_RANGE_SPEC = (
     ("заполнение_вниз", "fill_down", "lm_pp_range_fill_down_empty"),
     ("заполнить_вверх", "fill_up", "lm_pp_range_fill_up_empty"),
     ("развернуть_столбцы", "unpivot_columns", "lm_pp_range_unpivot_columns"),
+    ("транспонировать_таблицу", "transpose_table", "lm_pp_range_transpose_table"),
     ("анкета_в_таблицу", "form_to_table", "lm_pp_range_form_to_table"),
     ("таблица_в_анкету", "table_to_form", "lm_pp_range_table_to_form"),
     (

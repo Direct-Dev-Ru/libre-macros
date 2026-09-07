@@ -2,7 +2,7 @@
 
 **Исходный код:** [`collect_workbooks.py`](../macro-lib/collect_workbooks.py)  
 **Режим:** `MERGE_MODE_ONE` = `"на один лист"` (параметр **Режим** на листе `Параметры_Объединения*`)  
-**Версия документа:** ориентир на **3.10.523**; **номера строк устаревают** — ищите по именам функций.
+**Версия документа:** ориентир на **3.10.696**; **номера строк устаревают** — ищите по именам функций.
 
 Связанные документы: [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md), [09_ARCHITECTURE.md](09_ARCHITECTURE.md), [05_POSTPROCESS.md](05_POSTPROCESS.md), [15_PARAM_REFERENCE.md](15_PARAM_REFERENCE.md), [18_ORCHESTRATOR.md](18_ORCHESTRATOR.md).
 

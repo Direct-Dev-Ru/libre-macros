@@ -38,3 +38,7 @@ qa/collect_headless/.profile/
 # LO/AO lock files
 .~lock.*
 **/.~lock.*
+
+# Accidental unnamed Calc saves in manual templates
+test/collect_workbooks/workbooks/Без имени*.ods
+test/collect_workbooks/workbooks/Без\ имени*.ods

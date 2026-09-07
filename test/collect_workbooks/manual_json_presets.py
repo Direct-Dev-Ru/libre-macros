@@ -192,6 +192,21 @@ PRESET = {
     "копировать_формат_заголовка": jone("копировать_формат_заголовка"),
     "подсветка_по_заголовку": jone("подсветка_по_заголовку"),
     "жирный_по_пути": jone("жирный_по_пути"),
+    "развернуть_столбцы": jone(
+        "развернуть_столбцы",
+        unpivot_columns=["'Январь'", "'Февраль'"],
+        attribute_column="Месяц",
+        value_column="Сумма",
+        drop_empty_rows=True,
+        output="inplace",
+    ),
+    "транспонировать_таблицу": jone(
+        "транспонировать_таблицу",
+        output="new_sheet",
+        dest_sheet="Матрица_T",
+        headers_from_column=False,
+        as_values=True,
+    ),
     # анкета ↔ таблица (сценарии 14 / 15; источники sources/forms/source_forms.xlsx)
     "анкета_в_таблицу": jblocks(
         {

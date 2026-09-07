@@ -19,7 +19,7 @@ from pathlib import Path
 
 from bundle_python_lib import BundleSpec, main_cli
 
-MACRO_VERSION = "3.10.693"
+MACRO_VERSION = "3.10.696"
 SPEC = BundleSpec(
     packages=("defusedxml", "odf"),
     bundle_tag="odf_bundled",

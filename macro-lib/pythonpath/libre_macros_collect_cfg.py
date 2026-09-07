@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.693"
+MACRO_VERSION = "3.10.696"
 import re
 
 try:
@@ -705,6 +705,12 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         '[{"v":1,"fn":"развернуть_столбцы","unpivot_columns":["\'Январь\'","\'Февраль\'"],'
         '"attribute_column":"Месяц","value_column":"Сумма","drop_empty_rows":true}]',
     ),
+    "транспонировать_таблицу": (
+        "Транспонирование: output=inplace|new_sheet|offset; range/header_row; "
+        "headers_from_column + header_column; result_headers; dest_sheet/dest_cell",
+        '[{"v":1,"fn":"транспонировать_таблицу","output":"new_sheet","dest_sheet":"Матрица_T",'
+        '"result_headers":["Метка","Янв","Фев"]}]',
+    ),
     "анкета_в_таблицу": (
         "Пары вопрос/ответ → wide: question_column/answer_column, block_mode, "
         "block_start_question; output=new_sheet|inplace|replace_sheet",
@@ -916,6 +922,7 @@ MERGE_POSTPROCESS_XML_REST_HINTS = {
         "заполнение_вниз",
         "заполнить_вверх",
         "развернуть_столбцы",
+        "транспонировать_таблицу",
         "анкета_в_таблицу",
         "таблица_в_анкету",
         "заполнение_вниз_вычислить",
@@ -982,6 +989,9 @@ _PP_RANGE_MAP_SPEC = (
     ("развернуть_столбцы", "merge_pp_range_unpivot_columns"),
     ("unpivot", "merge_pp_range_unpivot_columns"),
     ("unpivot_columns", "merge_pp_range_unpivot_columns"),
+    ("транспонировать_таблицу", "merge_pp_range_transpose_table"),
+    ("transpose", "merge_pp_range_transpose_table"),
+    ("transpose_table", "merge_pp_range_transpose_table"),
     ("анкета_в_таблицу", "merge_pp_range_form_to_table"),
     ("form_to_table", "merge_pp_range_form_to_table"),
     ("таблица_в_анкету", "merge_pp_range_table_to_form"),
@@ -1146,6 +1156,7 @@ MERGE_FINAL_PROCESSING_REST_HINTS = {
     "заполнение_вниз": MERGE_POSTPROCESS_RANGE_REST_HINTS["заполнение_вниз"],
     "заполнить_вверх": MERGE_POSTPROCESS_RANGE_REST_HINTS["заполнить_вверх"],
     "развернуть_столбцы": MERGE_POSTPROCESS_RANGE_REST_HINTS["развернуть_столбцы"],
+    "транспонировать_таблицу": MERGE_POSTPROCESS_RANGE_REST_HINTS["транспонировать_таблицу"],
     "анкета_в_таблицу": MERGE_POSTPROCESS_RANGE_REST_HINTS["анкета_в_таблицу"],
     "таблица_в_анкету": MERGE_POSTPROCESS_RANGE_REST_HINTS["таблица_в_анкету"],
     "заполнение_вниз_вычислить": MERGE_POSTPROCESS_RANGE_REST_HINTS[
@@ -1248,6 +1259,9 @@ _FINAL_MAP_SPEC = (
     ("развернуть_столбцы", "merge_final_unpivot_columns"),
     ("unpivot", "merge_final_unpivot_columns"),
     ("unpivot_columns", "merge_final_unpivot_columns"),
+    ("транспонировать_таблицу", "merge_final_transpose_table"),
+    ("transpose", "merge_final_transpose_table"),
+    ("transpose_table", "merge_final_transpose_table"),
     ("анкета_в_таблицу", "merge_final_form_to_table"),
     ("form_to_table", "merge_final_form_to_table"),
     ("таблица_в_анкету", "merge_final_table_to_form"),

@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.693"
+MACRO_VERSION = "3.10.696"
 import ast
 import glob
 import json
@@ -9755,6 +9755,14 @@ def _block_field_to_text(block, field_id, fn_key=None):
                 raw, unicode(block.get('output') or u'inplace')
             )
         if fk in (
+            u'транспонировать_таблицу'.casefold(),
+            u'transpose',
+            u'transpose_table',
+        ):
+            return _pw_cfg.TRANSPOSE_OUTPUT_LABEL.get(
+                raw, unicode(block.get('output') or u'inplace')
+            )
+        if fk in (
             u'анкета_в_таблицу'.casefold(),
             u'таблица_в_анкету'.casefold(),
             u'form_to_table',
@@ -10199,6 +10207,15 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
                 return code
             return u'inplace'
         if unicode(fn_key or u'').casefold() in (
+            u'транспонировать_таблицу'.casefold(),
+            u'transpose',
+            u'transpose_table',
+        ):
+            code = _pw_cfg.TRANSPOSE_OUTPUT_CODE.get(t, t)
+            if code in (u'inplace', u'new_sheet', u'offset'):
+                return code
+            return u'inplace'
+        if unicode(fn_key or u'').casefold() in (
             u'анкета_в_таблицу'.casefold(),
             u'таблица_в_анкету'.casefold(),
             u'form_to_table',
@@ -10224,10 +10241,10 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
         if code in _pw_cfg.FORM_BLOCK_SEP_LABEL:
             return code
         return u'blank_row'
-    if field_id in ('markers', 'columns', 'new_names'):
+    if field_id in ('markers', 'columns', 'new_names', 'result_headers'):
         if text == u'':
             return []
-        if field_id == 'new_names':
+        if field_id in ('new_names', 'result_headers'):
             out = []
             for p in re.split('[,;]', text):
                 p = p.strip()

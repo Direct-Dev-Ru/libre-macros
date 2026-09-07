@@ -1,7 +1,7 @@
 # Архитектура макроса `collect_workbooks` / `collect_pack`
 
 **Файл:** `macro-lib/collect_workbooks.py`  
-**Версия:** **3.10.523**  
+**Версия:** **3.10.696**  
 **Связанные модули:** `pythonpath/libre_macros_lib.py`, `libre_macros_direct_lib.py`, `libre_macros_split_lib.py`, `libre_macros_header_lib.py`, `libre_macros_lambda_column_lib.py`, `libre_macros_pack_orchestrator_lib.py`, `libre_macros_final_lib.py`, `param_wizard.py`, `functions_pp.py`, `functions_final.py`
 
 Параметры — [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md); оркестратор — [18_ORCHESTRATOR.md](18_ORCHESTRATOR.md); постобработка — [05_POSTPROCESS.md](05_POSTPROCESS.md); `xml_excel_ods` — [17_POSTPROCESS_XML.md](17_POSTPROCESS_XML.md); визард — [06_PARAM_WIZARD.md](06_PARAM_WIZARD.md).
@@ -161,4 +161,4 @@ Entry-скрипты (`macro-lib/*.py`) при установке → `Scripts/p
 
 ---
 
-*Документ соответствует `MACRO_VERSION` **3.10.523**.*
+*Документ соответствует `MACRO_VERSION` **3.10.696**.*
