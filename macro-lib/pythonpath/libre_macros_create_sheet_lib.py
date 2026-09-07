@@ -6,7 +6,7 @@ from __future__ import print_function, unicode_literals
 Ключ: создать_лист (RANGE + FINAL).
 Созданный лист регистрируется в pending → следующие шаги pp/final.
 """
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 try:
     unicode
 except NameError:

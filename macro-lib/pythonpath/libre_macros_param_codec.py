@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 import json
 import re
 
@@ -2342,13 +2342,17 @@ def _normalize_table_to_form_block(block):
             (u"skip_empty_rows", True),
             (u"sheet_preamble_blank_after", True),
             (u"preamble_columns_first", True),
-            (u"has_header_in_output", False),
+            (u"has_header_in_output", True),
             (u"clear_source_first", False),
             (u"as_values", True),
         ):
             out[key] = bool(lm_parse_bool_param(out.get(key), default=default))
     except Exception:
         pass
+    qh = unicode(out.get("question_header") or u"").strip()
+    ah = unicode(out.get("answer_header") or u"").strip()
+    out["question_header"] = qh or u"Вопрос"
+    out["answer_header"] = ah or u"Ответ"
     ea = unicode(out.get("empty_answer") or u"write").strip().casefold()
     out["empty_answer"] = u"skip" if ea == u"skip" else u"write"
     return _attach_sheet(out, out.get("sheet"))

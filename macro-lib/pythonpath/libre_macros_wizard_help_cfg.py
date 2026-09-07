@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -284,16 +284,29 @@ _FN_HELP_TEXTS = {
     ),
     u"таблица_в_анкету": (
         u"══════════════════════════════════════\n"
-        u"ТАБЛИЦА → АНКЕТА\n"
+        u"ТАБЛИЦА → АНКЕТА  (table_to_form)\n"
         u"══════════════════════════════════════\n"
         u"\n"
-        u"Wide-строки → вертикальные пары вопрос/ответ (блоки).\n"
-        u"body_columns / sheet_preamble_columns / block_preamble_columns.\n"
+        u"Wide-строки → вертикальные пары вопрос/ответ (блоки вниз).\n"
+        u"Алиасы: table_to_form, wide_to_form.\n"
+        u"\n"
+        u"── Заголовки выходных колонок ──\n"
+        u"Заголовок колонки вопросов → question_header (по умолчанию «Вопрос»)\n"
+        u"Заголовок колонки ответов  → answer_header  (по умолчанию «Ответ»)\n"
+        u"Писать строку заголовков   → has_header_in_output (по умолчанию да)\n"
+        u"Первая строка листа назначения: question_header | answer_header,\n"
+        u"далее пары данных. Без заголовка (has_header_in_output=false)\n"
+        u"сразу идёт первая пара вопроса/ответа — как «нет шапки».\n"
+        u"\n"
+        u"── Прочие поля ──\n"
+        u"body_columns / skip_columns / sheet_preamble_columns /\n"
+        u"block_preamble_columns — столбцы wide.\n"
+        u"question_column / answer_column — куда писать (A/B…).\n"
         u"block_separator: blank_row | none | repeat_key.\n"
-        u"Обратная к анкета_в_таблицу. Алиасы: table_to_form, wide_to_form.\n"
         u"\n"
         u'[{"v":1,"fn":"таблица_в_анкету","body_columns":["\'ФИО\'","\'Возраст\'"],'
-        u'"block_separator":"blank_row","dest_sheet":"Анкеты"}]\n'
+        u'"question_header":"Вопрос","answer_header":"Ответ",'
+        u'"has_header_in_output":true,"block_separator":"blank_row","dest_sheet":"Анкеты"}]\n'
         u"\n"
     ),
     u"заполнение_вниз_вычислить": (

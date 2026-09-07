@@ -2,7 +2,7 @@
 """Константы макросов управления строками таблицы задач (todo_task_*)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 # Имена колонок заголовка (лист задач). Сопоставление — нормализованное.
 COL_NUM = u"№ п/п"
 COL_NAME = u"Наименование"

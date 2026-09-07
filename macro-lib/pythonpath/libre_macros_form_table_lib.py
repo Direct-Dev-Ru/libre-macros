@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 """
 анкета_в_таблицу / таблица_в_анкету — вертикальные пары Q/A ↔ wide-таблица.
 
@@ -374,7 +374,7 @@ def build_wide_matrix_from_blocks( blocks, sheet_preamble=None, column_order=Non
 # Pure: wide → анкета
 # ---------------------------------------------------------------------------
 
-def build_form_pairs_from_wide( header, body_rows, body_rel_indices, sheet_preamble_rel=None, block_preamble_rel=None, block_separator=u"blank_row", blank_rows_between=1, empty_answer=u"write", preamble_columns_first=True, has_header_in_output=False, question_header=u"Вопрос", answer_header=u"Ответ"):
+def build_form_pairs_from_wide( header, body_rows, body_rel_indices, sheet_preamble_rel=None, block_preamble_rel=None, block_separator=u"blank_row", blank_rows_between=1, empty_answer=u"write", preamble_columns_first=True, has_header_in_output=True, question_header=u"Вопрос", answer_header=u"Ответ"):
     """
     Returns (pairs, sheet_preamble_pairs) where pairs is list of (q,a) or None for blank row.
     sheet_preamble_pairs written once before blocks.
@@ -1364,7 +1364,11 @@ def lm_pp_range_table_to_form(doc, sheet, data_range, header_row_range, *extra_a
         preamble_columns_first=True
         if u"preamble_columns_first" not in block
         else bool(block.get(u"preamble_columns_first")),
-        has_header_in_output=bool(block.get(u"has_header_in_output")),
+        has_header_in_output=(
+            True
+            if u"has_header_in_output" not in block
+            else bool(block.get(u"has_header_in_output"))
+        ),
         question_header=_u(block.get(u"question_header") or u"Вопрос"),
         answer_header=_u(block.get(u"answer_header") or u"Ответ"),
     )

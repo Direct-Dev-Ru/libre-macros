@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Вшитый generate_qr_template.ods (base64). Пересборка: python3 macro-lib/bundle_qr_template.py"""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 import base64
 import os
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 import re
 
 try:
@@ -712,9 +712,10 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         '"block_mode":"by_repeat_key","block_start_question":"ФИО","dest_sheet":"Анкеты_wide"}]',
     ),
     "таблица_в_анкету": (
-        "Wide → пары вопрос/ответ: body_columns / preamble; block_separator; "
-        "output=new_sheet|inplace|replace_sheet",
+        "Wide → пары вопрос/ответ: body_columns; question_header/answer_header "
+        "(по умолчанию Вопрос/Ответ); has_header_in_output; block_separator; output",
         '[{"v":1,"fn":"таблица_в_анкету","body_columns":["\'ФИО\'","\'Возраст\'"],'
+        '"question_header":"Вопрос","answer_header":"Ответ","has_header_in_output":true,'
         '"block_separator":"blank_row","dest_sheet":"Анкеты"}]',
     ),
     "заполнение_вниз_вычислить": (

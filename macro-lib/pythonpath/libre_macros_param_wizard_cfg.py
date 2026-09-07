@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 import re
 
 try:
@@ -565,8 +565,10 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u'"block_mode":"by_repeat_key","block_start_question":"ФИО","dest_sheet":"Анкеты_wide"}]',
     ),
     u"таблица_в_анкету": (
-        u"Wide → пары Q/A: body_columns; block_separator; new_sheet",
+        u"Wide → пары Q/A: body_columns; question_header/answer_header (Вопрос/Ответ); "
+        u"has_header_in_output; block_separator",
         u'[{"v":1,"fn":"таблица_в_анкету","body_columns":["\'ФИО\'","\'Возраст\'"],'
+        u'"question_header":"Вопрос","answer_header":"Ответ","has_header_in_output":true,'
         u'"block_separator":"blank_row","dest_sheet":"Анкеты"}]',
     ),
     u"заполнение_вниз_вычислить": (
@@ -3053,9 +3055,10 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
         "hint": (
             u"Широкая таблица → вертикальные пары вопрос/ответ (блоки вниз).\n"
             u"Столбцы тела — columns_pick; шапка листа / шапка блока — отдельно.\n"
-            u"Разделитель блоков: пустая строка / нет / старт по ключу."
+            u"Первая строка выхода: заголовки колонок (по умолчанию Вопрос / Ответ)."
         ),
         "hint_lines": 3,
+        "compact_fields": True,
         "fields": (
             {
                 "id": "body_columns",
@@ -3086,8 +3089,43 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "choices_from_headers": True,
                 "default": u"",
             },
-            {"id": "question_column", "label": u"Колонка вопросов (выход)", "default": u"A"},
-            {"id": "answer_column", "label": u"Колонка ответов (выход)", "default": u"B"},
+            {
+                "id": "question_column",
+                "label": u"Колонка вопросов (выход)",
+                "default": u"A",
+                "row_group": u"qa_out_cols",
+                "row_group_slot": 0,
+            },
+            {
+                "id": "answer_column",
+                "label": u"Колонка ответов (выход)",
+                "default": u"B",
+                "row_group": u"qa_out_cols",
+                "row_group_slot": 1,
+            },
+            {
+                "id": "question_header",
+                "label": u"Заголовок колонки вопросов",
+                "default": u"Вопрос",
+                "row_group": u"qa_headers",
+                "row_group_slot": 0,
+                "hint": u"question_header",
+            },
+            {
+                "id": "answer_header",
+                "label": u"Заголовок колонки ответов",
+                "default": u"Ответ",
+                "row_group": u"qa_headers",
+                "row_group_slot": 1,
+                "hint": u"answer_header",
+            },
+            {
+                "id": "has_header_in_output",
+                "label": u"Писать строку заголовков",
+                "type": "bool",
+                "default": True,
+                "hint": u"has_header_in_output",
+            },
             {
                 "id": "block_separator",
                 "label": u"Между блоками",
@@ -3106,11 +3144,16 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "combo",
                 "choices": tuple(lab for _c, lab in FORM_TABLE_OUTPUT_CHOICES),
                 "default": u"Новый лист",
+                "row_group": u"t2f_output_dest",
+                "row_group_slot": 0,
+                "row_group_frac": 0.48,
             },
             {
                 "id": "dest_sheet",
                 "label": u"Лист назначения",
                 "default": u"Анкеты",
+                "row_group": u"t2f_output_dest",
+                "row_group_slot": 1,
             },
             {
                 "id": "as_values",

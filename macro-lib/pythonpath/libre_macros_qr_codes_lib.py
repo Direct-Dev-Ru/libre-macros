@@ -3,7 +3,7 @@
 Расчёт штрихкодов и генерация карточек с QR-кодами (segno bundled).
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 import json
 import os
 import re

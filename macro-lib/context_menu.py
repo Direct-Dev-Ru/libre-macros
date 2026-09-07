@@ -11,7 +11,7 @@ from __future__ import print_function
 Точка входа: setContextMenu().
 """
 
-MACRO_VERSION = "3.10.692"
+MACRO_VERSION = "3.10.693"
 import ast
 import os
 import sys
