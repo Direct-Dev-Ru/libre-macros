@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.688"
+MACRO_VERSION = "3.10.689"
 import re
 
 try:
@@ -705,6 +705,18 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         '[{"v":1,"fn":"развернуть_столбцы","unpivot_columns":["\'Январь\'","\'Февраль\'"],'
         '"attribute_column":"Месяц","value_column":"Сумма","drop_empty_rows":true}]',
     ),
+    "анкета_в_таблицу": (
+        "Пары вопрос/ответ → wide: question_column/answer_column, block_mode, "
+        "block_start_question; output=new_sheet|inplace|replace_sheet",
+        '[{"v":1,"fn":"анкета_в_таблицу","question_column":"A","answer_column":"B",'
+        '"block_mode":"by_repeat_key","block_start_question":"ФИО","dest_sheet":"Анкеты_wide"}]',
+    ),
+    "таблица_в_анкету": (
+        "Wide → пары вопрос/ответ: body_columns / preamble; block_separator; "
+        "output=new_sheet|inplace|replace_sheet",
+        '[{"v":1,"fn":"таблица_в_анкету","body_columns":["\'ФИО\'","\'Возраст\'"],'
+        '"block_separator":"blank_row","dest_sheet":"Анкеты"}]',
+    ),
     "заполнение_вниз_вычислить": (
         "JSON: columns + rules (column, formula, expand_to_right); кнопка «Параметры…»",
         '[{"v":1,"fn":"заполнение_вниз_вычислить","columns":["A"],"rules":[{"column":"A","formula":"=A{row-1}"}]}]',
@@ -903,6 +915,8 @@ MERGE_POSTPROCESS_XML_REST_HINTS = {
         "заполнение_вниз",
         "заполнить_вверх",
         "развернуть_столбцы",
+        "анкета_в_таблицу",
+        "таблица_в_анкету",
         "заполнение_вниз_вычислить",
         "сортировка",
         "переименовать_лист",
@@ -967,6 +981,10 @@ _PP_RANGE_MAP_SPEC = (
     ("развернуть_столбцы", "merge_pp_range_unpivot_columns"),
     ("unpivot", "merge_pp_range_unpivot_columns"),
     ("unpivot_columns", "merge_pp_range_unpivot_columns"),
+    ("анкета_в_таблицу", "merge_pp_range_form_to_table"),
+    ("form_to_table", "merge_pp_range_form_to_table"),
+    ("таблица_в_анкету", "merge_pp_range_table_to_form"),
+    ("table_to_form", "merge_pp_range_table_to_form"),
     ("заполнение_вниз_вычислить", "merge_pp_range_fill_down_calculate"),
     ("копировать_значения", "merge_pp_range_copy_values"),
     ("замена_значений", "merge_pp_range_replace_values"),
@@ -1127,6 +1145,8 @@ MERGE_FINAL_PROCESSING_REST_HINTS = {
     "заполнение_вниз": MERGE_POSTPROCESS_RANGE_REST_HINTS["заполнение_вниз"],
     "заполнить_вверх": MERGE_POSTPROCESS_RANGE_REST_HINTS["заполнить_вверх"],
     "развернуть_столбцы": MERGE_POSTPROCESS_RANGE_REST_HINTS["развернуть_столбцы"],
+    "анкета_в_таблицу": MERGE_POSTPROCESS_RANGE_REST_HINTS["анкета_в_таблицу"],
+    "таблица_в_анкету": MERGE_POSTPROCESS_RANGE_REST_HINTS["таблица_в_анкету"],
     "заполнение_вниз_вычислить": MERGE_POSTPROCESS_RANGE_REST_HINTS[
         "заполнение_вниз_вычислить"
     ],
@@ -1227,6 +1247,10 @@ _FINAL_MAP_SPEC = (
     ("развернуть_столбцы", "merge_final_unpivot_columns"),
     ("unpivot", "merge_final_unpivot_columns"),
     ("unpivot_columns", "merge_final_unpivot_columns"),
+    ("анкета_в_таблицу", "merge_final_form_to_table"),
+    ("form_to_table", "merge_final_form_to_table"),
+    ("таблица_в_анкету", "merge_final_table_to_form"),
+    ("table_to_form", "merge_final_table_to_form"),
     ("заполнение_вниз_вычислить", "merge_final_fill_down_calculate"),
     ("копировать_значения", "merge_final_copy_values"),
     ("замена_значений", "merge_final_replace_values"),

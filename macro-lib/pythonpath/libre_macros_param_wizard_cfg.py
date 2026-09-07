@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.688"
+MACRO_VERSION = "3.10.689"
 import re
 
 try:
@@ -182,6 +182,8 @@ _FALLBACK_PP_RANGE_CHOICES = [
     u"формат_столбцы",     u"ширина_столбцов", u"шрифт", u"заполнение_вниз",
     u"заполнить_вверх",
     u"развернуть_столбцы",
+    u"анкета_в_таблицу",
+    u"таблица_в_анкету",
     u"заполнение_вниз_вычислить", u"копировать_значения", u"замена_значений", u"текстовые_операции", u"переименовать_лист",
     u"переименовать_столбцы", u"переставить_столбцы",
     u"количество_значений", u"удалить_дубликаты", u"копировать_переместить_лист",
@@ -202,7 +204,7 @@ _FALLBACK_PP_XML_CHOICES = [
     u"зебра_диапазон", u"формат_деньги", u"формат_даты", u"формат_столбцы",
     u"применить_формулу", u"удалить_столбцы", u"конкатенация_столбцов",
     u"разделить_по_столбцам", u"условный_столбец",
-    u"замена_значений", u"текстовые_операции", u"заполнение_вниз", u"заполнить_вверх", u"развернуть_столбцы", u"сортировка",
+    u"замена_значений", u"текстовые_операции", u"заполнение_вниз", u"заполнить_вверх", u"развернуть_столбцы", u"анкета_в_таблицу", u"таблица_в_анкету", u"сортировка",
     u"переименовать_лист", u"переименовать_столбцы", u"переставить_столбцы",
     u"копировать_переместить_лист", u"закрепить_заголовок",
     u"автофильтр", u"сводная_таблица",
@@ -225,6 +227,8 @@ _FALLBACK_FINAL_CHOICES = [
     u"отправить_по_почте",
     u"заполнение_вниз", u"заполнить_вверх",
     u"развернуть_столбцы",
+    u"анкета_в_таблицу",
+    u"таблица_в_анкету",
     u"замена_значений", u"текстовые_операции",
     u"переименовать_лист", u"переименовать_столбцы", u"переставить_столбцы",
 ]
@@ -554,6 +558,16 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u"Unpivot: unpivot_columns или exclude_columns; attribute/value; inplace|new_sheet",
         u'[{"v":1,"fn":"развернуть_столбцы","unpivot_columns":["\'Январь\'","\'Февраль\'"],'
         u'"attribute_column":"Месяц","value_column":"Сумма","drop_empty_rows":true}]',
+    ),
+    u"анкета_в_таблицу": (
+        u"Пары Q/A → wide: block_mode + block_start_question; new_sheet",
+        u'[{"v":1,"fn":"анкета_в_таблицу","question_column":"A","answer_column":"B",'
+        u'"block_mode":"by_repeat_key","block_start_question":"ФИО","dest_sheet":"Анкеты_wide"}]',
+    ),
+    u"таблица_в_анкету": (
+        u"Wide → пары Q/A: body_columns; block_separator; new_sheet",
+        u'[{"v":1,"fn":"таблица_в_анкету","body_columns":["\'ФИО\'","\'Возраст\'"],'
+        u'"block_separator":"blank_row","dest_sheet":"Анкеты"}]',
     ),
     u"заполнение_вниз_вычислить": (
         u"JSON: columns + rules (column, formula, expand_to_right); кнопка «Параметры…»",
@@ -1850,6 +1864,37 @@ UNPIVOT_OUTPUT_CODE = {label.casefold(): code for code, label in UNPIVOT_OUTPUT_
 for _up_out_code, _up_out_label in UNPIVOT_OUTPUT_CHOICES:
     UNPIVOT_OUTPUT_CODE[_up_out_code.casefold()] = _up_out_code
 
+FORM_TABLE_OUTPUT_CHOICES = (
+    (u"new_sheet", u"Новый лист"),
+    (u"inplace", u"На месте"),
+    (u"replace_sheet", u"Заменить лист"),
+)
+FORM_TABLE_OUTPUT_LABEL = {code: label for code, label in FORM_TABLE_OUTPUT_CHOICES}
+FORM_TABLE_OUTPUT_CODE = {label.casefold(): code for code, label in FORM_TABLE_OUTPUT_CHOICES}
+for _ft_out_code, _ft_out_label in FORM_TABLE_OUTPUT_CHOICES:
+    FORM_TABLE_OUTPUT_CODE[_ft_out_code.casefold()] = _ft_out_code
+
+FORM_BLOCK_MODE_CHOICES = (
+    (u"by_repeat_key", u"По ключевому вопросу"),
+    (u"by_blank_row", u"По пустой строке"),
+    (u"fixed_size", u"Фиксированное число вопросов"),
+    (u"by_unique_cycle", u"По циклу уникальных вопросов"),
+)
+FORM_BLOCK_MODE_LABEL = {code: label for code, label in FORM_BLOCK_MODE_CHOICES}
+FORM_BLOCK_MODE_CODE = {label.casefold(): code for code, label in FORM_BLOCK_MODE_CHOICES}
+for _bm_code, _bm_label in FORM_BLOCK_MODE_CHOICES:
+    FORM_BLOCK_MODE_CODE[_bm_code.casefold()] = _bm_code
+
+FORM_BLOCK_SEP_CHOICES = (
+    (u"blank_row", u"Пустая строка между блоками"),
+    (u"none", u"Без разделителя"),
+    (u"repeat_key", u"Старт по ключевому вопросу"),
+)
+FORM_BLOCK_SEP_LABEL = {code: label for code, label in FORM_BLOCK_SEP_CHOICES}
+FORM_BLOCK_SEP_CODE = {label.casefold(): code for code, label in FORM_BLOCK_SEP_CHOICES}
+for _bs_code, _bs_label in FORM_BLOCK_SEP_CHOICES:
+    FORM_BLOCK_SEP_CODE[_bs_code.casefold()] = _bs_code
+
 HEADER_SEP_CHOICES = (
     (u" ", u"пробел"),
     (u"_", u"подчёркивание _"),
@@ -2895,6 +2940,167 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"unpivot_columns": {
         "alias_of": u"развернуть_столбцы",
     },
+    u"анкета_в_таблицу": {
+        "title": u"Анкета → таблица",
+        "hint": (
+            u"Вертикальные пары «вопрос → ответ» превращаются в широкую таблицу "
+            u"(строка = одна анкета).\n"
+            u"Режим нарезки: по ключевому вопросу (ФИО…), пустой строке, фиксированному "
+            u"числу вопросов или циклу.\n"
+            u"Опционально: шапка листа (строки from–to + forms_start_row) и шапка блока."
+        ),
+        "hint_lines": 4,
+        "fields": (
+            {"id": "question_column", "label": u"Колонка вопросов", "default": u"A"},
+            {"id": "answer_column", "label": u"Колонка ответов", "default": u"B"},
+            {
+                "id": "block_mode",
+                "label": u"Нарезка блоков",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in FORM_BLOCK_MODE_CHOICES),
+                "default": u"По ключевому вопросу",
+            },
+            {
+                "id": "block_start_question",
+                "label": u"Ключевой вопрос (старт блока)",
+                "default": u"ФИО",
+            },
+            {
+                "id": "blank_rows_to_split",
+                "label": u"Пустых строк для разделения",
+                "default": u"1",
+            },
+            {
+                "id": "questions_per_block",
+                "label": u"Вопросов в блоке (fixed)",
+                "default": u"",
+            },
+            {
+                "id": "sheet_preamble_row_from",
+                "label": u"Шапка листа: строка с",
+                "default": u"",
+            },
+            {
+                "id": "sheet_preamble_row_to",
+                "label": u"Шапка листа: строка по",
+                "default": u"",
+            },
+            {
+                "id": "forms_start_row",
+                "label": u"Строка начала анкет",
+                "default": u"",
+            },
+            {
+                "id": "block_preamble_rows",
+                "label": u"Строк шапки блока",
+                "default": u"0",
+            },
+            {
+                "id": "output",
+                "label": u"Куда писать",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in FORM_TABLE_OUTPUT_CHOICES),
+                "default": u"Новый лист",
+            },
+            {
+                "id": "dest_sheet",
+                "label": u"Лист назначения",
+                "default": u"Анкеты_wide",
+            },
+            {
+                "id": "add_block_index",
+                "label": u"Колонка #Блок",
+                "type": "bool",
+                "default": True,
+            },
+            {
+                "id": "add_source_row",
+                "label": u"Колонка source_start_row",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "as_values",
+                "label": u"Как значения (формулы)",
+                "type": "bool",
+                "default": True,
+            },
+        ),
+    },
+    u"form_to_table": {"alias_of": u"анкета_в_таблицу"},
+    u"таблица_в_анкету": {
+        "title": u"Таблица → анкета",
+        "hint": (
+            u"Широкая таблица → вертикальные пары вопрос/ответ (блоки вниз).\n"
+            u"Столбцы тела — columns_pick; шапка листа / шапка блока — отдельно.\n"
+            u"Разделитель блоков: пустая строка / нет / старт по ключу."
+        ),
+        "hint_lines": 3,
+        "fields": (
+            {
+                "id": "body_columns",
+                "label": u"Столбцы тела (вопросы)",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"",
+                "hint": u"Пусто = все, кроме skip/preamble",
+            },
+            {
+                "id": "skip_columns",
+                "label": u"Исключить столбцы",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"",
+            },
+            {
+                "id": "sheet_preamble_columns",
+                "label": u"Шапка листа (один раз)",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"",
+            },
+            {
+                "id": "block_preamble_columns",
+                "label": u"Шапка блока (каждый)",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"",
+            },
+            {"id": "question_column", "label": u"Колонка вопросов (выход)", "default": u"A"},
+            {"id": "answer_column", "label": u"Колонка ответов (выход)", "default": u"B"},
+            {
+                "id": "block_separator",
+                "label": u"Между блоками",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in FORM_BLOCK_SEP_CHOICES),
+                "default": u"Пустая строка между блоками",
+            },
+            {
+                "id": "block_start_question",
+                "label": u"Ключ старта (для repeat_key)",
+                "default": u"",
+            },
+            {
+                "id": "output",
+                "label": u"Куда писать",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in FORM_TABLE_OUTPUT_CHOICES),
+                "default": u"Новый лист",
+            },
+            {
+                "id": "dest_sheet",
+                "label": u"Лист назначения",
+                "default": u"Анкеты",
+            },
+            {
+                "id": "as_values",
+                "label": u"Как значения (формулы)",
+                "type": "bool",
+                "default": True,
+            },
+        ),
+    },
+    u"table_to_form": {"alias_of": u"таблица_в_анкету"},
     u"копировать_значения": {
         "title": u"Копировать значения",
         "hint": (

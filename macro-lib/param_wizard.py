@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.688"
+MACRO_VERSION = "3.10.689"
 import ast
 import glob
 import json
@@ -9749,19 +9749,37 @@ def _block_field_to_text(block, field_id, fn_key=None):
                 u'mark', u'Маркировка (столбец)'
             )
         raw = unicode(block.get('output') or u'inplace').strip().casefold()
-        if fn_key == u'развернуть_столбцы' or unicode(fn_key or u'').casefold() in (
-            u'unpivot', u'unpivot_columns'
-        ):
+        fk = unicode(fn_key or u'').casefold()
+        if fk in (u'развернуть_столбцы'.casefold(), u'unpivot', u'unpivot_columns'):
             return _pw_cfg.UNPIVOT_OUTPUT_LABEL.get(
                 raw, unicode(block.get('output') or u'inplace')
             )
+        if fk in (
+            u'анкета_в_таблицу'.casefold(),
+            u'таблица_в_анкету'.casefold(),
+            u'form_to_table',
+            u'table_to_form',
+        ):
+            return _pw_cfg.FORM_TABLE_OUTPUT_LABEL.get(
+                raw, unicode(block.get('output') or u'new_sheet')
+            )
         return _pw_cfg.DEDUP_OUTPUT_LABEL.get(raw, unicode(block.get('output') or u'inplace'))
+    if field_id == 'block_mode':
+        raw = unicode(block.get('block_mode') or u'by_repeat_key').strip().casefold()
+        return _pw_cfg.FORM_BLOCK_MODE_LABEL.get(
+            raw, unicode(block.get('block_mode') or u'by_repeat_key')
+        )
+    if field_id == 'block_separator':
+        raw = unicode(block.get('block_separator') or u'blank_row').strip().casefold()
+        return _pw_cfg.FORM_BLOCK_SEP_LABEL.get(
+            raw, unicode(block.get('block_separator') or u'blank_row')
+        )
     if field_id == 'skip_empty_cells':
         if 'skip_empty_cells' in block:
             return bool(block.get('skip_empty_cells'))
         raw = unicode(block.get('empty_key_policy') or u'dedup').strip().casefold()
         return raw == u'skip'
-    if field_id in ('key_columns', 'exclude_columns', 'unpivot_columns', 'columns', 'markers', 'marker', 'agg_columns', 'style_columns', 'source_columns'):
+    if field_id in ('key_columns', 'exclude_columns', 'unpivot_columns', 'body_columns', 'skip_columns', 'sheet_preamble_columns', 'block_preamble_columns', 'columns', 'markers', 'marker', 'agg_columns', 'style_columns', 'source_columns'):
         val = block.get(field_id)
         if val is None or val == u'' or val == []:
             return u''
@@ -9977,7 +9995,7 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
     if field_id in ('old', 'new'):
         return unicode(text or u'').strip()
     text = unicode(text or u'').strip()
-    if field_type == 'columns_pick' or field_id in ('key_columns', 'exclude_columns', 'unpivot_columns', 'style_columns'):
+    if field_type == 'columns_pick' or field_id in ('key_columns', 'exclude_columns', 'unpivot_columns', 'body_columns', 'skip_columns', 'sheet_preamble_columns', 'block_preamble_columns', 'style_columns'):
         text = unicode(text or u'').strip()
         if text == u'':
             return []
@@ -10180,10 +10198,32 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
             if code in (u'inplace', u'new_sheet'):
                 return code
             return u'inplace'
+        if unicode(fn_key or u'').casefold() in (
+            u'анкета_в_таблицу'.casefold(),
+            u'таблица_в_анкету'.casefold(),
+            u'form_to_table',
+            u'table_to_form',
+        ):
+            code = _pw_cfg.FORM_TABLE_OUTPUT_CODE.get(t, t)
+            if code in (u'inplace', u'new_sheet', u'replace_sheet'):
+                return code
+            return u'new_sheet'
         code = _pw_cfg.DEDUP_OUTPUT_CODE.get(t, t)
         if code in (u'inplace', u'new_sheet', u'offset', u'mark'):
             return code
         return u'inplace'
+    if field_id == 'block_mode':
+        t = unicode(text or u'').strip().casefold()
+        code = _pw_cfg.FORM_BLOCK_MODE_CODE.get(t, t)
+        if code in _pw_cfg.FORM_BLOCK_MODE_LABEL:
+            return code
+        return u'by_repeat_key'
+    if field_id == 'block_separator':
+        t = unicode(text or u'').strip().casefold()
+        code = _pw_cfg.FORM_BLOCK_SEP_CODE.get(t, t)
+        if code in _pw_cfg.FORM_BLOCK_SEP_LABEL:
+            return code
+        return u'blank_row'
     if field_id in ('markers', 'columns', 'new_names'):
         if text == u'':
             return []

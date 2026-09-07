@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.688"
+MACRO_VERSION = "3.10.689"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -216,6 +216,35 @@ _FN_HELP_TEXTS = {
         u"\n"
         u'[{"v":1,"fn":"развернуть_столбцы","unpivot_columns":["\'Январь\'","\'Февраль\'"],'
         u'"attribute_column":"Месяц","value_column":"Сумма","drop_empty_rows":true}]\n'
+        u"\n"
+    ),
+    u"анкета_в_таблицу": (
+        u"══════════════════════════════════════\n"
+        u"АНКЕТА → ТАБЛИЦА\n"
+        u"══════════════════════════════════════\n"
+        u"\n"
+        u"Пары «вопрос → ответ» вниз по листу → широкая таблица (строка = анкета).\n"
+        u"block_mode: by_repeat_key / by_blank_row / fixed_size / by_unique_cycle.\n"
+        u"Шапка листа: sheet_preamble_row_from/to + forms_start_row.\n"
+        u"Шапка блока: block_preamble_rows.\n"
+        u"Алиасы: form_to_table, form_to_wide.\n"
+        u"\n"
+        u'[{"v":1,"fn":"анкета_в_таблицу","question_column":"A","answer_column":"B",'
+        u'"block_mode":"by_repeat_key","block_start_question":"ФИО","dest_sheet":"Анкеты_wide"}]\n'
+        u"\n"
+    ),
+    u"таблица_в_анкету": (
+        u"══════════════════════════════════════\n"
+        u"ТАБЛИЦА → АНКЕТА\n"
+        u"══════════════════════════════════════\n"
+        u"\n"
+        u"Wide-строки → вертикальные пары вопрос/ответ (блоки).\n"
+        u"body_columns / sheet_preamble_columns / block_preamble_columns.\n"
+        u"block_separator: blank_row | none | repeat_key.\n"
+        u"Обратная к анкета_в_таблицу. Алиасы: table_to_form, wide_to_form.\n"
+        u"\n"
+        u'[{"v":1,"fn":"таблица_в_анкету","body_columns":["\'ФИО\'","\'Возраст\'"],'
+        u'"block_separator":"blank_row","dest_sheet":"Анкеты"}]\n'
         u"\n"
     ),
     u"заполнение_вниз_вычислить": (
@@ -885,6 +914,8 @@ _FN_HELP_ALIASES = {
     u"условное_форматирование": u"подсветка_по_порогу",
     u"unpivot": u"развернуть_столбцы",
     u"unpivot_columns": u"развернуть_столбцы",
+    u"form_to_table": u"анкета_в_таблицу",
+    u"table_to_form": u"таблица_в_анкету",
 }
 
 

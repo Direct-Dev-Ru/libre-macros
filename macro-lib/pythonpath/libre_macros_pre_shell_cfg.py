@@ -2,7 +2,7 @@
 """Константы параметра «Предварительный_скрипт» (pre-shell)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.688"
+MACRO_VERSION = "3.10.689"
 # Имя строки на листе параметров (синхрон с P_MERGE_PRE_SHELL в collect_cfg).
 P_MERGE_PRE_SHELL = u"Предварительный_скрипт"
 

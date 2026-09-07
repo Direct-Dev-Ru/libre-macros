@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.688"
+MACRO_VERSION = "3.10.689"
 import json
 import re
 
@@ -55,6 +55,12 @@ _FN_ALIASES = {
     "unpivot": "развернуть_столбцы",
     "unpivot_columns": "развернуть_столбцы",
     "развернуть столбцы": "развернуть_столбцы",
+    "table_to_form": "таблица_в_анкету",
+    "wide_to_form": "таблица_в_анкету",
+    "таблица → анкета": "таблица_в_анкету",
+    "form_to_table": "анкета_в_таблицу",
+    "form_to_wide": "анкета_в_таблицу",
+    "анкета → таблица": "анкета_в_таблицу",
     "копировать_диапазон": "копирование_диапазонов",
     "copy_ranges": "копирование_диапазонов",
     "copy_range": "копирование_диапазонов",
@@ -101,6 +107,8 @@ _SHEET_BLOCK_FORM_FNS = frozenset(
         "заполнение_вниз",
         "заполнить_вверх",
         "развернуть_столбцы",
+        "таблица_в_анкету",
+        "анкета_в_таблицу",
         "копировать_значения",
         "замена_значений",
         "переименовать_лист",
@@ -265,6 +273,10 @@ def _normalize_block_for_fn(fn_key, block):
         return _normalize_fill_up_block(block)
     if fn_key == "развернуть_столбцы":
         return _normalize_unpivot_columns_block(block)
+    if fn_key == "таблица_в_анкету":
+        return _normalize_table_to_form_block(block)
+    if fn_key == "анкета_в_таблицу":
+        return _normalize_form_to_table_block(block)
     if fn_key == "заполнение_вниз_вычислить":
         return _normalize_fill_down_calculate_block(block)
     if fn_key == "копировать_значения":
@@ -472,6 +484,10 @@ def _decode_json_blocks(fn_key, items):
         return [_normalize_fill_up_block(b) for b in items]
     if fn_key == "развернуть_столбцы":
         return [_normalize_unpivot_columns_block(b) for b in items]
+    if fn_key == "таблица_в_анкету":
+        return [_normalize_table_to_form_block(b) for b in items]
+    if fn_key == "анкета_в_таблицу":
+        return [_normalize_form_to_table_block(b) for b in items]
     if fn_key == "заполнение_вниз_вычислить":
         return [_normalize_fill_down_calculate_block(b) for b in items]
     if fn_key == "копировать_значения":
@@ -2205,6 +2221,115 @@ def _normalize_unpivot_columns_block(block):
         out["drop_empty_rows"] = bool(out.get("drop_empty_rows"))
         out["as_values"] = True if "as_values" not in out else bool(out.get("as_values"))
     out.pop("skip_header_row", None)
+    return _attach_sheet(out, out.get("sheet"))
+
+
+def _normalize_form_output(out):
+    output = unicode(out.get("output") or u"new_sheet").strip().casefold()
+    if output in (u"inplace", u"на_месте"):
+        out["output"] = u"inplace"
+    elif output in (u"replace_sheet", u"replace", u"заменить_лист"):
+        out["output"] = u"replace_sheet"
+    else:
+        out["output"] = u"new_sheet"
+    dest = unicode(out.get("dest_sheet") or out.get("dest") or u"").strip()
+    if dest:
+        out["dest_sheet"] = dest
+    else:
+        out.pop("dest_sheet", None)
+        out.pop("dest", None)
+    return out
+
+
+def _normalize_form_to_table_block(block):
+    out = _normalize_block("анкета_в_таблицу", block)
+    out["question_column"] = unicode(out.get("question_column") or u"A").strip() or u"A"
+    out["answer_column"] = unicode(out.get("answer_column") or u"B").strip() or u"B"
+    mode = unicode(out.get("block_mode") or u"by_repeat_key").strip().casefold()
+    aliases = {
+        u"repeat": u"by_repeat_key",
+        u"blank": u"by_blank_row",
+        u"blank_row": u"by_blank_row",
+        u"fixed": u"fixed_size",
+        u"cycle": u"by_unique_cycle",
+        u"unique": u"by_unique_cycle",
+    }
+    out["block_mode"] = aliases.get(mode, mode) or u"by_repeat_key"
+    out["block_start_question"] = unicode(out.get("block_start_question") or u"").strip()
+    out["column_order"] = _normalize_column_token_list(out.get("column_order"))
+    # synonyms preamble → block_
+    if out.get("preamble_rows") is not None and out.get("block_preamble_rows") is None:
+        out["block_preamble_rows"] = out.get("preamble_rows")
+    if out.get("preamble_mode") and not out.get("block_preamble_mode"):
+        out["block_preamble_mode"] = out.get("preamble_mode")
+    out = _normalize_form_output(out)
+    try:
+        from libre_macros_lib import lm_parse_bool_param
+
+        for key, default in (
+            (u"add_block_index", False),
+            (u"add_source_row", False),
+            (u"keep_partial_blocks", True),
+            (u"has_header_in_source", False),
+            (u"preamble_columns_first", True),
+            (u"trim_questions", True),
+            (u"collapse_spaces", True),
+            (u"ignore_case", False),
+            (u"trim_answers", True),
+            (u"clear_source_first", False),
+            (u"as_values", True),
+        ):
+            if key in out or default is not None:
+                out[key] = bool(lm_parse_bool_param(out.get(key), default=default))
+    except Exception:
+        pass
+    return _attach_sheet(out, out.get("sheet"))
+
+
+def _normalize_table_to_form_block(block):
+    out = _normalize_block("таблица_в_анкету", block)
+    out["question_column"] = unicode(out.get("question_column") or u"A").strip() or u"A"
+    out["answer_column"] = unicode(out.get("answer_column") or u"B").strip() or u"B"
+    out["body_columns"] = _normalize_column_token_list(
+        out.get("body_columns") or out.get("column_order")
+    )
+    out["skip_columns"] = _normalize_column_token_list(out.get("skip_columns"))
+    out["sheet_preamble_columns"] = _normalize_column_token_list(
+        out.get("sheet_preamble_columns")
+    )
+    out["block_preamble_columns"] = _normalize_column_token_list(
+        out.get("block_preamble_columns")
+    )
+    sep = unicode(out.get("block_separator") or u"blank_row").strip().casefold()
+    if sep in (u"none", u"нет", u"no"):
+        out["block_separator"] = u"none"
+    elif sep in (u"repeat_key", u"repeat", u"key"):
+        out["block_separator"] = u"repeat_key"
+    else:
+        out["block_separator"] = u"blank_row"
+    if out.get("sheet_preamble_columns") and not out.get("sheet_preamble_mode"):
+        out["sheet_preamble_mode"] = u"qa_pair"
+    if out.get("block_preamble_columns") and not out.get("block_preamble_mode"):
+        out["block_preamble_mode"] = u"qa_pair"
+    out = _normalize_form_output(out)
+    try:
+        from libre_macros_lib import lm_parse_bool_param
+
+        for key, default in (
+            (u"skip_block_index", True),
+            (u"skip_source_row", True),
+            (u"skip_empty_rows", True),
+            (u"sheet_preamble_blank_after", True),
+            (u"preamble_columns_first", True),
+            (u"has_header_in_output", False),
+            (u"clear_source_first", False),
+            (u"as_values", True),
+        ):
+            out[key] = bool(lm_parse_bool_param(out.get(key), default=default))
+    except Exception:
+        pass
+    ea = unicode(out.get("empty_answer") or u"write").strip().casefold()
+    out["empty_answer"] = u"skip" if ea == u"skip" else u"write"
     return _attach_sheet(out, out.get("sheet"))
 
 

@@ -6,7 +6,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.688"
+MACRO_VERSION = "3.10.689"
 from libre_macros_ad_ssl_stub import install_ssl_stub_if_needed, ssl_is_stub
 from libre_macros_ad_winldap import pick_ad_backend
 

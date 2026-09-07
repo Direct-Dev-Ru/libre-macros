@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.688"
+MACRO_VERSION = "3.10.689"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -24560,6 +24560,20 @@ def lm_pp_range_unpivot_columns(doc, sheet, data_range, header_row_range, *extra
     return _fn(doc, sheet, data_range, header_row_range, *extra_args)
 
 
+def lm_pp_range_form_to_table(doc, sheet, data_range, header_row_range, *extra_args):
+    """RANGE: анкета_в_таблицу (lazy import)."""
+    from libre_macros_form_table_lib import lm_pp_range_form_to_table as _fn
+
+    return _fn(doc, sheet, data_range, header_row_range, *extra_args)
+
+
+def lm_pp_range_table_to_form(doc, sheet, data_range, header_row_range, *extra_args):
+    """RANGE: таблица_в_анкету (lazy import)."""
+    from libre_macros_form_table_lib import lm_pp_range_table_to_form as _fn
+
+    return _fn(doc, sheet, data_range, header_row_range, *extra_args)
+
+
 # endregion Финальная обработка
 
 # region Финальная обработка (libre_macros_values_lib)
@@ -24585,6 +24599,8 @@ from libre_macros_values_lib import (  # noqa: E402
     lm_final_fill_down,
     lm_final_fill_up,
     lm_final_unpivot_columns,
+    lm_final_form_to_table,
+    lm_final_table_to_form,
     lm_final_fill_down_calculate,
     lm_final_format_columns,
     lm_final_format_date,
@@ -24668,6 +24684,8 @@ LM_PP_PUBLIC_NAMES = (
     "lm_pp_range_fill_down_empty",
     "lm_pp_range_fill_up_empty",
     "lm_pp_range_unpivot_columns",
+    "lm_pp_range_form_to_table",
+    "lm_pp_range_table_to_form",
     "lm_pp_range_copy_values",
     "lm_pp_range_fill_down_calculate",
     "lm_pp_range_replace_values",
