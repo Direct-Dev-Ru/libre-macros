@@ -2,7 +2,7 @@
 """Константы плана выполнения задачи (todo_task_plan_*)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 PLAN_SHEET_NAME = u"__План_задач"
 PLAN_SHEET_PREFIX = u"__План_задач_"
 PLAN_SHEET_NAME_MAX = 31

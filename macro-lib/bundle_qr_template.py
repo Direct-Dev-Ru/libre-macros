@@ -1,5 +1,5 @@
 from __future__ import print_function
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Пересобрать pythonpath/libre_macros_qr_template_blob.py из generate_qr_template.ods."""

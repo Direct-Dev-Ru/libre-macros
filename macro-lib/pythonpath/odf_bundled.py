@@ -9,7 +9,7 @@ odfpy (import odf) + defusedxml в одном файле для LibreOffice pyth
   import odf_bundled
 """
 from __future__ import annotations
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 import importlib.abc
 import importlib.util
 import sys

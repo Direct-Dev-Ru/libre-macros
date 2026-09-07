@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 """
 анкета_в_таблицу / таблица_в_анкету — вертикальные пары Q/A ↔ wide-таблица.
 
@@ -38,6 +38,19 @@ def _empty(val):
     except Exception:
         pass
     return _u(val).strip() == u""
+
+
+def _optional_row_1based(val):
+    """Пусто / None → None; иначе int ≥ 1 или raise ValueError."""
+    if val is None:
+        return None
+    s = _u(val).strip()
+    if s == u"":
+        return None
+    n = int(s)
+    if n < 1:
+        raise ValueError("row < 1")
+    return n
 
 
 def normalize_question_key(text, trim=True, collapse_spaces=True, ignore_case=False, mode=u"none"):
@@ -581,25 +594,63 @@ def lm_pp_range_form_to_table(doc, sheet, data_range, header_row_range, *extra_a
         except Exception:
             pass
 
-    # sheet preamble absolute rows (1-based)
-    sp_from = block.get(u"sheet_preamble_row_from")
-    sp_to = block.get(u"sheet_preamble_row_to")
+    # sheet preamble absolute rows (1-based). Пустые поля визарда → авто по диапазону.
+    # sheet_preamble_row_from/to (Шапка листа: с / по)
+    # forms_start_row (Строка начала анкет)
     sheet_preamble = []
-    forms_start_1 = block.get(u"forms_start_row")
-    if sp_from is not None or sp_to is not None:
-        try:
-            sp_from = int(sp_from)
-            sp_to = int(sp_to)
-        except Exception:
+    data_start_1 = int(max(sr, h_sr + 1 if header_row_range is not None else sr)) + 1
+    sp_from_raw = block.get(u"sheet_preamble_row_from")
+    sp_to_raw = block.get(u"sheet_preamble_row_to")
+    forms_raw = block.get(u"forms_start_row")
+    sp_from = None
+    sp_to = None
+    forms_start_1 = None
+    try:
+        sp_from = _optional_row_1based(sp_from_raw)
+        sp_to = _optional_row_1based(sp_to_raw)
+        forms_start_1 = _optional_row_1based(forms_raw)
+    except Exception:
+        _lm_log_postprocess(
+            doc,
+            sheet_name,
+            u"диапазон",
+            fn_label,
+            u"ошибка",
+            u"sheet_preamble_row_from/to / forms_start_row "
+            u"(Шапка листа: с / по, Строка начала анкет) — целые номера строк ≥ 1",
+        )
+        return
+
+    if (sp_from is None) ^ (sp_to is None):
+        _lm_log_postprocess(
+            doc,
+            sheet_name,
+            u"диапазон",
+            fn_label,
+            u"ошибка",
+            u"sheet_preamble_row_from и sheet_preamble_row_to "
+            u"(Шапка листа: с / по) задайте оба или оставьте пустыми",
+        )
+        return
+
+    # Авто: задана только «Строка начала анкет» → шапка листа =
+    # строки диапазона данных от начала до forms_start−1
+    if sp_from is None and sp_to is None and forms_start_1 is not None:
+        if forms_start_1 > data_start_1:
+            sp_from = data_start_1
+            sp_to = forms_start_1 - 1
             _lm_log_postprocess(
                 doc,
                 sheet_name,
                 u"диапазон",
                 fn_label,
-                u"ошибка",
-                u"sheet_preamble_row_from/to должны быть числами",
+                u"ok",
+                u"sheet_preamble_row_from/to (Шапка листа: с / по) авто = %d…%d "
+                u"по диапазону до forms_start_row"
+                % (sp_from, sp_to),
             )
-            return
+
+    if sp_from is not None and sp_to is not None:
         if sp_from > sp_to or sp_from < 1:
             _lm_log_postprocess(
                 doc,
@@ -607,7 +658,8 @@ def lm_pp_range_form_to_table(doc, sheet, data_range, header_row_range, *extra_a
                 u"диапазон",
                 fn_label,
                 u"ошибка",
-                u"неверный диапазон шапки листа",
+                u"неверный диапазон шапки листа "
+                u"(sheet_preamble_row_from/to = Шапка листа: с / по)",
             )
             return
         if forms_start_1 is None:
@@ -618,12 +670,8 @@ def lm_pp_range_form_to_table(doc, sheet, data_range, header_row_range, *extra_a
                 u"диапазон",
                 fn_label,
                 u"ok",
-                u"forms_start_row по умолчанию = %d" % forms_start_1,
+                u"forms_start_row (Строка начала анкет) авто = %d" % forms_start_1,
             )
-        try:
-            forms_start_1 = int(forms_start_1)
-        except Exception:
-            forms_start_1 = sp_to + 1
         if forms_start_1 <= sp_to:
             _lm_log_postprocess(
                 doc,
@@ -631,7 +679,8 @@ def lm_pp_range_form_to_table(doc, sheet, data_range, header_row_range, *extra_a
                 u"диапазон",
                 fn_label,
                 u"ошибка",
-                u"forms_start_row пересекает шапку листа",
+                u"forms_start_row (Строка начала анкет) пересекает шапку листа "
+                u"(sheet_preamble_row_to)",
             )
             return
         sp_mode = _u(block.get(u"sheet_preamble_mode") or u"qa_pair").casefold()
@@ -667,16 +716,16 @@ def lm_pp_range_form_to_table(doc, sheet, data_range, header_row_range, *extra_a
                     (as_name, _read_cell_value(sheet, ref[0], ref[1]))
                 )
         # ignore → empty sheet_preamble
+    elif forms_start_1 is None:
+        # Нет шапки листа и нет явного старта → диапазон данных сбора
+        forms_start_1 = data_start_1
 
     # stream start
     if forms_start_1 is not None:
-        try:
-            stream_r0 = int(forms_start_1) - 1
-        except Exception:
-            stream_r0 = max(sr, h_sr + 1)
+        stream_r0 = int(forms_start_1) - 1
     else:
         start_row = block.get(u"start_row")
-        if start_row is not None:
+        if start_row is not None and _u(start_row).strip() != u"":
             try:
                 stream_r0 = int(start_row) - 1
             except Exception:

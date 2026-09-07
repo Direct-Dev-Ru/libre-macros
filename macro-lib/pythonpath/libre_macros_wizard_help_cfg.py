@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -220,17 +220,66 @@ _FN_HELP_TEXTS = {
     ),
     u"анкета_в_таблицу": (
         u"══════════════════════════════════════\n"
-        u"АНКЕТА → ТАБЛИЦА\n"
+        u"АНКЕТА → ТАБЛИЦА  (form_to_table)\n"
         u"══════════════════════════════════════\n"
         u"\n"
-        u"Пары «вопрос → ответ» вниз по листу → широкая таблица (строка = анкета).\n"
-        u"block_mode: by_repeat_key / by_blank_row / fixed_size / by_unique_cycle.\n"
-        u"Шапка листа: sheet_preamble_row_from/to + forms_start_row.\n"
-        u"Шапка блока: block_preamble_rows.\n"
-        u"Алиасы: form_to_table, form_to_wide.\n"
+        u"Вертикальные пары «вопрос → ответ» → широкая таблица\n"
+        u"(одна строка = одна анкета / блок).\n"
+        u"Алиасы JSON: form_to_table, form_to_wide.\n"
         u"\n"
+        u"── Поля визарда ↔ ключ JSON (для логов/ошибок) ──\n"
+        u"\n"
+        u"Колонка вопросов          → question_column\n"
+        u"Колонка ответов           → answer_column\n"
+        u"Нарезка блоков            → block_mode\n"
+        u"  • По ключевому вопросу  → by_repeat_key\n"
+        u"  • По пустой строке      → by_blank_row\n"
+        u"  • Фикс. число вопросов  → fixed_size\n"
+        u"  • По циклу уникальных   → by_unique_cycle\n"
+        u"Ключевой вопрос           → block_start_question\n"
+        u"  (для by_repeat_key, напр. ФИО)\n"
+        u"Пустых строк для разделения → blank_rows_to_split\n"
+        u"  (для by_blank_row)\n"
+        u"Вопросов в блоке (fixed)  → questions_per_block\n"
+        u"\n"
+        u"Шапка листа: с            → sheet_preamble_row_from\n"
+        u"Шапка листа: по           → sheet_preamble_row_to\n"
+        u"  Абсолютные № строк на листе (1…), один раз сверху.\n"
+        u"  Пусто = без шапки листа (поток анкет = диапазон данных).\n"
+        u"Строка начала анкет       → forms_start_row\n"
+        u"  С этой строки (1…) идёт нарезка блоков.\n"
+        u"  Пусто: если задана шапка листа → сразу после «по»;\n"
+        u"  иначе → начало диапазона данных листа-источника.\n"
+        u"Строк шапки блока         → block_preamble_rows\n"
+        u"  N пар перед телом каждой анкеты (бланк, дата…).\n"
+        u"\n"
+        u"Куда писать               → output\n"
+        u"  (new_sheet / inplace / replace_sheet)\n"
+        u"Лист назначения           → dest_sheet\n"
+        u"Колонка #Блок             → add_block_index\n"
+        u"source_start_row          → add_source_row\n"
+        u"Как значения (формулы)    → as_values\n"
+        u"\n"
+        u"── Авто, если поля пустые ──\n"
+        u"• sheet_preamble_row_from/to пусты → шапка листа не читается;\n"
+        u"  анкеты берутся из диапазона данных сбора (после заголовка).\n"
+        u"• forms_start_row пуст → старт = первая строка этого диапазона\n"
+        u"  (или строка после шапки листа, если from/to заданы).\n"
+        u"• Заполните from и to оба сразу — иначе ошибка в логе.\n"
+        u"\n"
+        u"Пример ошибки в «Сбор_книг_лог»:\n"
+        u"  sheet_preamble_row_from/to (Шапка листа: с / по) …\n"
+        u"→ проверьте поля «Шапка листа: с» и «по» в визарде.\n"
+        u"\n"
+        u"Пример JSON:\n"
         u'[{"v":1,"fn":"анкета_в_таблицу","question_column":"A","answer_column":"B",'
-        u'"block_mode":"by_repeat_key","block_start_question":"ФИО","dest_sheet":"Анкеты_wide"}]\n'
+        u'"block_mode":"by_repeat_key","block_start_question":"ФИО",'
+        u'"output":"new_sheet","dest_sheet":"Анкеты_wide"}]\n'
+        u"\n"
+        u"С шапкой листа (строки 2–4, анкеты с 6):\n"
+        u'[{"v":1,"fn":"анкета_в_таблицу","sheet_preamble_row_from":2,'
+        u'"sheet_preamble_row_to":4,"forms_start_row":6,'
+        u'"block_mode":"by_repeat_key","block_start_question":"ФИО"}]\n'
         u"\n"
     ),
     u"таблица_в_анкету": (

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы AD/LDAP: AO 2026 вырезает модульные присваивания в Scripts/*.py."""
 
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 DEFAULT_PORT = 389
 DEFAULT_SSL_PORT = 636
 DEFAULT_AUTH = "SIMPLE"

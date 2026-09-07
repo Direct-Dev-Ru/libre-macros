@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 import json
 import re
 
@@ -2262,6 +2262,27 @@ def _normalize_form_to_table_block(block):
         out["block_preamble_rows"] = out.get("preamble_rows")
     if out.get("preamble_mode") and not out.get("block_preamble_mode"):
         out["block_preamble_mode"] = out.get("preamble_mode")
+    # пустые строки визарда → ключ убрать (иначе int("") в исполнителе)
+    for opt_key in (
+        "sheet_preamble_row_from",
+        "sheet_preamble_row_to",
+        "forms_start_row",
+        "block_preamble_rows",
+        "blank_rows_to_split",
+        "questions_per_block",
+        "block_total_rows",
+    ):
+        if opt_key not in out:
+            continue
+        raw = out.get(opt_key)
+        if raw is None or unicode(raw).strip() == u"":
+            out.pop(opt_key, None)
+            continue
+        try:
+            out[opt_key] = int(unicode(raw).strip())
+        except Exception:
+            # оставить как есть — исполнитель даст понятную ошибку
+            out[opt_key] = unicode(raw).strip()
     out = _normalize_form_output(out)
     try:
         from libre_macros_lib import lm_parse_bool_param

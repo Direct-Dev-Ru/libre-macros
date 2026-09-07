@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 import re
 
 try:
@@ -2980,6 +2980,7 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "default": u"",
                 "row_group": u"sheet_preamble_rows",
                 "row_group_slot": 0,
+                "hint": u"sheet_preamble_row_from; пусто = авто/нет",
             },
             {
                 "id": "sheet_preamble_row_to",
@@ -2987,6 +2988,7 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "default": u"",
                 "row_group": u"sheet_preamble_rows",
                 "row_group_slot": 1,
+                "hint": u"sheet_preamble_row_to; задайте оба или оба пусто",
             },
             {
                 "id": "forms_start_row",
@@ -2994,6 +2996,7 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "default": u"",
                 "row_group": u"forms_block_preamble",
                 "row_group_slot": 0,
+                "hint": u"forms_start_row; пусто = начало диапазона данных",
             },
             {
                 "id": "block_preamble_rows",
@@ -3001,6 +3004,7 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "default": u"0",
                 "row_group": u"forms_block_preamble",
                 "row_group_slot": 1,
+                "hint": u"block_preamble_rows",
             },
             {
                 "id": "output",

@@ -34,3 +34,7 @@ todo/for_bar_code_macros.xl*
 test/collect_workbooks/workbooks/results/headless/
 qa/collect_headless/.profile/
 
+
+# LO/AO lock files
+.~lock.*
+**/.~lock.*

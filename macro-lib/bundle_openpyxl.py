@@ -1,4 +1,4 @@
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """

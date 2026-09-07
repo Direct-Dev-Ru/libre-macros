@@ -3,7 +3,7 @@
 Пересборка: python3 macro-lib/bundle_set_menu_images.py
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.691"
+MACRO_VERSION = "3.10.692"
 import base64
 import os
 
