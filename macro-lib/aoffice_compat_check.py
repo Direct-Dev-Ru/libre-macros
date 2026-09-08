@@ -16,7 +16,7 @@ uno / unohelper / com.sun.star.* — достаточно для import-time п�
   python3 macro-lib/aoffice_compat_check.py --tree macro-lib --warn-assigns
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 import argparse
 import ast
 import importlib.abc

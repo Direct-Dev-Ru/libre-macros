@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 import re
 
 try:
@@ -212,11 +212,9 @@ _FALLBACK_PP_XML_CHOICES = [
     u"удаление_листов", u"скрытие_листов",
 ]
 _FALLBACK_PP_PLUGIN_REST = (
-    u"JSON в C: [{\"v\":1,\"fn\":\"функция_плагин\",\"ref\":\"functions_pp.py#имя\","
-    u"\"allow_env\":\"ENV\",\"allow_global\":\"Glob\",\"extra\":\"…\",\"sheet\":\"Лист\"}]; "
-    u"допуск: env ↔ зашифрованная глобальная",
-    u'[{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka",'
-    u'"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin","sheet":"Сводка"}]',
+    u"JSON в C: ref/code, allow_env/allow_global (пусто = MERGE_ALLOW_PLUGINS / "
+    u"Merge_Allow_Plugins), extra, sheet; допуск: env ↔ зашифрованная глобальная",
+    u'[{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka","sheet":"Сводка"}]',
 )
 _FALLBACK_FINAL_CHOICES = [
     u"удаление_листов", u"скрытие_листов", u"только_значения",
@@ -243,11 +241,9 @@ _PLUGIN_DESC_OFFSET = _LBL_H + _EXTRA_EDIT_H + _GAP_S
 _DESC_H_PLUGIN = max(_ui_v(72), _DESC_H - _PLUGIN_DESC_OFFSET)
 _FALLBACK_FINAL_REST_HINTS = {
     PLUGIN_FUNCTION_KEY: (
-        u"JSON в C: [{\"v\":1,\"fn\":\"функция_плагин\",\"ref\":\"functions_final.py#имя\","
-        u"\"allow_env\":\"ENV\",\"allow_global\":\"Glob\",\"extra\":\"…\",\"sheet\":\"Лист\"}]; "
-        u"допуск: env ↔ зашифрованная глобальная",
-        u'[{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka",'
-        u'"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin"}]',
+        u"JSON в C: ref/code, allow_env/allow_global (пусто = MERGE_ALLOW_PLUGINS / "
+        u"Merge_Allow_Plugins), extra, sheet; допуск: env ↔ зашифрованная глобальная",
+        u'[{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka"}]',
     ),
     u"удаление_листов": (
         u"имена/шаблоны (*Отчет*); опционально filter — лямбда name→bool (санация);\n"
@@ -1141,8 +1137,7 @@ WIZARD_HINTS = {
         u"Порядок шагов — сверху вниз на листе параметров.\n"
         u"Примеры C:\n"
         u'  [{"v":1,"fn":"тонкая_сетка"}]\n'
-        u'  [{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka",'
-        u'"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin","extra":"42","sheet":"Сводка"}]\n'
+        u'  [{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka","extra":"42","sheet":"Сводка"}]\n'
         u'  [{"v":1,"fn":"заголовок_плюс_высота","height_mm":13,"h_align":"center","v_align":"center"}]'
     ),
     u"Постобработка_Строка": (
@@ -1177,8 +1172,7 @@ WIZARD_HINTS = {
         u"C — JSON; D — rest плагина, если не в JSON.\n"
         u"Примеры C:\n"
         u'  [{"v":1,"fn":"удаление_листов"}]\n'
-        u'  [{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka",'
-        u'"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin","sheet":"Сводка"}]\n'
+        u'  [{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka","sheet":"Сводка"}]\n'
         u'  [{"v":1,"fn":"заголовок_плюс_высота","height_mm":13,"sheet":"Сводная"}]'
     ),
 }

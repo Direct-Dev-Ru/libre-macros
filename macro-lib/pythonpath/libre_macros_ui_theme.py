@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 """
 Общая soft-gray тема диалогов (визард параметров, collect_workbooks, ВПР и т.п.).
 

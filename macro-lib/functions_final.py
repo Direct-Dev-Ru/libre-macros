@@ -1,4 +1,4 @@
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 # region Справка — namespace и хелперы (свернуть: ▼ слева или Ctrl+Shift+[)
 """
 functions_final.py — пользовательские функции финальной обработки (вся книга).
@@ -7,11 +7,12 @@ functions_final.py — пользовательские функции фина�
 ----------------------------------------
   A = Финальная_обработка
   B = функция_плагин
-  C = [{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka","allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin","extra":"42","sheet":"Сводка"}]
+  C = [{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka","extra":"42","sheet":"Сводка"}]
   D = (пусто, если extra в JSON)
 
-Допуск (обязательно): allow_env + allow_global — имена OS env и зашифрованной
-глобальной переменной; значения должны совпасть, иначе сбор прерывается.
+Допуск: allow_env / allow_global — имена OS env и зашифрованной глобальной;
+пусто в визарде/JSON → MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins.
+Значения env и глобальной должны совпасть, иначе сбор прерывается.
 
 Выполняется один раз по всей книге перед диалогом «Нажмите Завершить».
 Поле sheet в JSON ограничивает обработку указанными листами результата.

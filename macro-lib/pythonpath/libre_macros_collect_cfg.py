@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 import re
 
 try:
@@ -809,9 +809,9 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         '"column_fields":[],"data_fields":[{"field":"Сумма","function":"SUM"}]}]',
     ),
     MERGE_PLUGIN_FUNCTION_KEY: (
-        "C — JSON: ref/code, allow_env, allow_global (env ↔ зашифрованная глобальная), extra, sheet",
-        '[{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka",'
-        '"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin"}]',
+        "C — JSON: ref/code; allow_env/allow_global опционально "
+        "(пусто = MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins); extra, sheet",
+        '[{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka"}]',
     ),
 }
 MERGE_POSTPROCESS_ROW_REST_HINTS = {
@@ -841,9 +841,9 @@ MERGE_POSTPROCESS_ROW_REST_HINTS = {
         '[{"v":1,"fn":"скрытие_листов","sheets":["Сбор_книг_лог*"]}]',
     ),
     MERGE_PLUGIN_FUNCTION_KEY: (
-        "C — JSON: ref/code, allow_env, allow_global (env ↔ зашифрованная глобальная), extra, sheet",
-        '[{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_row_zagotovka",'
-        '"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin"}]',
+        "C — JSON: ref/code; allow_env/allow_global опционально "
+        "(пусто = MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins); extra, sheet",
+        '[{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_row_zagotovka"}]',
     ),
 }
 MERGE_RESULT_POSTPROCESS_RANGE_MAP = {}
@@ -1206,9 +1206,9 @@ MERGE_FINAL_PROCESSING_REST_HINTS = {
         MERGE_POSTPROCESS_RANGE_REST_HINTS["копировать_переместить_лист"][1],
     ),
     MERGE_PLUGIN_FUNCTION_KEY: (
-        "C — JSON: ref/code, allow_env, allow_global (env ↔ зашифрованная глобальная), extra, sheet",
-        '[{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka",'
-        '"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin"}]',
+        "C — JSON: ref/code; allow_env/allow_global опционально "
+        "(пусто = MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins); extra, sheet",
+        '[{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka"}]',
     ),
 }
 _FINAL_MAP_SPEC = (

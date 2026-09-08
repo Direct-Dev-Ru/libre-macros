@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 """
 Глобальные настройки collect_workbooks (JSON рядом с пресетами).
 
@@ -225,13 +225,16 @@ def decrypt_global_variable_value(stored, key_file_path):
 def prepare_global_variables_for_store(items, key_file_path):
     """
     Нормализация + шифрование значений с encrypt=True.
-    Merge_Allow_Pre_Scripts — всегда encrypt=True.
+    Merge_Allow_Pre_Scripts / Merge_Allow_Plugins — всегда encrypt=True.
     Возвращает (list_or_None, error_or_None).
     """
     try:
-        from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+        from libre_macros_allow_gate_lib import is_force_encrypt_allow_global_name
     except Exception:
-        is_pre_shell_allow_global_name = None
+        try:
+            from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name as is_force_encrypt_allow_global_name
+        except Exception:
+            is_force_encrypt_allow_global_name = None
     key_path = normalize_global_variables_key_file(key_file_path)
     need_key = False
     for item in items or ():
@@ -239,7 +242,7 @@ def prepare_global_variables_for_store(items, key_file_path):
             continue
         name = unicode(item.get("name") or u"").strip()
         encrypt = bool(item.get("encrypt"))
-        if is_pre_shell_allow_global_name is not None and is_pre_shell_allow_global_name(name):
+        if is_force_encrypt_allow_global_name is not None and is_force_encrypt_allow_global_name(name):
             encrypt = True
         if encrypt:
             need_key = True
@@ -254,7 +257,7 @@ def prepare_global_variables_for_store(items, key_file_path):
         if name == u"" or u"~" in name:
             continue
         encrypt = bool(item.get("encrypt"))
-        if is_pre_shell_allow_global_name is not None and is_pre_shell_allow_global_name(name):
+        if is_force_encrypt_allow_global_name is not None and is_force_encrypt_allow_global_name(name):
             encrypt = True
         value = unicode(item.get("value") if item.get("value") is not None else u"")
         if encrypt:
@@ -328,12 +331,18 @@ def _normalize_global_variable_entry(item):
     value = unicode(item.get("value") if item.get("value") is not None else u"")
     encrypt = bool(item.get("encrypt"))
     try:
-        from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+        from libre_macros_allow_gate_lib import is_force_encrypt_allow_global_name
 
-        if is_pre_shell_allow_global_name(name):
+        if is_force_encrypt_allow_global_name(name):
             encrypt = True
     except Exception:
-        pass
+        try:
+            from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+
+            if is_pre_shell_allow_global_name(name):
+                encrypt = True
+        except Exception:
+            pass
     return {u"name": name, u"value": value, u"encrypt": encrypt}
 
 

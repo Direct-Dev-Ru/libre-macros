@@ -3,11 +3,11 @@
 Гейт допуска: OS env ↔ зашифрованная глобальная переменная.
 
 Используется для «Предварительный_скрипт» (фиксированные имена) и
-«функция_плагин» (имена задаются в JSON/визарде).
+«функция_плагин» (имена в JSON/визарде; пусто → имена по умолчанию).
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 import os
 import sys
 
@@ -21,12 +21,64 @@ try:
 except Exception:
     uno = None
 
+# Имена по умолчанию для «функция_плагин», если allow_env / allow_global не заданы.
+PLUGIN_ALLOW_ENV_NAME = u"MERGE_ALLOW_PLUGINS"
+PLUGIN_ALLOW_GLOBAL_NAME = u"Merge_Allow_Plugins"
+
 
 def _log(msg):
     try:
         print(u"[allow_gate] %s" % msg)
     except Exception:
         pass
+
+
+def fold_allow_global_name(name):
+    """
+    Нормализация имени глобальной допуска:
+    регистр игнорируется; «_», «-» и прочие не-буквы/цифры выкидываются.
+    """
+    try:
+        from libre_macros_pre_shell_cfg import fold_pre_shell_allow_name
+
+        return fold_pre_shell_allow_name(name)
+    except Exception:
+        s = unicode(name or u"")
+        chars = []
+        i = 0
+        while i < len(s):
+            ch = s[i]
+            i += 1
+            try:
+                if ch.isalnum():
+                    chars.append(ch)
+            except Exception:
+                pass
+        folded = u"".join(chars)
+        try:
+            return folded.casefold()
+        except Exception:
+            return folded.lower()
+
+
+PLUGIN_ALLOW_GLOBAL_NAME_FOLD = fold_allow_global_name(PLUGIN_ALLOW_GLOBAL_NAME)
+
+
+def is_plugin_allow_global_name(name):
+    """True, если имя — канонический Merge_Allow_Plugins (гибкое написание)."""
+    return fold_allow_global_name(name) == PLUGIN_ALLOW_GLOBAL_NAME_FOLD
+
+
+def is_force_encrypt_allow_global_name(name):
+    """Имена допуска pre-shell / plugin — всегда encrypt при сохранении."""
+    try:
+        from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+
+        if is_pre_shell_allow_global_name(name):
+            return True
+    except Exception:
+        pass
+    return is_plugin_allow_global_name(name)
 
 
 def get_env_value(env_name):
@@ -205,9 +257,12 @@ def verify_named_allow_gate( env_name, global_name, variables_map=None, subject=
 
 
 def plugin_block_allow_names(block):
-    """Извлечь (allow_env, allow_global) из блока функция_плагин."""
+    """
+    Извлечь (allow_env, allow_global) из блока функция_плагин.
+    Пустое поле → имена по умолчанию MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins.
+    """
     if not isinstance(block, dict):
-        return u"", u""
+        return PLUGIN_ALLOW_ENV_NAME, PLUGIN_ALLOW_GLOBAL_NAME
     env_nm = unicode(
         block.get(u"allow_env")
         or block.get(u"env")
@@ -222,11 +277,15 @@ def plugin_block_allow_names(block):
         or block.get(u"allow_global_name")
         or u""
     ).strip()
+    if env_nm == u"":
+        env_nm = PLUGIN_ALLOW_ENV_NAME
+    if glob_nm == u"":
+        glob_nm = PLUGIN_ALLOW_GLOBAL_NAME
     return env_nm, glob_nm
 
 
 def verify_plugin_allow_gate(block, variables_map=None):
-    """Гейт для одного JSON-блока функция_плагин."""
+    """Гейт для одного JSON-блока функция_плагин (с именами по умолчанию)."""
     env_nm, glob_nm = plugin_block_allow_names(block)
     return verify_named_allow_gate(
         env_nm,

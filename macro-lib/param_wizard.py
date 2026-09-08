@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 import ast
 import glob
 import json
@@ -680,7 +680,7 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
     dm.Title = u'Пользовательская функция'
     _inner_dialog_set_sizeable(dm)
     y = m
-    _wizard_dlg_add_fixed(dm, 'HintLbl', u'B = «функция_плагин». Ссылка/код + extra. Допуск: имя env и имя зашифрованной глобальной (значения должны совпасть).', m, y, dw - m * 2, 28, multiline=True)
+    _wizard_dlg_add_fixed(dm, 'HintLbl', u'B = «функция_плагин». Ссылка/код + extra. Допуск: env ↔ зашифрованная глобальная (пусто = MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins).', m, y, dw - m * 2, 28, multiline=True)
     y += 34
     col_gap = 10
     left_w = 190
@@ -711,11 +711,11 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
     fy += 14
     _wizard_dlg_add_edit(dm, 'ExtraEd', rx, fy, right_w, 18)
     fy += 22
-    _wizard_dlg_add_fixed(dm, 'AllowEnvLbl', u'Допуск — переменная среды (имя):', rx, fy, right_w, 12)
+    _wizard_dlg_add_fixed(dm, 'AllowEnvLbl', u'Допуск — env (пусто = MERGE_ALLOW_PLUGINS):', rx, fy, right_w, 12)
     fy += 14
     _wizard_dlg_add_edit(dm, 'AllowEnvEd', rx, fy, right_w, 18)
     fy += 22
-    _wizard_dlg_add_fixed(dm, 'AllowGlobalLbl', u'Допуск — глобальная (имя, шифровать!):', rx, fy, right_w, 12)
+    _wizard_dlg_add_fixed(dm, 'AllowGlobalLbl', u'Допуск — глобальная (пусто = Merge_Allow_Plugins):', rx, fy, right_w, 12)
     fy += 14
     _wizard_dlg_add_edit(dm, 'AllowGlobalEd', rx, fy, right_w, 18)
     y2 = y + list_h + 8
@@ -1087,20 +1087,6 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
         ref_or_code = b.get('code') or b.get('ref') or b.get('c') or u''
         if unicode(ref_or_code).strip() == u'':
             _show_message(u'В каждом блоке нужна ссылка или Python-код.', dialog=dlg, doc=doc)
-            return None
-        env_nm = unicode(
-            b.get('allow_env') or b.get('env') or b.get('среда') or b.get('allow_env_name') or u''
-        ).strip()
-        glob_nm = unicode(
-            b.get('allow_global') or b.get('global') or b.get('глобальная') or b.get('allow_global_name') or u''
-        ).strip()
-        if env_nm == u'' or glob_nm == u'':
-            _show_message(
-                u'В каждом блоке укажите имена переменной среды и глобальной переменной допуска '
-                u'(глобальная должна быть зашифрована).',
-                dialog=dlg,
-                doc=doc,
-            )
             return None
         val = unicode(ref_or_code).strip()
         if not _pp_allows_freeform_c(val):
@@ -7819,11 +7805,16 @@ def _show_global_variables_dialog(parent_dialog=None, doc=None):
 
     def _force_encrypt_for_name(nm):
         try:
-            from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+            from libre_macros_allow_gate_lib import is_force_encrypt_allow_global_name
 
-            return bool(is_pre_shell_allow_global_name(nm))
+            return bool(is_force_encrypt_allow_global_name(nm))
         except Exception:
-            return False
+            try:
+                from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+
+                return bool(is_pre_shell_allow_global_name(nm))
+            except Exception:
+                return False
 
     def _fill_from_index(idx):
         if idx < 0 or idx >= len(state['items']):

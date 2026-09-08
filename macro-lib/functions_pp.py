@@ -1,4 +1,4 @@
-MACRO_VERSION = "3.10.701"
+MACRO_VERSION = "3.10.702"
 # region Справка — namespace и хелперы (свернуть: ▼ слева или Ctrl+Shift+[)
 """
 functions_pp.py — пользовательские функции постобработки (диапазон / строка).
@@ -8,16 +8,17 @@ functions_pp.py — пользовательские функции постоб
 Диапазон:
   A = Постобработка_Диапазон
   B = функция_плагин
-  C = [{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka","allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin","extra":"42,тест","sheet":"Сводка"}]
+  C = [{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka","extra":"42,тест","sheet":"Сводка"}]
   D = (пусто, если extra в JSON)
 
 Строка:
   A = Постобработка_Строка
   B = функция_плагин
-  C = [{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_row_zagotovka","allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin","sheet":"Итог"}]
+  C = [{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_row_zagotovka","sheet":"Итог"}]
 
-Допуск (обязательно): allow_env + allow_global — имена OS env и зашифрованной
-глобальной переменной; значения должны совпасть, иначе сбор прерывается.
+Допуск: allow_env / allow_global — имена OS env и зашифрованной глобальной;
+пусто в визарде/JSON → MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins.
+Значения env и глобальной должны совпасть, иначе сбор прерывается.
 
 Legacy: B = functions_pp.py#имя без JSON — по-прежнему работает.
 
