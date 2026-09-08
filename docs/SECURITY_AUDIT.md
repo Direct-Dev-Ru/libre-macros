@@ -32,6 +32,7 @@
 | C-2 сохранение источников | Критический: `close(True)` трактовался как save | **Закрыто:** `close_source` → `setModified(False)` + discard; комментарии в коде явны |
 | Сеть | «Сетевых вызовов нет» | **Есть:** LDAP/AD (`libre_macros_ad_*`, `ldap3_bundled`); почта — только локальный compose UI |
 | Pre-shell | Не было в отчёте | Канал `libre_macros_pre_shell_lib`; с **3.10.698** — гейт env `MERGE_ALLOW_PRE_SCRIPT` + encrypted global `Merge_Allow_Pre_Scripts` |
+| функция_плагин | Eval/exec (C-1/H-5) | С **3.10.701** — гейт: имена `allow_env`/`allow_global` в JSON ↔ env + encrypted global |
 | Consent | — | Диалог условий + предупреждение о плагинах; журнал в `~/.config` |
 | H-2 `file_ref` abs | Открыт | **Открыт:** `_merge_pp_resolve_script_path` по-прежнему принимает abs; helper sanitize **не** подключён к загрузке |
 
@@ -88,6 +89,19 @@
 **Смягчения:** `shell=False`; env+encrypted global gate; confirm UI; `clean_env`.
 
 **Рекомендации:** не экспортировать значение допуска в шаблоны книг; держать ключ шифрования глобальных переменных вне общих каталогов.
+
+#### C-3b. «функция_плагин» — гейт допуска (с 3.10.701)
+
+**Где:** `libre_macros_allow_gate_lib.verify_plugin_allow_gate`, `collect_workbooks.merge_verify_plugin_allow_gates` (в `parse_collect_settings`), визард `_show_plugin_function_dialog`
+
+**Описание:** в JSON блока плагина задаются **имена** `allow_env` и `allow_global` (не фиксированные, в отличие от pre-shell). Перед сборкой цепочек PP/final:
+
+1. оба имени непусты;
+2. OS env с именем `allow_env` задана и не пуста;
+3. глобальная с именем `allow_global` в настройках с `encrypt=True` и `lm1:`;
+4. в runtime-карте (только сегмент «Глобальные_переменные») расшифрованное значение **совпадает** с env.
+
+Пустое/отсутствующее имя или значение, незашифрованная глобальная — **fail**. Ошибка — крупный красный диалог (`show_collect_error`).
 
 ---
 
@@ -257,20 +271,21 @@ if os.path.isabs(p):
 
 ---
 
-## Положительные меры (актуально на 3.10.698)
+## Положительные меры (актуально на 3.10.701)
 
 1. **AST-санация** подключена к compile постобработки и ряду лямбд/фильтров.
 2. **Consent** перед сбором + предупреждение о plugin refs.
 3. **Pre-shell:** `shell=False`, confirm UI, журнал согласий, `clean_env`; **гейты** env `MERGE_ALLOW_PRE_SCRIPT` + encrypted global `Merge_Allow_Pre_Scripts` (только сегмент глобальных в runtime-карте).
-4. **Источники:** discard без сохранения; ReadOnly по умолчанию.
-5. **C-2 закрыт** (пропуск строк не сохраняет внешний файл).
-6. **JSON-only** параметры постобработки в C.
-7. **defusedxml** в ODF/openpyxl-пути (с оговорками).
-8. **ast.literal_eval** для статических структур где применимо.
-9. **installer_password.txt** в `.gitignore`.
-10. Лимиты объёма постобработки/форматирования (`MERGE_*_MAX_ROWS`).
-11. Почта без встроенного SMTP.
-12. Документация санации: [16_CODE_SANITIZE.md](16_CODE_SANITIZE.md).
+4. **функция_плагин:** гейт `allow_env`/`allow_global` (имена в визарде/JSON) ↔ env + encrypted global; fail при пустых/незашифрованных.
+5. **Источники:** discard без сохранения; ReadOnly по умолчанию.
+6. **C-2 закрыт** (пропуск строк не сохраняет внешний файл).
+7. **JSON-only** параметры постобработки в C.
+8. **defusedxml** в ODF/openpyxl-пути (с оговорками).
+9. **ast.literal_eval** для статических структур где применимо.
+10. **installer_password.txt** в `.gitignore`.
+11. Лимиты объёма постобработки/форматирования (`MERGE_*_MAX_ROWS`).
+12. Почта без встроенного SMTP.
+13. Документация санации: [16_CODE_SANITIZE.md](16_CODE_SANITIZE.md).
 
 ---
 

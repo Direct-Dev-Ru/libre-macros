@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.700"
+MACRO_VERSION = "3.10.701"
 import ast
 import glob
 import json
@@ -657,7 +657,7 @@ def _plugin_blocks_from_initial(initial_ref, initial_extra):
 def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_extra=u'', doc=None):
     """
     Диалог пользовательской функции (блоки по листам, как у встроенных функций).
-    C = JSON-массив [{ref|code, extra, sheet}, …]; D пусто.
+    C = JSON-массив [{ref|code, extra, allow_env, allow_global, sheet}, …]; D пусто.
     Возвращает (c_ref, d_extra) или None.
     """
     choices = _plugin_scan_for_spec(spec)
@@ -670,7 +670,8 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
     toolkit = sm.createInstanceWithContext('com.sun.star.awt.Toolkit', ctx)
     dm = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialogModel', ctx)
     dw = 560
-    dh = _inner_dialog_height(_pw_cfg._INNER_GRID_DH)
+    # +56 под поля допуска (env / глобальная).
+    dh = _inner_dialog_height(_pw_cfg._INNER_GRID_DH + 56)
     m = 10
     dm.PositionX = 120
     dm.PositionY = 80
@@ -679,7 +680,7 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
     dm.Title = u'Пользовательская функция'
     _inner_dialog_set_sizeable(dm)
     y = m
-    _wizard_dlg_add_fixed(dm, 'HintLbl', u'B = «функция_плагин». Слева — лист; справа — ссылка functions_*.py#имя или Python-код и доп. аргументы (extra).', m, y, dw - m * 2, 28, multiline=True)
+    _wizard_dlg_add_fixed(dm, 'HintLbl', u'B = «функция_плагин». Ссылка/код + extra. Допуск: имя env и имя зашифрованной глобальной (значения должны совпасть).', m, y, dw - m * 2, 28, multiline=True)
     y += 34
     col_gap = 10
     left_w = 190
@@ -689,7 +690,7 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
     _wizard_dlg_add_fixed(dm, 'ParamsLbl', u'Параметры:', rx, y, right_w, 14)
     fy = y + 16
     y += 22
-    form_h = 16 + 18 + 20 + 14 + 72 + 24 + 14 + 18
+    form_h = 16 + 18 + 20 + 14 + 56 + 24 + 14 + 18 + 14 + 18 + 14 + 18
     list_top = y + 16
     list_h = _inner_grid_list_height(dh, list_top, m, min_h=72)
     list_h = min(list_h, max(72, dh - list_top - _pw_cfg._INNER_FOOTER_RESERVE - form_h - _pw_cfg._INNER_GRID_CONTROLS_H - _pw_cfg._INNER_GRID_LIST_GAP))
@@ -704,11 +705,19 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
     fy += 20
     _wizard_dlg_add_fixed(dm, 'CodeLbl', u'Код (lambda или def …):', rx, fy, right_w, 12)
     fy += 14
-    _wizard_dlg_add_edit(dm, 'CodeEd', rx, fy, right_w, 72, multiline=True)
-    fy += 78
+    _wizard_dlg_add_edit(dm, 'CodeEd', rx, fy, right_w, 56, multiline=True)
+    fy += 62
     _wizard_dlg_add_fixed(dm, 'ExtraLbl', u'Доп. аргументы (extra):', rx, fy, right_w, 12)
     fy += 14
     _wizard_dlg_add_edit(dm, 'ExtraEd', rx, fy, right_w, 18)
+    fy += 22
+    _wizard_dlg_add_fixed(dm, 'AllowEnvLbl', u'Допуск — переменная среды (имя):', rx, fy, right_w, 12)
+    fy += 14
+    _wizard_dlg_add_edit(dm, 'AllowEnvEd', rx, fy, right_w, 18)
+    fy += 22
+    _wizard_dlg_add_fixed(dm, 'AllowGlobalLbl', u'Допуск — глобальная (имя, шифровать!):', rx, fy, right_w, 12)
+    fy += 14
+    _wizard_dlg_add_edit(dm, 'AllowGlobalEd', rx, fy, right_w, 18)
     y2 = y + list_h + 8
     _wizard_dlg_add_fixed(dm, 'SheetLbl', u'Лист (пусто = все листы):', m, y2, left_w, 14)
     _wizard_dlg_add_combo(dm, 'SheetEd', m, y2 + 16, left_w, 18)
@@ -728,6 +737,8 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
     code_chk = dlg.getControl('CodeChk')
     code_ed = dlg.getControl('CodeEd')
     extra_ed = dlg.getControl('ExtraEd')
+    allow_env_ed = dlg.getControl('AllowEnvEd')
+    allow_global_ed = dlg.getControl('AllowGlobalEd')
     same_all_chk = dlg.getControl('SameAllChk')
     combo_items = [u''] + list(choices)
     _set_combo_items(ref_combo, combo_items, u'')
@@ -808,6 +819,14 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
                 extra_ed.setText(u'')
             except Exception:
                 pass
+            try:
+                allow_env_ed.setText(u'')
+            except Exception:
+                pass
+            try:
+                allow_global_ed.setText(u'')
+            except Exception:
+                pass
             form_loading[0] = False
             _sync_code_mode()
             return
@@ -817,6 +836,12 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
         ref_val = unicode(b.get('ref') or b.get('c') or u'').strip()
         code_val = unicode(b.get('code') or u'').strip()
         extra_val = unicode(b.get('extra') or b.get('d') or u'').strip()
+        allow_env_val = unicode(
+            b.get('allow_env') or b.get('env') or b.get('среда') or b.get('allow_env_name') or u''
+        ).strip()
+        allow_global_val = unicode(
+            b.get('allow_global') or b.get('global') or b.get('глобальная') or b.get('allow_global_name') or u''
+        ).strip()
         try:
             code_chk.setState(1 if use_code else 0)
         except Exception:
@@ -831,6 +856,14 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
             pass
         try:
             extra_ed.setText(extra_val)
+        except Exception:
+            pass
+        try:
+            allow_env_ed.setText(allow_env_val)
+        except Exception:
+            pass
+        try:
+            allow_global_ed.setText(allow_global_val)
         except Exception:
             pass
         form_loading[0] = False
@@ -874,6 +907,28 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
         else:
             b.pop('extra', None)
             b.pop('d', None)
+        try:
+            env_nm = unicode(allow_env_ed.getText() or u'').strip()
+        except Exception:
+            env_nm = u''
+        try:
+            glob_nm = unicode(allow_global_ed.getText() or u'').strip()
+        except Exception:
+            glob_nm = u''
+        if env_nm != u'':
+            b['allow_env'] = env_nm
+        else:
+            b.pop('allow_env', None)
+            b.pop('env', None)
+            b.pop('среда', None)
+            b.pop('allow_env_name', None)
+        if glob_nm != u'':
+            b['allow_global'] = glob_nm
+        else:
+            b.pop('allow_global', None)
+            b.pop('global', None)
+            b.pop('глобальная', None)
+            b.pop('allow_global_name', None)
         b['v'] = 1
         b['fn'] = _pw_cfg.PLUGIN_FUNCTION_KEY
         return True
@@ -942,7 +997,7 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
                 return
             if _wizard_dlg_is_named_control(src, sheet_ed, u'SheetEd'):
                 _sync_sheet_field_to_block()
-            elif src in (ref_combo, code_ed, extra_ed):
+            elif src in (ref_combo, code_ed, extra_ed, allow_env_ed, allow_global_ed):
                 self._sync_params_to_block()
 
         def itemStateChanged(self, ev):
@@ -986,6 +1041,8 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
         ref_combo.addTextListener(h)
         code_ed.addTextListener(h)
         extra_ed.addTextListener(h)
+        allow_env_ed.addTextListener(h)
+        allow_global_ed.addTextListener(h)
         code_chk.addItemListener(h)
         same_all_chk.addItemListener(h)
     except Exception:
@@ -1030,6 +1087,20 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
         ref_or_code = b.get('code') or b.get('ref') or b.get('c') or u''
         if unicode(ref_or_code).strip() == u'':
             _show_message(u'В каждом блоке нужна ссылка или Python-код.', dialog=dlg, doc=doc)
+            return None
+        env_nm = unicode(
+            b.get('allow_env') or b.get('env') or b.get('среда') or b.get('allow_env_name') or u''
+        ).strip()
+        glob_nm = unicode(
+            b.get('allow_global') or b.get('global') or b.get('глобальная') or b.get('allow_global_name') or u''
+        ).strip()
+        if env_nm == u'' or glob_nm == u'':
+            _show_message(
+                u'В каждом блоке укажите имена переменной среды и глобальной переменной допуска '
+                u'(глобальная должна быть зашифрована).',
+                dialog=dlg,
+                doc=doc,
+            )
             return None
         val = unicode(ref_or_code).strip()
         if not _pp_allows_freeform_c(val):

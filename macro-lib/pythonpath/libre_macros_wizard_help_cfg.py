@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.700"
+MACRO_VERSION = "3.10.701"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -1182,11 +1182,15 @@ _FN_HELP_TEXTS = {
         u"══════════════════════════════════════\n"
         u"\n"
         u"Вызов пользовательской функции из functions_pp.py / functions_final.py.\n"
-        u"JSON: fn=функция_плагин, ref=\"файл#имя\", extra, sheet.\n"
+        u"JSON: fn=функция_плагин, ref=\"файл#имя\", allow_env, allow_global, extra, sheet.\n"
+        u"Допуск: значение OS env (имя allow_env) должно совпасть с зашифрованной\n"
+        u"глобальной переменной (имя allow_global). Пустые имена/значения — отказ.\n"
         u"Колонка D — extra, если не задан в JSON.\n"
         u"\n"
         u"Пример:\n"
-        u"[{\"v\":1,\"fn\":\"функция_плагин\",\"ref\":\"functions_pp.py#pp_range_zagotovka\",\"sheet\":\"Сводка\"}]\n"
+        u"[{\"v\":1,\"fn\":\"функция_плагин\",\"ref\":\"functions_pp.py#pp_range_zagotovka\","
+        u"\"allow_env\":\"MERGE_ALLOW_PLUGIN\",\"allow_global\":\"Merge_Allow_Plugin\","
+        u"\"sheet\":\"Сводка\"}]\n"
         u"\n"
     ),
     u"Ячейка_В_Столбец": (

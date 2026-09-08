@@ -8,7 +8,7 @@ JSON в колонке B параметра «Предварительный_с�
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.700"
+MACRO_VERSION = "3.10.701"
 import datetime
 import json
 import os
@@ -1022,66 +1022,22 @@ def _pre_shell_allow_global_encrypt_ok(settings=None):
 
 def verify_pre_shell_allow_gate(variables_map=None, global_sheet_key=None, global_file_key=None):
     """
-    Гейт перед запуском pre-shell.
-
-    1) OS env MERGE_ALLOW_PRE_SCRIPT задана и не пуста.
-    2) В runtime-карте есть только глобальное значение Merge_Allow_Pre_Scripts
-       (сегмент Глобальные_переменные); ручной ввод / файл не учитываются.
-    3) В JSON переменная с encrypt=True и lm1:-значением.
-    4) Значения env и глобальной переменной совпадают (после расшифровки в карте).
+    Гейт перед запуском pre-shell (фиксированные имена env/глобальной).
 
     Возвращает None при успехе, иначе текст ошибки (сбор прервать).
     """
-    env_val = get_merge_allow_pre_script_env()
-    if env_val == u"":
-        return (
-            u"Предварительный_скрипт запрещён: не задана переменная среды %s. "
-            u"Задайте её и совпадающую зашифрованную глобальную переменную %s."
-            % (_cfg.PRE_SHELL_ALLOW_ENV_NAME, _cfg.PRE_SHELL_ALLOW_GLOBAL_NAME)
-        )
-    enc_ok, enc_err = _pre_shell_allow_global_encrypt_ok()
-    if not enc_ok:
-        return u"Предварительный_скрипт запрещён: %s" % enc_err
-
-    sheet_key = global_sheet_key
-    file_key = global_file_key
-    if sheet_key is None or file_key is None:
-        try:
-            from libre_macros_global_settings_lib import (
-                GLOBAL_VARIABLES_FILE_KEY,
-                GLOBAL_VARIABLES_SHEET_KEY,
-            )
-
-            if sheet_key is None:
-                sheet_key = GLOBAL_VARIABLES_SHEET_KEY
-            if file_key is None:
-                file_key = GLOBAL_VARIABLES_FILE_KEY
-        except Exception:
-            sheet_key = sheet_key or u"Глобальные_переменные"
-            file_key = file_key or u"Глобальные_переменные"
-
-    found, map_val = _lookup_pre_shell_allow_from_runtime_map(
-        variables_map, sheet_key, file_key,
+    try:
+        from libre_macros_allow_gate_lib import verify_named_allow_gate
+    except Exception as err:
+        return u"Предварительный_скрипт запрещён: модуль допуска недоступен: %s" % err
+    return verify_named_allow_gate(
+        _cfg.PRE_SHELL_ALLOW_ENV_NAME,
+        _cfg.PRE_SHELL_ALLOW_GLOBAL_NAME,
+        variables_map=variables_map,
+        subject=u"Предварительный_скрипт",
+        global_sheet_key=global_sheet_key,
+        global_file_key=global_file_key,
     )
-    if not found:
-        return (
-            u"Предварительный_скрипт запрещён: в runtime-карте нет глобальной "
-            u"переменной %s (нужна только из «Глобальные переменные», не ручной ввод "
-            u"и не значение из файла)."
-            % _cfg.PRE_SHELL_ALLOW_GLOBAL_NAME
-        )
-    if unicode(map_val).strip() == u"":
-        return (
-            u"Предварительный_скрипт запрещён: глобальная переменная %s пуста."
-            % _cfg.PRE_SHELL_ALLOW_GLOBAL_NAME
-        )
-    if unicode(map_val) != env_val:
-        return (
-            u"Предварительный_скрипт запрещён: значение среды %s не совпадает "
-            u"с глобальной переменной %s."
-            % (_cfg.PRE_SHELL_ALLOW_ENV_NAME, _cfg.PRE_SHELL_ALLOW_GLOBAL_NAME)
-        )
-    return None
 
 
 def run_pre_shell_from_param_raw(raw):

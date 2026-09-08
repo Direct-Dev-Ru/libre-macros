@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.700"
+MACRO_VERSION = "3.10.701"
 import re
 
 try:
@@ -809,8 +809,9 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         '"column_fields":[],"data_fields":[{"field":"Сумма","function":"SUM"}]}]',
     ),
     MERGE_PLUGIN_FUNCTION_KEY: (
-        "C — functions_pp.py#имя или Python lambda/def; D — доп. аргументы через запятую",
-        "functions_pp.py#pp_range_zagotovka",
+        "C — JSON: ref/code, allow_env, allow_global (env ↔ зашифрованная глобальная), extra, sheet",
+        '[{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_range_zagotovka",'
+        '"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin"}]',
     ),
 }
 MERGE_POSTPROCESS_ROW_REST_HINTS = {
@@ -840,8 +841,9 @@ MERGE_POSTPROCESS_ROW_REST_HINTS = {
         '[{"v":1,"fn":"скрытие_листов","sheets":["Сбор_книг_лог*"]}]',
     ),
     MERGE_PLUGIN_FUNCTION_KEY: (
-        "C — functions_pp.py#имя или Python lambda/def; D — доп. аргументы через запятую",
-        "functions_pp.py#pp_row_zagotovka",
+        "C — JSON: ref/code, allow_env, allow_global (env ↔ зашифрованная глобальная), extra, sheet",
+        '[{"v":1,"fn":"функция_плагин","ref":"functions_pp.py#pp_row_zagotovka",'
+        '"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin"}]',
     ),
 }
 MERGE_RESULT_POSTPROCESS_RANGE_MAP = {}
@@ -1204,8 +1206,9 @@ MERGE_FINAL_PROCESSING_REST_HINTS = {
         MERGE_POSTPROCESS_RANGE_REST_HINTS["копировать_переместить_лист"][1],
     ),
     MERGE_PLUGIN_FUNCTION_KEY: (
-        "C — functions_final.py#имя или Python lambda/def; D — доп. аргументы через запятую",
-        "functions_final.py#pp_range_zagotovka",
+        "C — JSON: ref/code, allow_env, allow_global (env ↔ зашифрованная глобальная), extra, sheet",
+        '[{"v":1,"fn":"функция_плагин","ref":"functions_final.py#pp_range_zagotovka",'
+        '"allow_env":"MERGE_ALLOW_PLUGIN","allow_global":"Merge_Allow_Plugin"}]',
     ),
 }
 _FINAL_MAP_SPEC = (

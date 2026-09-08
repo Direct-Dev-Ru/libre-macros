@@ -5,7 +5,7 @@
 Паттерн createPeer — как convert_tables_to_ranges / param_wizard.
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.700"
+MACRO_VERSION = "3.10.701"
 import unohelper
 from com.sun.star.awt import XActionListener
 

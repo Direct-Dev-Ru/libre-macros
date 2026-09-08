@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.700"
+MACRO_VERSION = "3.10.701"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -2616,6 +2616,47 @@ def merge_ensure_consent_before_run(doc):
         print(traceback.format_exc())
         show_message(u'Не удалось проверить условия использования:\n%s\nЗапуск отменён.' % err, doc)
         return False
+
+def merge_verify_plugin_allow_gates(doc):
+    """
+    Проверить гейт допуска для всех блоков «функция_плагин»
+    (постобработка диапазон/строка/xml и финальная обработка).
+
+    Возвращает текст ошибки или None.
+    """
+    try:
+        from libre_macros_allow_gate_lib import verify_plugin_allow_gate
+    except Exception as err:
+        return u'функция_плагин запрещена: модуль допуска недоступен: %s' % err
+    vm = getattr(_cw_cfg, '_MERGE_SOURCE_VARIABLES_MAP', None) or {}
+    keys = (
+        _cw_cfg.P_MERGE_POSTPROCESS_RANGE,
+        _cw_cfg.P_MERGE_POSTPROCESS_ROW,
+        _cw_cfg.P_MERGE_POSTPROCESS_XML,
+        _cw_cfg.P_MERGE_FINAL_PROCESSING,
+    )
+    ki = 0
+    while ki < len(keys):
+        param_key = keys[ki]
+        ki = ki + 1
+        try:
+            entries = read_postprocess_param_rows(doc, param_key)
+        except Exception:
+            entries = []
+        ei = 0
+        while ei < len(entries):
+            fn_name, c_raw, d_raw = entries[ei]
+            ei = ei + 1
+            for plugin_block, _resolve_name, _extra_raw in _merge_pp_iter_plugin_row_specs(
+                fn_name, c_raw, d_raw,
+            ):
+                if plugin_block is None:
+                    continue
+                gate_err = verify_plugin_allow_gate(plugin_block, variables_map=vm)
+                if gate_err:
+                    return gate_err
+    return None
+
 
 def parse_postprocess_from_sheet(doc, param_key, function_map, row_callback=False):
     """
@@ -9201,6 +9242,42 @@ def show_message(text, doc=None):
         return
     if doc is not None:
         write_status_log(doc, 'Диалог не отобразился. См. лист «%s».' % _cw_cfg.MERGE_LOG_SHEET_NAME)
+
+def show_collect_error(text, doc=None):
+    """
+    Ошибка сбора: для гейта допуска (pre-shell / функция_плагин) —
+    крупный красный диалог; иначе как show_message.
+    """
+    body = unicode(text or u'')
+    is_gate = False
+    try:
+        folded = body.casefold()
+        is_gate = (u'запрещ' in folded) and (
+            (u'функция_плагин' in folded)
+            or (u'предварительный_скрипт' in folded)
+            or (u'предварительн' in folded)
+        )
+    except Exception:
+        is_gate = False
+    if is_gate and (not _cw_get('_MERGE_QA_HEADLESS', False)):
+        title = None
+        try:
+            if u'функция_плагин' in body.casefold():
+                title = u'функция_плагин — невозможно выполнить'
+        except Exception:
+            title = None
+        try:
+            from libre_macros_allow_gate_lib import show_allow_gate_error_dialog
+
+            if show_allow_gate_error_dialog(doc, body, title=title):
+                try:
+                    write_status_log(doc, body)
+                except Exception:
+                    pass
+                return
+        except Exception as err:
+            merge_debug('show_collect_error', 'allow gate dialog failed: %s' % err)
+    show_message(text, doc)
 
 def ask_yes_no(text, doc=None):
     """
@@ -24334,6 +24411,9 @@ def parse_collect_settings(doc, validate_sources=True, interactive_manual=True):
     pipeline, pipeline_err = build_processing_pipeline(doc, _cw_cfg.MERGE_RESULT_POSTPROCESS_RANGE_MAP, _cw_cfg.MERGE_RESULT_POSTPROCESS_ROW_MAP)
     if pipeline_err:
         return ('Ошибка в настройках постобработки/ВПР:\n%s' % pipeline_err, None)
+    err_plugin_gate = merge_verify_plugin_allow_gates(doc)
+    if err_plugin_gate:
+        return (err_plugin_gate, None)
     err_split_xml = _validate_split_sheets_xml_run_phase(doc, data_transfer_mode)
     if err_split_xml:
         return (err_split_xml, None)
@@ -25822,7 +25902,7 @@ def collect_workbooks(event=None):
         defer_src = _merge_has_pre_shell_config(doc)
         err, settings = parse_collect_settings(doc, validate_sources=not defer_src)
         if err:
-            show_message(err, doc)
+            show_collect_error(err, doc)
             return False
         _merge_apply_flags_from_settings(settings)
         _merge_set_debug_log_doc(doc)
@@ -25917,21 +25997,7 @@ def collect_workbooks_run():
         # До expand_source_files: скрипт может создать CSV/файлы-источники.
         err_pre = merge_run_pre_shell_from_doc(doc)
         if err_pre:
-            shown = False
-            try:
-                from libre_macros_pre_shell_lib import show_pre_shell_error_dialog
-
-                shown = bool(show_pre_shell_error_dialog(doc, err_pre))
-            except Exception as err:
-                merge_debug('pre_shell', 'error dialog failed: %s' % err)
-                shown = False
-            if not shown:
-                show_message(err_pre, doc)
-            else:
-                try:
-                    write_status_log(doc, err_pre)
-                except Exception:
-                    pass
+            show_collect_error(err_pre, doc)
             return False
         # Этап 1 / pack уже спросили ручной ввод → только кэш, без повторных диалогов.
         # Самостоятельный запуск этапа 2: флага нет → очистить кэш и спросить.
@@ -25945,7 +26011,7 @@ def collect_workbooks_run():
             interactive_manual=not manual_done,
         )
         if err:
-            show_message(err, doc)
+            show_collect_error(err, doc)
             return False
         mode_for_msg = settings['mode']
         file_count = len(settings['files'])
@@ -26928,7 +26994,7 @@ def collect_workbooks_for_param_sheet(sheet_name, suppress_pre_clear=False, skip
         defer_src = _merge_has_pre_shell_config(doc)
         err, settings = parse_collect_settings(doc, validate_sources=not defer_src)
         if err:
-            show_message(err, doc)
+            show_collect_error(err, doc)
             return False
         _merge_apply_flags_from_settings(settings)
         _merge_set_debug_log_doc(doc)
