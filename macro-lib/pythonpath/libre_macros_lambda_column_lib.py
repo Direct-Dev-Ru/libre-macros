@@ -13,7 +13,7 @@ Sugar `upd_rows("Col")` / `upd_rows("Col")[-1]` → `_lm_upd_rows(_ri, col, offs
 Общий helper для `замена_значений`, `текстовые_операции`, `столбец_по_лямбде`.
 """
 from __future__ import print_function
-MACRO_VERSION = "3.10.698"
+MACRO_VERSION = "3.10.699"
 import ast
 import datetime
 import re

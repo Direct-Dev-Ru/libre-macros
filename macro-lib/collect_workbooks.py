@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.698"
+MACRO_VERSION = "3.10.699"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -23934,16 +23934,33 @@ def _merge_has_pre_shell_config(doc):
     """True, если на листе параметров задан «Предварительный_скрипт»."""
     try:
         table = read_param_table(doc)
-        raw = first_value(table, _cw_cfg.P_MERGE_PRE_SHELL, '')
+        raw = merge_pre_shell_param_raw(table)
         return str(raw or '').strip() != ''
     except Exception:
         return False
+
+def merge_pre_shell_param_raw(table):
+    """
+    Текст JSON «Предварительный_скрипт» из таблицы параметров.
+
+    B = «смотри в С» → берём C (как у пропуска строк / прочих подвизардов).
+    Иначе — B (обратная совместимость: JSON раньше писали в B).
+    """
+    vals = list_value(table, _cw_cfg.P_MERGE_PRE_SHELL, [])
+    if not vals:
+        return ''
+    b = str(vals[0] or '').strip()
+    if _merge_param_b_is_col_c_marker(b):
+        if len(vals) > 1:
+            return str(vals[1] or '').strip()
+        return ''
+    return b
 
 def merge_run_pre_shell_from_doc(doc):
     """
     Запуск «Предварительный_скрипт» до разбора источников / сбора.
 
-    Пустая ячейка B — пропуск. Гейт: OS env MERGE_ALLOW_PRE_SCRIPT +
+    Пустая ячейка (после разрешения B→C) — пропуск. Гейт: OS env MERGE_ALLOW_PRE_SCRIPT +
     зашифрованная глобальная Merge_Allow_Pre_Scripts (только runtime-карта,
     сегмент «Глобальные_переменные»). Отмена в диалоге / ошибка / таймаут —
     возвращает текст ошибки (сбор прервать). Успех или пропуск — None.
@@ -23961,7 +23978,7 @@ def merge_run_pre_shell_from_doc(doc):
         table = read_param_table(doc)
     except Exception as err:
         return 'Не удалось прочитать параметры для предварительного скрипта: %s' % err
-    raw = first_value(table, _cw_cfg.P_MERGE_PRE_SHELL, '')
+    raw = merge_pre_shell_param_raw(table)
     if str(raw or '').strip() == '':
         return None
     spec = parse_pre_shell_dict(raw)

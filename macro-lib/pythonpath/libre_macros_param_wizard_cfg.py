@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.698"
+MACRO_VERSION = "3.10.699"
 import re
 
 try:
@@ -835,7 +835,9 @@ WIZARD_HINTS = {
     ),
     u"Предварительный_скрипт": (
         u"Внешняя команда перед сбором источников (этап 2).\n"
-        u"JSON в колонке B. Пустая ячейка — скрипт не запускается.\n"
+        u"Визард по умолчанию: B = «смотри в С», JSON в колонке C\n"
+        u"(кнопка «Параметры…»). Пустая C — скрипт не запускается.\n"
+        u"Legacy: JSON целиком в B (без маркера) ещё читается.\n"
         u"Допуск (обязательно): переменная среды MERGE_ALLOW_PRE_SCRIPT\n"
         u"  и зашифрованная глобальная Merge_Allow_Pre_Scripts\n"
         u"  (вкладка «Глобальные» → «Глобальные переменные»; имя в любых\n"
@@ -846,15 +848,15 @@ WIZARD_HINTS = {
         u"Перед запуском — диалог «Внимание!!!»; согласие/отказ пишется в\n"
         u"~/.config/libre-macros/pre_shell_consent/ (дата, пользователь, книга).\n"
         u"При ненулевом коде возврата или таймауте сбор прерывается.\n"
-        u"Ключи: argv, cwd, timeout, env, clean_env (по умолчанию true).\n"
+        u"Ключи JSON: argv, cwd, timeout, env, clean_env (по умолчанию true).\n"
         u"clean_env=true снимает PYTHONHOME/PYTHONPATH и пути AlterOffice из PATH.\n"
         u"argv — список аргументов без shell, напр.:\n"
         u'  ["/usr/bin/python3","/path/ad_export.py","--config","/path/ad_export.ini"]\n'
         u"Если задан pre-скрипт, проверка наличия файлов-источников — после его отработки.\n"
-        u"Пример:\n"
+        u"Пример C:\n"
         u'  {"argv":["/bin/bash","/path/run.sh"],"cwd":"/path","timeout":600,'
         u'"clean_env":true,"env":{"AD_BIND_PASSWORD":"…"}}\n'
-        u"В визарде — кнопка «Параметры…» или курсор в B."
+        u"В визарде — кнопка «Параметры…» у колонки C или курсор в B/C."
     ),
     u"Листы": (
         u"Фильтр листов на каждый файл (B,C,D… — как у «Файлы-Источники»).\n"

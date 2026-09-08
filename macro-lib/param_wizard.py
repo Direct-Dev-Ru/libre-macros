@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.698"
+MACRO_VERSION = "3.10.699"
 import ast
 import glob
 import json
@@ -1205,7 +1205,7 @@ def _build_wizard_catalog():
             default = advanced_defaults.get(name, u'')
             return u'Расширенный параметр. Целое число в B.\nПустое B — значение по умолчанию из кода: %s.' % default
         return text
-    catalog = [{'name': _pw_cfg.P_MERGE_COMMENT, 'mode': 'text', 'multi_row': False, 'hint': _hint(_pw_cfg.P_MERGE_COMMENT)}, {'name': p_files, 'mode': 'files', 'multi_row': False, 'multi_column': True, 'hint': _hint(p_files)}, {'name': p_source_extra, 'mode': 'source_extra', 'multi_row': False, 'multi_column': True, 'hint': _hint(p_source_extra)}, {'name': p_pre_shell, 'mode': 'pre_shell', 'multi_row': False, 'hint': _hint(p_pre_shell)}, {'name': p_mode, 'mode': 'choice', 'choices': choice_mode, 'multi_row': False, 'hint': _hint(p_mode), 'inline_transfer': True, 'transfer_choices': choice_transfer}, {'name': p_sheets, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_sheets), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheets_include_filter', 'col_c_keep_b': True}, {'name': p_columns, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_columns), 'col_c_keep_b': True}, {'name': p_start_row, 'mode': 'number', 'multi_row': False, 'hint': _hint(p_start_row)}, {'name': p_start_col, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_start_col)}, {'name': p_row_count, 'mode': 'number', 'multi_row': False, 'hint': _hint(p_row_count)}, {'name': p_col_count, 'mode': 'number', 'multi_row': False, 'hint': _hint(p_col_count)}, {'name': p_header, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_header), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'header_row', 'col_c_keep_b': True}, {'name': p_path, 'mode': 'choice', 'choices': choice_path, 'multi_row': False, 'hint': _hint(p_path)}, {'name': p_dt, 'mode': 'choice', 'choices': choice_dt, 'multi_row': False, 'hint': _hint(p_dt)}, {'name': p_dt_legacy, 'mode': 'choice', 'choices': choice_dt, 'multi_row': False, 'hint': _hint(p_dt_legacy)}, {'name': p_transfer, 'mode': 'choice', 'choices': choice_transfer, 'multi_row': False, 'hint': _hint(p_transfer)}, {'name': p_xml_convert, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_xml_convert)}, {'name': p_xml_dt_formats, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_xml_dt_formats)}, {'name': p_src_subfolders, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_src_subfolders)}, {'name': p_src_exclude, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_src_exclude)}, {'name': p_debug, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_debug)}, {'name': p_debug_console, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_debug_console)}, {'name': p_create_log, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_create_log)}, {'name': p_do_empty, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_do_empty)}, {'name': p_undelete, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_undelete), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheets_undelete_filter', 'col_c_keep_b': True}, {'name': p_force_delete, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_force_delete), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheets_force_delete_filter', 'col_c_keep_b': True}, {'name': p_skip_rows, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_skip_rows), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'skip_source_rows'}, {'name': p_delete_top, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_delete_top), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'delete_top_rows'}, {'name': p_copy_auto_trim, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_copy_auto_trim)}, {'name': p_paste_formats, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_paste_formats)}, {'name': p_autofilter, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_autofilter), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheet_list_fn', 'col_c_fn_key': u'автофильтр'}, {'name': p_freeze, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_freeze), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheet_list_fn', 'col_c_fn_key': u'закрепить_заголовок'}, {'name': p_progress, 'mode': 'choice', 'choices': choice_progress, 'multi_row': False, 'hint': _hint(p_progress)}, {'name': p_pp_range, 'mode': 'postprocess_range', 'choices': pp_range_choices, 'rest_hints': pp_range_rest, 'multi_row': True, 'hint': _hint(p_pp_range)}, {'name': p_pp_row, 'mode': 'postprocess_row', 'choices': pp_row_choices, 'rest_hints': pp_row_rest, 'multi_row': True, 'hint': _hint(p_pp_row)}, {'name': p_pp_xml, 'mode': 'postprocess_range', 'choices': pp_xml_choices, 'rest_hints': pp_xml_rest, 'multi_row': True, 'hint': _hint(p_pp_xml)}, {'name': p_final, 'mode': 'postprocess_range', 'choices': final_choices, 'rest_hints': final_rest, 'multi_row': True, 'hint': _hint(p_final)}, {'name': p_vlookup, 'mode': 'vlookup', 'multi_row': True, 'hint': _hint(p_vlookup)}, {'name': p_merge_sheets, 'mode': 'merge_sheets', 'multi_row': True, 'hint': u'Объединить несколько листов в один. JSON в колонке C (sheets, dest_sheet, header_row, with_formatting).'}, {'name': p_split_sheets, 'mode': 'split_sheets', 'multi_row': True, 'hint': u'Разделить листы (заглушка). JSON в C или пусто.'}, {'name': p_cell, 'mode': 'cell_to_column', 'multi_row': True, 'hint': _hint(p_cell), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'cell_to_column'}, {'name': p_var_map, 'mode': 'cell_to_column', 'multi_row': True, 'hint': _hint(p_var_map), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'add_to_variables_map'}, {'name': p_manual_var, 'mode': 'text', 'multi_row': True, 'hint': _hint(p_manual_var), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'manual_variable_input', 'col_c_keep_b': True}]
+    catalog = [{'name': _pw_cfg.P_MERGE_COMMENT, 'mode': 'text', 'multi_row': False, 'hint': _hint(_pw_cfg.P_MERGE_COMMENT)}, {'name': p_files, 'mode': 'files', 'multi_row': False, 'multi_column': True, 'hint': _hint(p_files)}, {'name': p_source_extra, 'mode': 'source_extra', 'multi_row': False, 'multi_column': True, 'hint': _hint(p_source_extra)}, {'name': p_pre_shell, 'mode': 'pre_shell', 'multi_row': False, 'hint': _hint(p_pre_shell), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'pre_shell'}, {'name': p_mode, 'mode': 'choice', 'choices': choice_mode, 'multi_row': False, 'hint': _hint(p_mode), 'inline_transfer': True, 'transfer_choices': choice_transfer}, {'name': p_sheets, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_sheets), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheets_include_filter', 'col_c_keep_b': True}, {'name': p_columns, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_columns), 'col_c_keep_b': True}, {'name': p_start_row, 'mode': 'number', 'multi_row': False, 'hint': _hint(p_start_row)}, {'name': p_start_col, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_start_col)}, {'name': p_row_count, 'mode': 'number', 'multi_row': False, 'hint': _hint(p_row_count)}, {'name': p_col_count, 'mode': 'number', 'multi_row': False, 'hint': _hint(p_col_count)}, {'name': p_header, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_header), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'header_row', 'col_c_keep_b': True}, {'name': p_path, 'mode': 'choice', 'choices': choice_path, 'multi_row': False, 'hint': _hint(p_path)}, {'name': p_dt, 'mode': 'choice', 'choices': choice_dt, 'multi_row': False, 'hint': _hint(p_dt)}, {'name': p_dt_legacy, 'mode': 'choice', 'choices': choice_dt, 'multi_row': False, 'hint': _hint(p_dt_legacy)}, {'name': p_transfer, 'mode': 'choice', 'choices': choice_transfer, 'multi_row': False, 'hint': _hint(p_transfer)}, {'name': p_xml_convert, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_xml_convert)}, {'name': p_xml_dt_formats, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_xml_dt_formats)}, {'name': p_src_subfolders, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_src_subfolders)}, {'name': p_src_exclude, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_src_exclude)}, {'name': p_debug, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_debug)}, {'name': p_debug_console, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_debug_console)}, {'name': p_create_log, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_create_log)}, {'name': p_do_empty, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_do_empty)}, {'name': p_undelete, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_undelete), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheets_undelete_filter', 'col_c_keep_b': True}, {'name': p_force_delete, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_force_delete), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheets_force_delete_filter', 'col_c_keep_b': True}, {'name': p_skip_rows, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_skip_rows), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'skip_source_rows'}, {'name': p_delete_top, 'mode': 'text', 'multi_row': False, 'hint': _hint(p_delete_top), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'delete_top_rows'}, {'name': p_copy_auto_trim, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_copy_auto_trim)}, {'name': p_paste_formats, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_paste_formats)}, {'name': p_autofilter, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_autofilter), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheet_list_fn', 'col_c_fn_key': u'автофильтр'}, {'name': p_freeze, 'mode': 'choice', 'choices': choice_bool, 'multi_row': False, 'hint': _hint(p_freeze), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'sheet_list_fn', 'col_c_fn_key': u'закрепить_заголовок'}, {'name': p_progress, 'mode': 'choice', 'choices': choice_progress, 'multi_row': False, 'hint': _hint(p_progress)}, {'name': p_pp_range, 'mode': 'postprocess_range', 'choices': pp_range_choices, 'rest_hints': pp_range_rest, 'multi_row': True, 'hint': _hint(p_pp_range)}, {'name': p_pp_row, 'mode': 'postprocess_row', 'choices': pp_row_choices, 'rest_hints': pp_row_rest, 'multi_row': True, 'hint': _hint(p_pp_row)}, {'name': p_pp_xml, 'mode': 'postprocess_range', 'choices': pp_xml_choices, 'rest_hints': pp_xml_rest, 'multi_row': True, 'hint': _hint(p_pp_xml)}, {'name': p_final, 'mode': 'postprocess_range', 'choices': final_choices, 'rest_hints': final_rest, 'multi_row': True, 'hint': _hint(p_final)}, {'name': p_vlookup, 'mode': 'vlookup', 'multi_row': True, 'hint': _hint(p_vlookup)}, {'name': p_merge_sheets, 'mode': 'merge_sheets', 'multi_row': True, 'hint': u'Объединить несколько листов в один. JSON в колонке C (sheets, dest_sheet, header_row, with_formatting).'}, {'name': p_split_sheets, 'mode': 'split_sheets', 'multi_row': True, 'hint': u'Разделить листы (заглушка). JSON в C или пусто.'}, {'name': p_cell, 'mode': 'cell_to_column', 'multi_row': True, 'hint': _hint(p_cell), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'cell_to_column'}, {'name': p_var_map, 'mode': 'cell_to_column', 'multi_row': True, 'hint': _hint(p_var_map), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'add_to_variables_map'}, {'name': p_manual_var, 'mode': 'text', 'multi_row': True, 'hint': _hint(p_manual_var), 'col_c_subdialog': True, 'col_c_subdialog_kind': 'manual_variable_input', 'col_c_keep_b': True}]
     for adv in advanced:
         catalog.append({'name': adv, 'mode': 'number', 'multi_row': False, 'hint': _hint(adv)})
     return catalog
@@ -5774,6 +5774,11 @@ def _read_values_at_row(sheet, spec, row, col=None):
         if _spec_col_c_keeps_b(spec) or spec.get('mode') == 'choice':
             primary = _cell_string(sheet.getCellByPosition(1, row))
             return (primary, extra, u'')
+        # see-only: B = «смотри в С»; C = JSON. Legacy pre_shell: JSON мог быть в B.
+        if extra == u'' and spec.get('mode') == 'pre_shell':
+            b_old = _cell_string(sheet.getCellByPosition(1, row))
+            if b_old != u'' and (not _param_b_is_see_column_c(b_old)):
+                extra = b_old
         return (_pw_cfg._PARAM_B_SEE_COLUMN_C, extra, u'')
     if mode == 'files':
         if icol >= 1:
@@ -6035,7 +6040,13 @@ def _wizard_launch_plan(doc, param_sheet, catalog):
             },
         }
     if mode == 'pre_shell' and icol >= 1:
-        initial_text = _cell_string(param_sheet.getCellByPosition(1, row))
+        # JSON в C (B = «смотри в С»); legacy — JSON ещё мог лежать в B.
+        b_text = _cell_string(param_sheet.getCellByPosition(1, row))
+        c_text = _cell_string(param_sheet.getCellByPosition(2, row))
+        if _param_b_is_see_column_c(b_text) or c_text != u'':
+            initial_text = c_text
+        else:
+            initial_text = b_text
         return {
             'action': 'subdialog',
             'new_param_mode': False,
@@ -6044,7 +6055,7 @@ def _wizard_launch_plan(doc, param_sheet, catalog):
                 'kind': 'pre_shell',
                 'spec': spec,
                 'row': row,
-                'target_col': 1,
+                'target_col': 2,
                 'initial_text': initial_text,
             },
         }
@@ -6097,6 +6108,9 @@ def _wizard_launch_plan(doc, param_sheet, catalog):
         if _param_match(pname, u'Пропуск_строк_источника'):
             initial_text = _cell_string(param_sheet.getCellByPosition(2, row))
             return {'action': 'subdialog', 'new_param_mode': False, 'initial': None, 'subdialog': {'kind': 'skip_source_rows', 'spec': spec, 'row': row, 'initial_text': initial_text}}
+        if _param_match(pname, u'Предварительный_скрипт'):
+            initial_text = _cell_string(param_sheet.getCellByPosition(2, row))
+            return {'action': 'subdialog', 'new_param_mode': False, 'initial': None, 'subdialog': {'kind': 'pre_shell', 'spec': spec, 'row': row, 'initial_text': initial_text}}
         if _param_match(pname, u'Строка_Заголовков'):
             initial_text = _cell_string(param_sheet.getCellByPosition(2, row))
             return {'action': 'subdialog', 'new_param_mode': False, 'initial': None, 'subdialog': {'kind': 'header_row', 'spec': spec, 'row': row, 'initial_text': initial_text}}
@@ -6236,9 +6250,13 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             pass
         try:
-            sheet.getCellByPosition(1, row).String = unicode(result_text).strip()
+            sheet.getCellByPosition(1, row).String = _pw_cfg._PARAM_B_SEE_COLUMN_C
         except Exception:
-            sheet.getCellByPosition(1, row).String = u''
+            pass
+        try:
+            sheet.getCellByPosition(2, row).String = unicode(result_text).strip()
+        except Exception:
+            sheet.getCellByPosition(2, row).String = u''
         _ensure_param_row_formatting(sheet, row, catalog, spec, False, doc=doc)
     elif kind == 'cell_to_column':
         result_text = show_cell_to_column_param_dialog(None, sub.get('initial_text'), doc=doc)
@@ -7214,31 +7232,6 @@ def _apply_param_value_unlocked(sheet, spec, primary, extra=None, target_row=Non
             sheet.getCellByPosition(0, row).String = name
             _ensure_param_row_formatting(sheet, row, catalog, spec, True, doc=doc)
         return row
-    if mode == 'pre_shell':
-        # JSON в B; primary из формы / субвизарда.
-        if target_row is not None and int(target_row) >= 0:
-            tr = int(target_row)
-            rname = _row_param_name(sheet, tr)
-            needs_shell = rname == u''
-            if rname == u'' or _param_row_matches_name(rname, name):
-                if rname == u'':
-                    sheet.getCellByPosition(0, tr).String = name
-                if primary is not None and unicode(primary) != u'__pre_shell_keep__':
-                    sheet.getCellByPosition(1, tr).String = unicode(primary or u'').strip()
-                _ensure_param_row_formatting(sheet, tr, catalog, spec, needs_shell, doc=doc)
-                return tr
-        row = _find_param_row(sheet, name)
-        if row < 0:
-            row = _first_empty_row(sheet)
-            sheet.getCellByPosition(0, row).String = name
-            needs_shell = True
-        else:
-            needs_shell = False
-        if primary is not None and unicode(primary) != u'__pre_shell_keep__':
-            sheet.getCellByPosition(1, row).String = unicode(primary or u'').strip()
-        _ensure_param_row_formatting(sheet, row, catalog, spec, needs_shell, doc=doc)
-        return row
-
     def _write_values_to_row(row):
         if spec.get('col_c_subdialog'):
             if _spec_col_c_keeps_b(spec) or spec.get('mode') == 'choice':
@@ -13451,9 +13444,9 @@ def show_pre_shell_param_dialog(parent_dialog=None, initial_text=u'', doc=None):
     hint = (
         u'Команда без shell=True: argv — по одному аргументу на строку.\n'
         u'Пустой argv → параметр не сохраняется (скрипт не запускается).\n'
+        u'На лист: B = «смотри в С», JSON — в колонке C.\n'
         u'Допуск: env MERGE_ALLOW_PRE_SCRIPT = зашифрованная глобальная\n'
-        u'Merge_Allow_Pre_Scripts (иначе сбор прерывается до confirm).\n'
-        u'env — KEY=VALUE. «Очистить env AO» — снять PYTHONHOME/пути AlterOffice.'
+        u'Merge_Allow_Pre_Scripts (иначе сбор прерывается до confirm).'
     )
     _wizard_dlg_add_fixed(dm, 'HintLbl', hint, m, y, dw - m * 2, 54, multiline=True)
     y += 58
@@ -26558,11 +26551,6 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                     primary = split_vals
                 elif mode == 'source_extra':
                     primary = u''
-                elif mode == 'pre_shell':
-                    if self.value_edit is not None:
-                        primary = self.value_edit.getText().strip()
-                    else:
-                        primary = u''
                 elif mode in ('choice', 'postprocess_range', 'postprocess_row'):
                     if self.value_combo is not None:
                         try:
@@ -27129,26 +27117,6 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
 
             def _on_col_c_params_clicked(self):
                 spec = self._current_spec()
-                if spec is not None and spec.get('mode') == 'pre_shell':
-                    initial = u''
-                    if self.value_edit is not None:
-                        try:
-                            initial = self.value_edit.getText().strip()
-                        except Exception:
-                            pass
-                    if initial == u'':
-                        row = self._wizard_row_for_spec(spec)
-                        if row is not None and int(row) >= 1:
-                            initial = _cell_string(self.sheet.getCellByPosition(1, int(row)))
-                    result = show_pre_shell_param_dialog(self.dialog, initial, doc=self.doc)
-                    if result is None:
-                        return
-                    try:
-                        if self.value_edit is not None:
-                            self.value_edit.setText(unicode(result).strip())
-                    except Exception:
-                        pass
-                    return
                 if not _spec_has_col_c_subdialog(spec):
                     return
                 initial = u''
@@ -27161,13 +27129,20 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                     initial = unicode(getattr(self, '_col_c_json_text', u'') or u'').strip()
                 row = self._wizard_row_for_spec(spec)
                 if initial == u'' and row is not None and (int(row) >= 1):
+                    # C; legacy pre_shell — JSON мог быть в B.
                     initial = _cell_string(self.sheet.getCellByPosition(2, int(row)))
+                    if initial == u'' and spec.get('mode') == 'pre_shell':
+                        b_old = _cell_string(self.sheet.getCellByPosition(1, int(row)))
+                        if not _param_b_is_see_column_c(b_old):
+                            initial = b_old
                 kind = _spec_col_c_subdialog_kind(spec)
                 result = None
                 if kind == u'delete_top_rows':
                     result = show_delete_top_rows_param_dialog(self.dialog, initial, doc=self.doc)
                 elif kind == u'skip_source_rows':
                     result = show_skip_source_rows_param_dialog(self.dialog, initial, doc=self.doc)
+                elif kind == u'pre_shell':
+                    result = show_pre_shell_param_dialog(self.dialog, initial, doc=self.doc)
                 elif kind == u'header_row':
                     result = show_header_row_param_dialog(self.dialog, initial, doc=self.doc)
                 elif kind == u'cell_to_column':
@@ -27196,7 +27171,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                         self.extra_edit.setText(text)
                     except Exception:
                         pass
-                if kind == u'header_row' and self.value_edit is not None:
+                if kind in (u'header_row', u'pre_shell') and self.value_edit is not None:
                     try:
                         self.value_edit.setText(_pw_cfg._PARAM_B_SEE_COLUMN_C)
                     except Exception:
@@ -27393,7 +27368,6 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                     return
                 mode = spec.get('mode', 'text')
                 source_extra_mode = mode == 'source_extra'
-                pre_shell_mode = mode == 'pre_shell'
                 col_c_mode = _spec_has_col_c_subdialog(spec)
                 col_c_see_only = _spec_col_c_see_only(spec)
                 keep_b = _spec_col_c_keeps_b(spec)
@@ -27480,22 +27454,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                 _set_control_visible(self.value_combo, show_combo, value_ctrl_y, _pw_cfg._VALUE_CTRL_H, _pw_cfg._FIELD_W)
                 _set_control_visible(self.value_edit, show_edit and (not show_vlookup_hint), value_ctrl_y, _pw_cfg._VALUE_CTRL_H, _pw_cfg._FIELD_W)
                 self._sync_col_c_params_ui(spec)
-                if pre_shell_mode:
-                    # Кнопка «Параметры…» рядом с JSON в B.
-                    try:
-                        if self.lbl_value is not None:
-                            self.lbl_value.Model.Label = u'JSON (B) / кнопка «Параметры…»:'
-                    except Exception:
-                        pass
-                    _set_control_visible(self.col_c_params_btn, True, value_ctrl_y, _pw_cfg._CTRL_H, 100)
-                    try:
-                        if self.value_edit is not None:
-                            self.value_edit.Model.Width = _pw_cfg._FIELD_W - 105
-                            self.value_edit.Model.ReadOnly = False
-                    except Exception:
-                        pass
-                    _sync_value_row_z_order(self.value_combo, self.value_edit, self.col_c_params_btn, False, True, True)
-                elif not col_c_mode:
+                if not col_c_mode:
                     _sync_value_row_z_order(self.value_combo, self.value_edit, self.col_c_params_btn, show_combo, show_edit and (not show_vlookup_hint), False)
                 if show_files_tools:
                     clear_last_x = _pw_cfg._M + _pw_cfg._BROWSE_W + _pw_cfg._FILES_BTN_GAP
