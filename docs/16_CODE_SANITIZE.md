@@ -5,7 +5,7 @@
 и в фильтрах имён листов (`libre_macros_sheet_filter_lib.compile_sheet_name_filter` —
 «Листы_не_удалять», «удаление_листов» / «скрытие_листов»).
 
-Связанные находки аудита: [SECURITY_AUDIT.md](SECURITY_AUDIT.md) — C-1, H-2, H-4.
+Связанные находки аудита: [SECURITY_AUDIT.md](SECURITY_AUDIT.md) — H-5 (бывш. C-1/H-4), H-2.
 
 ---
 
