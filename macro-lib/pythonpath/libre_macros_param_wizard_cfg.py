@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.707"
+MACRO_VERSION = "3.10.708"
 import re
 
 try:
@@ -1559,7 +1559,8 @@ _PARAM_COL_WIDTHS = (8500, 9500, 9500, 9500, 9500, 9500)
 _DESC_GENERAL_INFO_SEPARATOR = u"---------Общая информация ---------"
 _PICK_SOURCE = None
 _INNER_BTN_W = 80
-_INNER_BTN_H = 16
+# Высота OK/Отмена/Справка в футере субвизардов (+40% к прежним 16).
+_INNER_BTN_H = 22
 _INNER_BTN_GAP = 10
 _INNER_CHK_H = 14
 _INNER_FOOTER_RESERVE = _INNER_BTN_H + 4 + _INNER_CHK_H + 6

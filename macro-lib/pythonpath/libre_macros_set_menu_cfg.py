@@ -2,7 +2,7 @@
 """Встроенные menubar.xml, cell.xml, toolbar и lc_imagelist для set_menu (AlterOffice)."""
 from __future__ import print_function
 
-MACRO_VERSION = "3.10.707"
+MACRO_VERSION = "3.10.708"
 MENUBAR_FILENAME = "menubar.xml"
 CELL_FILENAME = "cell.xml"
 TOOLBAR_FILENAME = "custom_toolbar_f99c2c5b.xml"

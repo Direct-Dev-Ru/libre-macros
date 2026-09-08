@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.707"
+MACRO_VERSION = "3.10.708"
 import json
 import os
 import sys

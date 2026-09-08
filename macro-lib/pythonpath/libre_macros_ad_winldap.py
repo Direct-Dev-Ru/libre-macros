@@ -45,7 +45,7 @@ Embedded Python AlterOffice/LibreOffice на Windows не содержит ра�
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.707"
+MACRO_VERSION = "3.10.708"
 import sys
 
 try:

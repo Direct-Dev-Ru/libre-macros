@@ -5,7 +5,7 @@ from __future__ import print_function, unicode_literals
 
 Ключ: копирование_диапазонов (FINAL + опционально RANGE).
 """
-MACRO_VERSION = "3.10.707"
+MACRO_VERSION = "3.10.708"
 import re
 
 try:

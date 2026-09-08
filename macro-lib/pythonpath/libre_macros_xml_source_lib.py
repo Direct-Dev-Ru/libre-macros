@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.707"
+MACRO_VERSION = "3.10.708"
 """
 Чтение XML-источников: плоская таблица (как при открытии XML в Excel).
 
