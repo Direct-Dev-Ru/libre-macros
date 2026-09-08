@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.699"
+MACRO_VERSION = "3.10.700"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -25917,7 +25917,21 @@ def collect_workbooks_run():
         # До expand_source_files: скрипт может создать CSV/файлы-источники.
         err_pre = merge_run_pre_shell_from_doc(doc)
         if err_pre:
-            show_message(err_pre, doc)
+            shown = False
+            try:
+                from libre_macros_pre_shell_lib import show_pre_shell_error_dialog
+
+                shown = bool(show_pre_shell_error_dialog(doc, err_pre))
+            except Exception as err:
+                merge_debug('pre_shell', 'error dialog failed: %s' % err)
+                shown = False
+            if not shown:
+                show_message(err_pre, doc)
+            else:
+                try:
+                    write_status_log(doc, err_pre)
+                except Exception:
+                    pass
             return False
         # Этап 1 / pack уже спросили ручной ввод → только кэш, без повторных диалогов.
         # Самостоятельный запуск этапа 2: флага нет → очистить кэш и спросить.

@@ -8,7 +8,7 @@ LDAPS/start_tls при stub вызовет понятную ошибку из ld
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.699"
+MACRO_VERSION = "3.10.700"
 def _ssl_usable(mod):
     if mod is None:
         return False

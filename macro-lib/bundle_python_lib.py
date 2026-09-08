@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-MACRO_VERSION = "3.10.699"
+MACRO_VERSION = "3.10.700"
 import argparse
 import ast
 import sys

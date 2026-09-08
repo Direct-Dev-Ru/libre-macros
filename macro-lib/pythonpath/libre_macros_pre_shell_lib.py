@@ -8,7 +8,7 @@ JSON в колонке B параметра «Предварительный_с�
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.699"
+MACRO_VERSION = "3.10.700"
 import datetime
 import json
 import os
@@ -560,7 +560,7 @@ def _pre_shell_dialog_create_peer(dlg, toolkit, doc=None):
     return False
 
 
-def _pre_shell_dlg_add_fixed(dm, name, label, x, y, w, h, multiline=False):
+def _pre_shell_dlg_add_fixed(dm, name, label, x, y, w, h, multiline=False, text_color=None, font_height=None, bold=False):
     m = dm.createInstance(u"com.sun.star.awt.UnoControlFixedTextModel")
     m.Name = unicode(name)
     m.PositionX = int(x)
@@ -570,6 +570,34 @@ def _pre_shell_dlg_add_fixed(dm, name, label, x, y, w, h, multiline=False):
     m.Label = unicode(label)
     if multiline:
         m.MultiLine = True
+    if text_color is not None:
+        try:
+            m.TextColor = int(text_color)
+        except Exception:
+            pass
+    if font_height is not None or bold:
+        hpt = int(font_height) if font_height is not None else None
+        try:
+            fd = m.FontDescriptor
+            if hpt is not None:
+                fd.Height = hpt
+            if bold:
+                try:
+                    fd.Weight = 150
+                except Exception:
+                    pass
+            m.FontDescriptor = fd
+        except Exception:
+            if hpt is not None:
+                try:
+                    m.FontHeight = hpt
+                except Exception:
+                    pass
+            if bold:
+                try:
+                    m.FontWeight = 150
+                except Exception:
+                    pass
     dm.insertByName(unicode(name), m)
     return m
 
@@ -592,6 +620,123 @@ def _pre_shell_dlg_add_edit(dm, name, x, y, w, h, multiline=False, readonly=Fals
         edit.ReadOnly = True
     dm.insertByName(unicode(name), edit)
     return edit
+
+
+def show_pre_shell_error_dialog(doc, text, title=None):
+    """
+    Диалог ошибки / запрета pre-shell: крупный красный текст, алая полоса-титл.
+    Возвращает True, если диалог показан; False — fallback на обычный MessageBox.
+    """
+    body = unicode(text or u"").strip()
+    if body == u"":
+        return False
+    if uno is None:
+        _log(u"error dialog: UNO недоступен")
+        return False
+    try:
+        # Headless QA — без UI.
+        import libre_macros_collect_cfg as _cw_cfg
+
+        if bool(getattr(_cw_cfg, u"_MERGE_QA_HEADLESS", False)):
+            _log(u"error dialog: headless skip")
+            return False
+    except Exception:
+        pass
+    try:
+        ctx = uno.getComponentContext()
+        sm = ctx.getServiceManager()
+        toolkit = sm.createInstanceWithContext(u"com.sun.star.awt.Toolkit", ctx)
+    except Exception as err:
+        _log(u"error dialog: toolkit error: %s" % err)
+        return False
+    try:
+        from libre_macros_ui_theme import (
+            INNER_BTN_H,
+            INNER_BTN_W,
+            inner_dialog_footer_y,
+            inner_dialog_set_sizeable,
+            prepare_dialog_soft_gray_warning,
+        )
+    except Exception as err:
+        _log(u"error dialog: ui_theme import error: %s" % err)
+        return False
+
+    caption = unicode(title or _cfg.PRE_SHELL_ERROR_DIALOG_TITLE)
+    dm = sm.createInstanceWithContext(u"com.sun.star.awt.UnoControlDialogModel", ctx)
+    m = 12
+    dw = 560
+    dh = 280
+    dm.PositionX = 100
+    dm.PositionY = 90
+    dm.Width = dw
+    dm.Height = dh
+    dm.Title = caption
+    inner_dialog_set_sizeable(dm)
+
+    y = m
+    msg_h = inner_dialog_footer_y(dh, m) - y - 8
+    if msg_h < 100:
+        msg_h = 100
+    _pre_shell_dlg_add_fixed(
+        dm,
+        u"ErrLbl",
+        body,
+        m,
+        y,
+        dw - 2 * m,
+        msg_h,
+        multiline=True,
+        text_color=_cfg.PRE_SHELL_ERROR_TEXT_COLOR,
+        font_height=_cfg.PRE_SHELL_ERROR_FONT_HEIGHT,
+        bold=True,
+    )
+    y_btn = inner_dialog_footer_y(dh, m)
+    ok_btn = dm.createInstance(u"com.sun.star.awt.UnoControlButtonModel")
+    ok_btn.Name = u"OkButton"
+    ok_btn.Label = u"OK"
+    ok_btn.PositionX = int((dw - INNER_BTN_W) // 2)
+    ok_btn.PositionY = int(y_btn)
+    ok_btn.Width = int(INNER_BTN_W)
+    ok_btn.Height = int(INNER_BTN_H)
+    try:
+        ok_btn.PushButtonType = 1  # OK
+        ok_btn.DefaultButton = True
+    except Exception:
+        pass
+    dm.insertByName(u"OkButton", ok_btn)
+
+    dlg = sm.createInstanceWithContext(u"com.sun.star.awt.UnoControlDialog", ctx)
+    dlg.setModel(dm)
+    prepare_dialog_soft_gray_warning(dlg, title_text=u"Ошибка")
+    # После темы — снова красный крупный шрифт (тема могла перекрасить метки).
+    try:
+        err_m = dm.getByName(u"ErrLbl")
+        err_m.TextColor = int(_cfg.PRE_SHELL_ERROR_TEXT_COLOR)
+        try:
+            fd = err_m.FontDescriptor
+            fd.Height = int(_cfg.PRE_SHELL_ERROR_FONT_HEIGHT)
+            try:
+                fd.Weight = 150
+            except Exception:
+                pass
+            err_m.FontDescriptor = fd
+        except Exception:
+            err_m.FontHeight = int(_cfg.PRE_SHELL_ERROR_FONT_HEIGHT)
+    except Exception:
+        pass
+    if not _pre_shell_dialog_create_peer(dlg, toolkit, doc=doc):
+        _log(u"error dialog: createPeer failed")
+        return False
+    try:
+        dlg.execute()
+    except Exception as err:
+        _log(u"error dialog: execute failed: %s" % err)
+        return False
+    try:
+        dlg.dispose()
+    except Exception:
+        pass
+    return True
 
 
 def confirm_pre_shell_before_run(doc, spec, table=None, param_sheet_name=u"", macro_version=u""):

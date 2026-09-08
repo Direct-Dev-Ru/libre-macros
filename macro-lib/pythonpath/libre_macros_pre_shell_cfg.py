@@ -2,7 +2,7 @@
 """Константы параметра «Предварительный_скрипт» (pre-shell)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.699"
+MACRO_VERSION = "3.10.700"
 # Имя строки на листе параметров (синхрон с P_MERGE_PRE_SHELL в collect_cfg).
 P_MERGE_PRE_SHELL = u"Предварительный_скрипт"
 
@@ -22,6 +22,11 @@ PRE_SHELL_DEFAULT_CLEAN_ENV = True
 
 # Журнал согласий на запуск (каталог ~/.config/libre-macros/pre_shell_consent/).
 PRE_SHELL_CONSENT_SUBDIR = u"pre_shell_consent"
+
+# Диалог ошибки / запрета запуска (крупный красный текст).
+PRE_SHELL_ERROR_TEXT_COLOR = 0xB71C1C
+PRE_SHELL_ERROR_FONT_HEIGHT = 16
+PRE_SHELL_ERROR_DIALOG_TITLE = u"Предварительный_скрипт — невозможно выполнить"
 
 # Гейт запуска: OS env + зашифрованная глобальная переменная (см. verify_pre_shell_allow_gate).
 PRE_SHELL_ALLOW_ENV_NAME = u"MERGE_ALLOW_PRE_SCRIPT"
