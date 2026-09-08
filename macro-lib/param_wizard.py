@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.697"
+MACRO_VERSION = "3.10.698"
 import ast
 import glob
 import json
@@ -7614,8 +7614,8 @@ def _show_global_variables_dialog(parent_dialog=None, doc=None):
     dm.Title = u'Глобальные переменные'
     _inner_dialog_set_sizeable(dm)
     y = m
-    _wizard_dlg_add_fixed(dm, 'HintLbl', u'Имя и текстовое значение. При старте сбора попадают в карту переменных (file/sheet = Глобальные_переменные). Галочка «Шифровать» хранит значение как lm1:; общий ключ — SHA-256 содержимого файла (путь не сбрасывается при «Удалить все»).', m, y, dw - m * 2, 42, multiline=True)
-    y += 46
+    _wizard_dlg_add_fixed(dm, 'HintLbl', u'Имя и текстовое значение. При старте сбора попадают в карту переменных (file/sheet = Глобальные_переменные). Галочка «Шифровать» хранит значение как lm1:; общий ключ — SHA-256 содержимого файла (путь не сбрасывается при «Удалить все»). Переменная Merge_Allow_Pre_Scripts (допуск предварительного скрипта) всегда шифруется и сверяется с env MERGE_ALLOW_PRE_SCRIPT.', m, y, dw - m * 2, 48, multiline=True)
+    y += 52
     _wizard_dlg_add_fixed(dm, 'NameLbl', u'Имя:', m, y, 50, 14)
     _wizard_dlg_add_edit(dm, 'NameEd', m + 54, y - 2, dw - m * 2 - 54, 18)
     y += 24
@@ -7753,6 +7753,14 @@ def _show_global_variables_dialog(parent_dialog=None, doc=None):
             i += 1
         return -1
 
+    def _force_encrypt_for_name(nm):
+        try:
+            from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+
+            return bool(is_pre_shell_allow_global_name(nm))
+        except Exception:
+            return False
+
     def _fill_from_index(idx):
         if idx < 0 or idx >= len(state['items']):
             return
@@ -7765,7 +7773,10 @@ def _show_global_variables_dialog(parent_dialog=None, doc=None):
             val_ed.setText(unicode(item.get('value') if item.get('value') is not None else u''))
         except Exception:
             pass
-        _set_encrypt(bool(item.get('encrypt')))
+        enc = bool(item.get('encrypt'))
+        if _force_encrypt_for_name(item.get('name')):
+            enc = True
+        _set_encrypt(enc)
 
     def _upsert(replace_selected):
         nm = _name_text()
@@ -7775,7 +7786,18 @@ def _show_global_variables_dialog(parent_dialog=None, doc=None):
         if u'~' in nm:
             _wp_notify(u'В имени нельзя использовать символ «~».', doc=doc, dialog=dlg, title=u'Глобальные переменные')
             return
-        entry = {'name': nm, 'value': _val_text(), 'encrypt': _encrypt_on()}
+        encrypt = _encrypt_on()
+        if _force_encrypt_for_name(nm):
+            encrypt = True
+            _set_encrypt(True)
+            if _key_text() == u'':
+                _wp_notify(
+                    u'Для Merge_Allow_Pre_Scripts укажите файл ключа шифрования '
+                    u'(переменная всегда хранится зашифрованной).',
+                    doc=doc, dialog=dlg, title=u'Глобальные переменные',
+                )
+                return
+        entry = {'name': nm, 'value': _val_text(), 'encrypt': encrypt}
         idx = _index_by_name(nm)
         if idx >= 0:
             state['items'][idx] = entry
@@ -13429,11 +13451,12 @@ def show_pre_shell_param_dialog(parent_dialog=None, initial_text=u'', doc=None):
     hint = (
         u'Команда без shell=True: argv — по одному аргументу на строку.\n'
         u'Пустой argv → параметр не сохраняется (скрипт не запускается).\n'
-        u'env — KEY=VALUE. «Очистить env AO» — снять PYTHONHOME/пути AlterOffice\n'
-        u'(иначе системный python3 падает с TypeError fork_exec).'
+        u'Допуск: env MERGE_ALLOW_PRE_SCRIPT = зашифрованная глобальная\n'
+        u'Merge_Allow_Pre_Scripts (иначе сбор прерывается до confirm).\n'
+        u'env — KEY=VALUE. «Очистить env AO» — снять PYTHONHOME/пути AlterOffice.'
     )
-    _wizard_dlg_add_fixed(dm, 'HintLbl', hint, m, y, dw - m * 2, 48, multiline=True)
-    y += 52
+    _wizard_dlg_add_fixed(dm, 'HintLbl', hint, m, y, dw - m * 2, 54, multiline=True)
+    y += 58
     _wizard_dlg_add_fixed(dm, 'ArgvLbl', u'Аргументы (argv), по одному на строку:', m, y, dw - m * 2, 12)
     y += 14
     _wizard_dlg_add_edit(dm, 'ArgvEd', m, y, dw - m * 2, 72, multiline=True)

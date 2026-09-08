@@ -2,7 +2,7 @@
 """Константы параметра «Предварительный_скрипт» (pre-shell)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.697"
+MACRO_VERSION = "3.10.698"
 # Имя строки на листе параметров (синхрон с P_MERGE_PRE_SHELL в collect_cfg).
 P_MERGE_PRE_SHELL = u"Предварительный_скрипт"
 
@@ -22,6 +22,48 @@ PRE_SHELL_DEFAULT_CLEAN_ENV = True
 
 # Журнал согласий на запуск (каталог ~/.config/libre-macros/pre_shell_consent/).
 PRE_SHELL_CONSENT_SUBDIR = u"pre_shell_consent"
+
+# Гейт запуска: OS env + зашифрованная глобальная переменная (см. verify_pre_shell_allow_gate).
+PRE_SHELL_ALLOW_ENV_NAME = u"MERGE_ALLOW_PRE_SCRIPT"
+PRE_SHELL_ALLOW_GLOBAL_NAME = u"Merge_Allow_Pre_Scripts"
+
+
+def fold_pre_shell_allow_name(name):
+    """
+    Нормализация имени глобальной переменной допуска pre-shell:
+    регистр игнорируется; «_», «-» и прочие не-буквы/цифры выкидываются.
+    Merge_Allow_Pre_Scripts / merge-allow-pre-scripts / MergeAllowPreScripts → одно.
+    """
+    try:
+        unicode
+    except NameError:
+        _u = str
+    else:
+        _u = unicode
+    s = _u(name or u"")
+    chars = []
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        i += 1
+        try:
+            if ch.isalnum():
+                chars.append(ch)
+        except Exception:
+            pass
+    folded = u"".join(chars)
+    try:
+        return folded.casefold()
+    except Exception:
+        return folded.lower()
+
+
+PRE_SHELL_ALLOW_GLOBAL_NAME_FOLD = fold_pre_shell_allow_name(PRE_SHELL_ALLOW_GLOBAL_NAME)
+
+
+def is_pre_shell_allow_global_name(name):
+    """True, если имя — канонический Merge_Allow_Pre_Scripts (гибкое написание)."""
+    return fold_pre_shell_allow_name(name) == PRE_SHELL_ALLOW_GLOBAL_NAME_FOLD
 
 # Ключи env, значения которых маскируются в журнале.
 PRE_SHELL_ENV_SECRET_MARKERS = (

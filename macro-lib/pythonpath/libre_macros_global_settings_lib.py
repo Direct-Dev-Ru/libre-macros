@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.697"
+MACRO_VERSION = "3.10.698"
 """
 Глобальные настройки collect_workbooks (JSON рядом с пресетами).
 
@@ -225,12 +225,23 @@ def decrypt_global_variable_value(stored, key_file_path):
 def prepare_global_variables_for_store(items, key_file_path):
     """
     Нормализация + шифрование значений с encrypt=True.
+    Merge_Allow_Pre_Scripts — всегда encrypt=True.
     Возвращает (list_or_None, error_or_None).
     """
+    try:
+        from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+    except Exception:
+        is_pre_shell_allow_global_name = None
     key_path = normalize_global_variables_key_file(key_file_path)
     need_key = False
     for item in items or ():
-        if isinstance(item, dict) and bool(item.get("encrypt")):
+        if not isinstance(item, dict):
+            continue
+        name = unicode(item.get("name") or u"").strip()
+        encrypt = bool(item.get("encrypt"))
+        if is_pre_shell_allow_global_name is not None and is_pre_shell_allow_global_name(name):
+            encrypt = True
+        if encrypt:
             need_key = True
             break
     if need_key and key_path == u"":
@@ -243,12 +254,22 @@ def prepare_global_variables_for_store(items, key_file_path):
         if name == u"" or u"~" in name:
             continue
         encrypt = bool(item.get("encrypt"))
+        if is_pre_shell_allow_global_name is not None and is_pre_shell_allow_global_name(name):
+            encrypt = True
         value = unicode(item.get("value") if item.get("value") is not None else u"")
         if encrypt:
-            cipher, err = encrypt_global_variable_value(value, key_path)
-            if err:
-                return None, u"Переменная «%s»: %s" % (name, err)
-            value = cipher
+            # Уже lm1: — не шифровать повторно (иначе битый blob).
+            try:
+                from libre_macros_normalize_lib import CRYPTO_PREFIX, _has_tag_prefix
+
+                already = _has_tag_prefix(value, CRYPTO_PREFIX)
+            except Exception:
+                already = False
+            if not already:
+                cipher, err = encrypt_global_variable_value(value, key_path)
+                if err:
+                    return None, u"Переменная «%s»: %s" % (name, err)
+                value = cipher
         out.append({u"name": name, u"value": value, u"encrypt": encrypt})
     return normalize_global_variables(out), None
 
@@ -306,6 +327,13 @@ def _normalize_global_variable_entry(item):
         return None
     value = unicode(item.get("value") if item.get("value") is not None else u"")
     encrypt = bool(item.get("encrypt"))
+    try:
+        from libre_macros_pre_shell_cfg import is_pre_shell_allow_global_name
+
+        if is_pre_shell_allow_global_name(name):
+            encrypt = True
+    except Exception:
+        pass
     return {u"name": name, u"value": value, u"encrypt": encrypt}
 
 

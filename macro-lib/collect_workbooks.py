@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.697"
+MACRO_VERSION = "3.10.698"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -23943,7 +23943,9 @@ def merge_run_pre_shell_from_doc(doc):
     """
     Запуск «Предварительный_скрипт» до разбора источников / сбора.
 
-    Пустая ячейка B — пропуск. Отмена в диалоге / ошибка / таймаут —
+    Пустая ячейка B — пропуск. Гейт: OS env MERGE_ALLOW_PRE_SCRIPT +
+    зашифрованная глобальная Merge_Allow_Pre_Scripts (только runtime-карта,
+    сегмент «Глобальные_переменные»). Отмена в диалоге / ошибка / таймаут —
     возвращает текст ошибки (сбор прервать). Успех или пропуск — None.
     """
     try:
@@ -23951,6 +23953,7 @@ def merge_run_pre_shell_from_doc(doc):
             confirm_pre_shell_before_run,
             parse_pre_shell_dict,
             run_pre_shell_from_param_raw,
+            verify_pre_shell_allow_gate,
         )
     except Exception as err:
         return 'Не удалось загрузить libre_macros_pre_shell_lib: %s' % err
@@ -23964,6 +23967,24 @@ def merge_run_pre_shell_from_doc(doc):
     spec = parse_pre_shell_dict(raw)
     if spec is None:
         return None
+    # Карта ещё не заполнена parse_collect_settings — засеять только глобальные.
+    try:
+        _merge_seed_globals_into_variables_map()
+    except Exception as err:
+        return 'Предварительный_скрипт запрещён: не удалось загрузить глобальные переменные: %s' % err
+    gate_err = verify_pre_shell_allow_gate(
+        getattr(_cw_cfg, '_MERGE_SOURCE_VARIABLES_MAP', None) or {},
+    )
+    if gate_err:
+        merge_debug('pre_shell', 'allow gate denied')
+        try:
+            append_collect_log(
+                doc, '', '', '', '', 'предварительный_скрипт',
+                str(gate_err).replace('\n', ' | ')[:800],
+            )
+        except Exception:
+            pass
+        return gate_err
     param_sheet = get_run_param_sheet(doc)
     param_sheet_name = u''
     if param_sheet is not None:
