@@ -5,7 +5,7 @@ from __future__ import print_function
 
 Подключается из libre_macros_lib.py; публичный API — lm_pp_pivot_* и lm_pp_range_pivot_table.
 """
-MACRO_VERSION = "3.10.703"
+MACRO_VERSION = "3.10.704"
 import json
 import re
 

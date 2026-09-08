@@ -6,7 +6,7 @@
 """
 from __future__ import print_function
 
-MACRO_VERSION = "3.10.703"
+MACRO_VERSION = "3.10.704"
 import datetime
 import os
 import re

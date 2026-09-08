@@ -22,7 +22,7 @@
 
 Результат — строка 4 (заголовки), данные с строки 5.
 """
-MACRO_VERSION = "3.10.703"
+MACRO_VERSION = "3.10.704"
 from libre_macros_ad_lib import ad_list_users as _ad_list_users
 
 

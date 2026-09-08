@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.703"
+MACRO_VERSION = "3.10.704"
 """
 Общая soft-gray тема диалогов (визард параметров, collect_workbooks, ВПР и т.п.).
 
@@ -24,6 +24,9 @@ SOFT_GRAY_BAR_NAME = "SoftGrayTitleBar"
 # Алая полоса-титл (предупреждения безопасности и т.п.)
 WARNING_TITLE_BG = 0xB71C1C
 WARNING_TITLE_FG = 0xFFFFFF
+# Оранжевая полоса-титл (предупреждение о плагинах)
+ORANGE_TITLE_BG = 0xEF6C00
+ORANGE_TITLE_FG = 0xFFFFFF
 # Жёлтая полоса-титл (ручной ввод в карту переменных)
 MANUAL_INPUT_TITLE_BG = 0xF9A825
 MANUAL_INPUT_TITLE_FG = 0x212121
@@ -41,6 +44,8 @@ LISTBOX_FONT_HEIGHT = 12
 DIALOG_EDIT_FONT_HEIGHT = 10
 MANUAL_INPUT_VALUE_FONT_HEIGHT = DIALOG_EDIT_FONT_HEIGHT + 1
 HELP_TEXT_FONT_HEIGHT = DIALOG_EDIT_FONT_HEIGHT + 1
+# Предупреждение о плагинах: крупнее основной текст.
+PLUGIN_WARN_TEXT_FONT_HEIGHT = DIALOG_EDIT_FONT_HEIGHT + 2
 # Компактные кнопки «+» / «×» / «××» в визардах (columns_pick, ВПР, …).
 TOKEN_BTN_FONT_HEIGHT = 16
 TOKEN_BTN_LABELS = (u"+", u"×", u"××", u"x", u"xx", u"X", u"XX")
@@ -424,6 +429,16 @@ def apply_soft_gray_warning_theme(dm, title_text=None):
     )
 
 
+def apply_soft_gray_orange_theme(dm, title_text=None):
+    """Soft-gray форма с оранжевой полосой-титлом (плагины и т.п.)."""
+    return apply_soft_gray_theme(
+        dm,
+        title_text=title_text,
+        title_bg=ORANGE_TITLE_BG,
+        title_fg=ORANGE_TITLE_FG,
+    )
+
+
 def apply_soft_gray_manual_input_theme(dm, title_text=None):
     """Soft-gray форма с жёлтой полосой-титлом (ручной ввод переменной)."""
     return apply_soft_gray_theme(
@@ -470,6 +485,16 @@ def prepare_dialog_soft_gray_warning(dlg, title_text=None):
         title_text=title_text,
         title_bg=WARNING_TITLE_BG,
         title_fg=WARNING_TITLE_FG,
+    )
+
+
+def prepare_dialog_soft_gray_orange(dlg, title_text=None):
+    """Soft-gray форма с оранжевой полосой-титлом."""
+    return prepare_dialog_soft_gray(
+        dlg,
+        title_text=title_text,
+        title_bg=ORANGE_TITLE_BG,
+        title_fg=ORANGE_TITLE_FG,
     )
 
 

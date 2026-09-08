@@ -8,7 +8,7 @@
 """
 
 from __future__ import print_function
-MACRO_VERSION = "3.10.703"
+MACRO_VERSION = "3.10.704"
 import datetime
 import json
 import os
@@ -571,6 +571,7 @@ def lm_consent_dialog_show_plugin_warning( doc, plugin_refs, toolkit=None, paren
         dw = 560
         btn_h = 24
         edit_h = 250
+        # Soft-gray тема сама добавит высоту полосы-титла.
         dh = m + edit_h + 12 + btn_h + m
         dm.PositionX = 90
         dm.PositionY = 70
@@ -578,7 +579,7 @@ def lm_consent_dialog_show_plugin_warning( doc, plugin_refs, toolkit=None, paren
         dm.Height = dh
         dm.Title = u"Пользовательские функции плагинов"
 
-        _consent_dlg_add_edit(
+        edit_m = _consent_dlg_add_edit(
             dm,
             "PluginWarnText",
             m,
@@ -588,11 +589,30 @@ def lm_consent_dialog_show_plugin_warning( doc, plugin_refs, toolkit=None, paren
             multiline=True,
             readonly=True,
         )
+        try:
+            from libre_macros_ui_theme import PLUGIN_WARN_TEXT_FONT_HEIGHT
+
+            fh = int(PLUGIN_WARN_TEXT_FONT_HEIGHT)
+            fd = edit_m.FontDescriptor
+            fd.Height = fh
+            edit_m.FontDescriptor = fd
+        except Exception:
+            try:
+                edit_m.FontHeight = 12
+            except Exception:
+                pass
         by = m + edit_h + 10
         _consent_dlg_add_button(dm, "CancelBtn", u"Отмена", dw - m - 220, by, 104, btn_h)
         _consent_dlg_add_button(
             dm, "ContinueBtn", u"Продолжить", dw - m - 104, by, 96, btn_h
         )
+
+        try:
+            from libre_macros_ui_theme import apply_soft_gray_orange_theme
+
+            apply_soft_gray_orange_theme(dm, title_text=dm.Title)
+        except Exception:
+            pass
 
         sm = ctx.getServiceManager()
         dlg = sm.createInstanceWithContext("com.sun.star.awt.UnoControlDialog", ctx)
@@ -603,6 +623,12 @@ def lm_consent_dialog_show_plugin_warning( doc, plugin_refs, toolkit=None, paren
                 u"Не удалось создать окно предупреждения о плагинах. Запуск отменён.",
             )
             return False
+        try:
+            from libre_macros_ui_theme import ORANGE_TITLE_BG, ORANGE_TITLE_FG, try_paint_titlebar
+
+            try_paint_titlebar(dlg, title_bg=ORANGE_TITLE_BG, title_fg=ORANGE_TITLE_FG)
+        except Exception:
+            pass
 
         body_ctl = dlg.getControl("PluginWarnText")
         if body_ctl is not None:
@@ -610,6 +636,20 @@ def lm_consent_dialog_show_plugin_warning( doc, plugin_refs, toolkit=None, paren
                 body_ctl.setText(body)
             except Exception:
                 pass
+            # После темы снова крупный шрифт (тема могла сбросить descriptor).
+            try:
+                from libre_macros_ui_theme import PLUGIN_WARN_TEXT_FONT_HEIGHT
+
+                fh = int(PLUGIN_WARN_TEXT_FONT_HEIGHT)
+                bm = body_ctl.Model
+                fd = bm.FontDescriptor
+                fd.Height = fh
+                bm.FontDescriptor = fd
+            except Exception:
+                try:
+                    body_ctl.Model.FontHeight = 12
+                except Exception:
+                    pass
 
         state = {"continue": False}
 

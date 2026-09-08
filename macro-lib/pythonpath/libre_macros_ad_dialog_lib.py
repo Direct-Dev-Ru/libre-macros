@@ -4,7 +4,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.703"
+MACRO_VERSION = "3.10.704"
 import unohelper
 from com.sun.star.awt import XActionListener
 

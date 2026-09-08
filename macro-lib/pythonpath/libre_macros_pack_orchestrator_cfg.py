@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.703"
+MACRO_VERSION = "3.10.704"
 """Константы диалога оркестратора collect_pack."""
 
 try:
@@ -16,7 +16,7 @@ PACK_ORCH_TITLE = u"Оркестратор сбора (collect_pack)"
 PACK_ORCH_HINT_MULTI = (
     u"Отметьте листы параметров и задайте порядок запуска.\n"
     u"Зелёный — включён, серый — выключен; клик по галочке; "
-    u"клик по подписи — выбор; Ctrl — мультивыбор; «Вкл/Выкл» / «Выше»/«Ниже»."
+    u"клик по подписи — выбор; Ctrl — мультивыбор; кнопки справа."
 )
 PACK_ORCH_HINT_SINGLE = (
     u"Будет запущен сбор с параметрами листа «%s»%s."
@@ -88,6 +88,5 @@ PACK_DLG_CHECK_H = 18
 # Чекбоксы списка листов: крупнее; при выделении — жирный.
 PACK_ORCH_CHK_FONT_HEIGHT = 11
 PACK_ORCH_ROW_H = 18
-# «Установить все» / «Снять все»: 60% прежней ширины, зазор 20.
-PACK_DLG_ALL_BTN_W_PCT = 60
-PACK_DLG_ALL_BTN_GAP = 20
+# Вертикальный ряд справа: +1 pt к типичным ~10 pt подписей кнопок.
+PACK_ORCH_SIDE_BTN_FONT_HEIGHT = 11

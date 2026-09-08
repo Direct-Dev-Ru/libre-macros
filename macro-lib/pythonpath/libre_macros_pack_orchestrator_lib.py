@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.703"
+MACRO_VERSION = "3.10.704"
 """
 Диалог и persist настроек оркестратора collect_pack.
 
@@ -261,7 +261,7 @@ def _pack_dlg_add_fixed(dm, name, x, y, w, h, label=u"", multiline=False):
     return m
 
 
-def _pack_dlg_add_button(dm, name, label, x, y, w, h):
+def _pack_dlg_add_button(dm, name, label, x, y, w, h, font_height=None):
     m = dm.createInstance("com.sun.star.awt.UnoControlButtonModel")
     m.Name = str(name)
     m.Label = _u(label)
@@ -269,9 +269,32 @@ def _pack_dlg_add_button(dm, name, label, x, y, w, h):
     m.PositionY = int(y)
     m.Width = int(w)
     m.Height = int(h)
+    if font_height is not None:
+        try:
+            fh = int(font_height)
+        except Exception:
+            fh = 0
+        if fh > 0:
+            try:
+                fd = m.FontDescriptor
+                fd.Height = fh
+                m.FontDescriptor = fd
+            except Exception:
+                try:
+                    m.FontHeight = fh
+                except Exception:
+                    pass
     dm.insertByName(str(name), m)
     return m
 
+
+def _pack_dlg_add_side_button(dm, name, label, x, y, w, h):
+    """Кнопка правого вертикального ряда (+1 pt к подписи)."""
+    try:
+        fh = int(getattr(_cfg, "PACK_ORCH_SIDE_BTN_FONT_HEIGHT", 11) or 11)
+    except Exception:
+        fh = 11
+    return _pack_dlg_add_button(dm, name, label, x, y, w, h, font_height=fh)
 
 def _pack_dlg_add_checkbox(dm, name, label, x, y, w, h, checked=True):
     m = dm.createInstance("com.sun.star.awt.UnoControlCheckBoxModel")
@@ -657,37 +680,27 @@ def lm_pack_show_dialog( doc, sheet_names, book_path=u"", toolkit=None, parent_w
                 pass
         bx = m + list_w + g
         by = y
-        _pack_dlg_add_button(dm, "ToggleBtn", _cfg.PACK_ORCH_BTN_TOGGLE, bx, by, btn_w, btn_h)
-        by = by + btn_h + g
-        _pack_dlg_add_button(dm, "UpBtn", _cfg.PACK_ORCH_BTN_UP, bx, by, btn_w, btn_h)
-        by = by + btn_h + g
-        _pack_dlg_add_button(dm, "DownBtn", _cfg.PACK_ORCH_BTN_DOWN, bx, by, btn_w, btn_h)
-        y = y + list_h + g
-
-        # Высота как у остальных кнопок; ширина 60% от колонки чекбоксов/2; зазор 20.
-        gap_all = int(getattr(_cfg, "PACK_DLG_ALL_BTN_GAP", 20))
-        pct = int(getattr(_cfg, "PACK_DLG_ALL_BTN_W_PCT", 60))
-        full_each = max(1, (list_w - g) // 2)
-        all_w = max(1, int(full_each * pct / 100))
-        _pack_dlg_add_button(
-            dm,
-            "EnableAllBtn",
-            _cfg.PACK_ORCH_BTN_ENABLE_ALL,
-            m,
-            y,
-            all_w,
-            btn_h,
+        _pack_dlg_add_side_button(
+            dm, "EnableAllBtn", _cfg.PACK_ORCH_BTN_ENABLE_ALL, bx, by, btn_w, btn_h
         )
-        _pack_dlg_add_button(
-            dm,
-            "DisableAllBtn",
-            _cfg.PACK_ORCH_BTN_DISABLE_ALL,
-            m + all_w + gap_all,
-            y,
-            all_w,
-            btn_h,
+        by = by + btn_h + g
+        _pack_dlg_add_side_button(
+            dm, "DisableAllBtn", _cfg.PACK_ORCH_BTN_DISABLE_ALL, bx, by, btn_w, btn_h
         )
-        y = y + btn_h + g
+        by = by + btn_h + g
+        _pack_dlg_add_side_button(
+            dm, "ToggleBtn", _cfg.PACK_ORCH_BTN_TOGGLE, bx, by, btn_w, btn_h
+        )
+        by = by + btn_h + g
+        _pack_dlg_add_side_button(
+            dm, "UpBtn", _cfg.PACK_ORCH_BTN_UP, bx, by, btn_w, btn_h
+        )
+        by = by + btn_h + g
+        _pack_dlg_add_side_button(
+            dm, "DownBtn", _cfg.PACK_ORCH_BTN_DOWN, bx, by, btn_w, btn_h
+        )
+        side_h = by + btn_h - y
+        y = y + max(list_h, side_h) + g
 
     if not single:
         _pack_dlg_add_checkbox(
