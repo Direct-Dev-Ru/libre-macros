@@ -163,7 +163,17 @@ Libre-macros автоматизирует сведение табличных д
 
 ## 7. Организация и безопасность
 
-Модель доверия: **книга параметров = конфигурация с правами пользователя LO**. Сетевых вызовов в штатном сборе нет. Риски: произвольное чтение файлов по путям, запись источников при skip-rows, обход ограничений eval для inline-кода. Рекомендация: только свои шаблоны; не запускать сбор из чужих недоверенных `.ods`. Подробности — `docs/SECURITY_AUDIT.md`.
+Модель доверия: **книга параметров = конфигурация с правами пользователя LO**.
+
+Смягчения (см. `docs/19_SECURITY.md`, `docs/SECURITY_AUDIT.md`):
+
+- **Pre-shell / функция_плагин** — гейт OS env ↔ зашифрованная глобальная переменная профиля.
+- **«Файлы-Источники»** — режим strict: только доверенные корни (home / `H:\` / … + env/global); широкий glob вне корня не разворачивается.
+- **Постобработка B/C** — AST-санация, fail-closed, builtins без `getattr`/…; не полная песочница (UNO API остаётся).
+- **LDAP/AD** — удалён из поставки.
+- Источники при закрытии — discard (не сохранять скрытую копию на диск).
+
+Рекомендация: только свои шаблоны; не запускать сбор из чужих недоверенных `.ods` без понимания гейтов.
 
 Consent / terms — модуль `libre_macros_consent_lib` и текст `terms_of_use_ru.txt`.
 
@@ -254,7 +264,10 @@ Consent / terms — модуль `libre_macros_consent_lib` и текст `terms
 | **`libre_macros_global_settings_lib.py`** | Глобальные умолчания пользователя (шрифт, форматы даты/числа) в `~/.config/libre-macros/collect_workbooks/merge_global_settings.json`. |
 | **`libre_macros_consent_lib.py`** | Согласие с условиями использования и предупреждения о плагинах; журнал принятий в профиле. |
 | **`terms_of_use_ru.txt`** | Текст условий использования (русский), показывается/копируется consent-модулем. |
-| **`libre_macros_sanitize_lib.py`** | API санации пользовательского Python перед eval/exec и загрузкой `file#func` (на момент ревизии — **без полного подключения** к `collect_workbooks`). |
+| **`libre_macros_sanitize_lib.py`** | AST-санация пользовательского Python перед eval/exec; builtins blocklist; helpers для `file#func` (abs-path resolve в макросе — см. H-2). |
+| **`libre_macros_source_roots_cfg.py`** / **`libre_macros_source_roots_lib.py`** | Доверенные корни «Файлы-Источники» (strict/off, env/global). |
+| **`libre_macros_allow_gate_lib.py`** | Общий гейт env ↔ encrypted global (pre-shell, плагины). |
+| **`libre_macros_pre_shell_lib.py`** / **`*_cfg.py`** | Предварительный_скрипт: subprocess, confirm, гейт допуска. |
 | **`libre_macros_bundle_paths.py`** | Разрешение путей к bundled test/sources (логика совместима с установщиком). |
 | **`inner_dialogs.py`** | Вложенные микродиалоги параметров визарда (редактор текста/JSON на базе кодека, `INNER_DIALOG_REGISTRY`). |
 | **`openpyxl_bundled.py`** | Встроенная копия openpyxl (плоский модуль) для чтения/записи xlsx без системного pip. |

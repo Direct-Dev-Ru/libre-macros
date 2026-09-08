@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.710"
+MACRO_VERSION = "3.10.711"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -6058,9 +6058,14 @@ def expand_source_files(raw_paths, current_book_path=None, per_col_source_extra=
     param_col_for_file = []
     empty_globs = []
     is_current_book_flags = []
+    try:
+        _cw_cfg._MERGE_SOURCE_ROOTS_EXPAND_ERRORS = []
+    except Exception:
+        pass
     if current_book_path is None or str(current_book_path).strip() == '':
         current_book_path = get_current_book_path()
     extras = per_col_source_extra if isinstance(per_col_source_extra, (list, tuple)) else None
+    variables_map = getattr(_cw_cfg, '_MERGE_SOURCE_VARIABLES_MAP', None) or {}
     i = 0
     while i < len(raw_paths):
         pattern = str(raw_paths[i]).strip()
@@ -6081,13 +6086,48 @@ def expand_source_files(raw_paths, current_book_path=None, per_col_source_extra=
         if extras is not None and i < len(extras):
             col_extra = extras[i]
         if path_looks_like_glob(resolved_path):
+            try:
+                from libre_macros_source_roots_lib import guard_glob_or_path
+
+                ok_roots, err_roots = guard_glob_or_path(
+                    resolved_path,
+                    True,
+                    book_path=current_book_path,
+                    variables_map=variables_map,
+                )
+            except Exception as err:
+                ok_roots, err_roots = True, u''
+                merge_debug('source_roots', 'guard glob skip: %s' % err)
+            if not ok_roots:
+                try:
+                    _cw_cfg._MERGE_SOURCE_ROOTS_EXPAND_ERRORS.append(err_roots or resolved_path)
+                except Exception:
+                    pass
+                i = i + 1
+                continue
             matched = _merge_expand_glob_files(resolved_path, source_extra=col_extra)
             found = 0
             j = 0
             while j < len(matched):
                 p = matched[j]
                 if os.path.isfile(p):
-                    files.append(os.path.abspath(p))
+                    abs_p = os.path.abspath(p)
+                    try:
+                        from libre_macros_source_roots_lib import guard_glob_or_path as _guard_file
+
+                        ok_f, err_f = _guard_file(
+                            abs_p, False, book_path=current_book_path, variables_map=variables_map,
+                        )
+                    except Exception:
+                        ok_f, err_f = True, u''
+                    if not ok_f:
+                        try:
+                            _cw_cfg._MERGE_SOURCE_ROOTS_EXPAND_ERRORS.append(err_f or abs_p)
+                        except Exception:
+                            pass
+                        j = j + 1
+                        continue
+                    files.append(abs_p)
                     param_col_for_file.append(i)
                     is_current_book_flags.append(False)
                     found = found + 1
@@ -6098,6 +6138,25 @@ def expand_source_files(raw_paths, current_book_path=None, per_col_source_extra=
             # Явный путь тоже фильтруем exclude_mask / MERGE_SOURCE_EXCLUDE_MASK
             # (раньше маски работали только при развороте glob).
             if not _merge_is_remote_url_path(resolved_path):
+                try:
+                    from libre_macros_source_roots_lib import guard_glob_or_path
+
+                    ok_roots, err_roots = guard_glob_or_path(
+                        resolved_path,
+                        False,
+                        book_path=current_book_path,
+                        variables_map=variables_map,
+                    )
+                except Exception as err:
+                    ok_roots, err_roots = True, u''
+                    merge_debug('source_roots', 'guard path skip: %s' % err)
+                if not ok_roots:
+                    try:
+                        _cw_cfg._MERGE_SOURCE_ROOTS_EXPAND_ERRORS.append(err_roots or resolved_path)
+                    except Exception:
+                        pass
+                    i = i + 1
+                    continue
                 excl = _merge_source_exclude_masks(source_extra=col_extra)
                 base = os.path.basename(resolved_path)
                 if _merge_source_basename_excluded(base, excl):
@@ -6129,6 +6188,26 @@ def expand_source_files(raw_paths, current_book_path=None, per_col_source_extra=
                     resolved_path = picked[0]
                 except Exception as err:
                     merge_debug('expand_source', 'file_pick skip: %s' % err)
+            else:
+                try:
+                    from libre_macros_source_roots_lib import guard_glob_or_path
+
+                    ok_roots, err_roots = guard_glob_or_path(
+                        resolved_path,
+                        False,
+                        book_path=current_book_path,
+                        variables_map=variables_map,
+                    )
+                except Exception as err:
+                    ok_roots, err_roots = True, u''
+                    merge_debug('source_roots', 'guard remote skip: %s' % err)
+                if not ok_roots:
+                    try:
+                        _cw_cfg._MERGE_SOURCE_ROOTS_EXPAND_ERRORS.append(err_roots or resolved_path)
+                    except Exception:
+                        pass
+                    i = i + 1
+                    continue
             if _merge_is_remote_url_path(resolved_path):
                 files.append(resolved_path)
             else:
@@ -24452,8 +24531,27 @@ def parse_collect_settings(doc, validate_sources=True, interactive_manual=True):
         ):
             if sn not in sheets_undelete:
                 sheets_undelete.append(sn)
+    try:
+        roots_errs = list(getattr(_cw_cfg, '_MERGE_SOURCE_ROOTS_EXPAND_ERRORS', None) or [])
+    except Exception:
+        roots_errs = []
+    if roots_errs:
+        return (u'\n\n'.join(unicode(e) for e in roots_errs), None)
     if len(raw_files) == 0 or n == 0:
         return ('Не задан параметр «Файлы-Источники».', None)
+    try:
+        from libre_macros_source_roots_lib import validate_expanded_sources
+
+        err_roots = validate_expanded_sources(
+            files,
+            is_current_book_flags,
+            book_path=get_current_book_path(),
+            variables_map=getattr(_cw_cfg, '_MERGE_SOURCE_VARIABLES_MAP', None) or {},
+        )
+        if err_roots:
+            return (unicode(err_roots), None)
+    except Exception as err:
+        merge_debug('source_roots', 'validate skip: %s' % err)
     if validate_sources:
         if len(empty_globs) > 0:
             return ('По маске не найдено ни одного файла:\n' + '\n'.join(empty_globs), None)

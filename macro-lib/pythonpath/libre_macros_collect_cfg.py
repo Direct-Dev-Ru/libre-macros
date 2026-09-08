@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.710"
+MACRO_VERSION = "3.10.711"
 import re
 
 try:
@@ -96,6 +96,7 @@ _MERGE_ADD_TO_VARIABLES_PER_FILE = []
 _MERGE_PER_FILE_SOURCE_EXTRA = []
 _MERGE_SOURCE_VARIABLES_MAP = {}
 _MERGE_SOURCE_VARIABLES_ORDER = []
+_MERGE_SOURCE_ROOTS_EXPAND_ERRORS = []
 MERGE_SHEET_INDEX_TARGET_PREFIX = "Merge_"
 MERGE_ONE_SHEET_TARGET_NAME = "Merge"
 # Легаси-список (точное lower-совпадение); распознавание — через

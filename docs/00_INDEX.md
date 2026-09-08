@@ -30,7 +30,8 @@
 | [09](09_ARCHITECTURE.md) | Архитектура | Поток `collect_workbooks` / `collect_pack`, модули `pythonpath/` |
 | [10](10_MERGE_ALGORITHM.md) | Алгоритм «На один лист» | Слияние листов, индексы |
 | [11](11_LIB_REFERENCE.md) | Справочник библиотеки | `libre_macros_lib.py`, `merge_pp_*` |
-| [16](16_CODE_SANITIZE.md) | Санация Python | AST / file# перед eval |
+| [16](16_CODE_SANITIZE.md) | Санация Python | AST / builtins / file# перед eval |
+| [19](19_SECURITY.md) | **Безопасность** | Гейты pre-shell/плагинов, доверенные корни источников, сводка усилений |
 
 ## Проверка и формат JSON
 
@@ -59,11 +60,11 @@ todo/                          ← черновики ТЗ на новые фу�
 
 ## Версия макроса
 
-Каноническая версия — `macro-lib/version.txt` и `MACRO_VERSION` в `macro-lib/collect_workbooks.py` (на момент обновления документации: **3.10.696**). Синхронизируется по пакету (`sync_macro_version.py` / сборка bundled).
+Каноническая версия — `macro-lib/version.txt` и `MACRO_VERSION` в `macro-lib/collect_workbooks.py` (на момент обновления документации: **3.10.711**). Синхронизируется по пакету (`sync_macro_version.py` / сборка bundled).
 
 После обновления кода переустановите макросы в LibreOffice / AlterOffice и сверьте строку **Версия** на листе параметров и запись в «Сбор_книг_лог».
 
-## Ключевые возможности (состояние 3.10.696)
+## Ключевые возможности (состояние 3.10.711)
 
 | Тема | Документ |
 |------|----------|
@@ -79,3 +80,4 @@ todo/                          ← черновики ТЗ на новые фу�
 | **`транспонировать_таблицу`** (`headers_from_column`, `result_headers`) | [05](05_POSTPROCESS.md), [13](13_JSON_PARAMS.md), сценарий `16_transpose_table.xltx` |
 | **`анкета_в_таблицу` / `таблица_в_анкету`** | [05](05_POSTPROCESS.md), [13](13_JSON_PARAMS.md), сценарии `14` / `15` |
 | Word-копии документации (`.docx`) | `python3 docs/build_docx.py --all` → [03](03_INSTALL_DEV.md) |
+| **Безопасность:** гейты pre-shell/плагинов, доверенные корни, санация fail-closed | [19](19_SECURITY.md), [SECURITY_AUDIT.md](SECURITY_AUDIT.md), [16](16_CODE_SANITIZE.md) |

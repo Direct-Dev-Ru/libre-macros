@@ -661,6 +661,8 @@ _merge_copy_data_rows_to_target(...)  # С заполнением служебн
 | **param_wizard** | Несколько путей в одном поле (`;` или `,`), **Обзор** / **Очистить**, по OK — раскладка по B, C, D… |
 | Вручную | Пути и маски (`*.xlsx`) в B, C, D…; см. раздел 5 |
 
+**Безопасность путей (3.10.711):** по умолчанию разрешены только доверенные корни (домашний каталог пользователя, на Windows также `S:\{user}` и диск `H:\`, плюс каталог книги). Шары и другие диски — через глобальную `Merge_Allowed_Source_Roots` или env `MERGE_ALLOWED_SOURCE_ROOTS`. Отключение проверки: `MERGE_SOURCE_ROOTS_MODE=off`. См. [19_SECURITY.md](19_SECURITY.md).
+
 Подробнее: [08_PICK_SOURCE.md](08_PICK_SOURCE.md), [06_PARAM_WIZARD.md](06_PARAM_WIZARD.md).
 
 ### Оформление результата

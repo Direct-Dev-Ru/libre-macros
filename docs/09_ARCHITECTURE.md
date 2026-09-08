@@ -1,10 +1,10 @@
 # Архитектура макроса `collect_workbooks` / `collect_pack`
 
 **Файл:** `macro-lib/collect_workbooks.py`  
-**Версия:** **3.10.696**  
-**Связанные модули:** `pythonpath/libre_macros_lib.py`, `libre_macros_direct_lib.py`, `libre_macros_split_lib.py`, `libre_macros_header_lib.py`, `libre_macros_lambda_column_lib.py`, `libre_macros_pack_orchestrator_lib.py`, `libre_macros_final_lib.py`, `param_wizard.py`, `functions_pp.py`, `functions_final.py`
+**Версия:** **3.10.711**  
+**Связанные модули:** `pythonpath/libre_macros_lib.py`, `libre_macros_direct_lib.py`, `libre_macros_split_lib.py`, `libre_macros_header_lib.py`, `libre_macros_lambda_column_lib.py`, `libre_macros_pack_orchestrator_lib.py`, `libre_macros_final_lib.py`, `libre_macros_sanitize_lib.py`, `libre_macros_source_roots_*.py`, `libre_macros_allow_gate_lib.py`, `libre_macros_pre_shell_*.py`, `param_wizard.py`, `functions_pp.py`, `functions_final.py`
 
-Параметры — [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md); оркестратор — [18_ORCHESTRATOR.md](18_ORCHESTRATOR.md); постобработка — [05_POSTPROCESS.md](05_POSTPROCESS.md); `xml_excel_ods` — [17_POSTPROCESS_XML.md](17_POSTPROCESS_XML.md); визард — [06_PARAM_WIZARD.md](06_PARAM_WIZARD.md).
+Параметры — [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md); оркестратор — [18_ORCHESTRATOR.md](18_ORCHESTRATOR.md); постобработка — [05_POSTPROCESS.md](05_POSTPROCESS.md); `xml_excel_ods` — [17_POSTPROCESS_XML.md](17_POSTPROCESS_XML.md); визард — [06_PARAM_WIZARD.md](06_PARAM_WIZARD.md); безопасность — [19_SECURITY.md](19_SECURITY.md).
 
 Детальный разбор режима «На один лист» с привязкой к функциям — [10_MERGE_ALGORITHM.md](10_MERGE_ALGORITHM.md) (номера строк в нём могут отставать от кода; ориентируйтесь на имена функций).
 
@@ -142,6 +142,10 @@ sequenceDiagram
 | `libre_macros_param_codec.py` | JSON C |
 | `libre_macros_pivot_lib.py` | Сводные |
 | `libre_macros_consent_lib.py` | Согласие перед запуском |
+| `libre_macros_sanitize_lib.py` | AST-санация B/C / лямбд (fail-closed) |
+| `libre_macros_source_roots_cfg.py` / `_lib.py` | Доверенные корни «Файлы-Источники» |
+| `libre_macros_allow_gate_lib.py` | Гейт env ↔ encrypted global |
+| `libre_macros_pre_shell_cfg.py` / `_lib.py` | Предварительный_скрипт |
 
 Entry-скрипты (`macro-lib/*.py`) при установке → `Scripts/python/`. Фильтр **AlterOffice 2026** вырезает module-level присваивания — константы в `pythonpath/` ([03_INSTALL_DEV.md](03_INSTALL_DEV.md)).
 

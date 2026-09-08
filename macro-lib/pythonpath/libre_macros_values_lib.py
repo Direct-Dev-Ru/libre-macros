@@ -5,7 +5,7 @@ from __future__ import print_function
 
 Используется финальной обработкой (Только_значения) и постобработкой сводных (as_values).
 """
-MACRO_VERSION = "3.10.710"
+MACRO_VERSION = "3.10.711"
 import re
 import time
 

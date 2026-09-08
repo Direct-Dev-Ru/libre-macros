@@ -5,7 +5,8 @@
 и в фильтрах имён листов (`libre_macros_sheet_filter_lib.compile_sheet_name_filter` —
 «Листы_не_удалять», «удаление_листов» / «скрытие_листов»).
 
-Связанные находки аудита: [SECURITY_AUDIT.md](SECURITY_AUDIT.md) — H-5 (бывш. C-1/H-4), H-2.
+Связанные находки аудита: [SECURITY_AUDIT.md](SECURITY_AUDIT.md) — H-5; H-2 (file_ref ещё открыт).
+Сводка гейтов и корней источников: [19_SECURITY.md](19_SECURITY.md).
 
 ---
 
@@ -16,11 +17,11 @@
 1. **Inline** — колонка B (`lambda` / `def`) или поле `"code"` в JSON колонки C.
 2. **file#func** — ссылка вида `functions_pp.py#pp_range_zagotovka` (файл на диске → вырезание `def` → тот же eval/exec).
 
-Текущая «песочница» в макросе — blocklist builtins (`__import__`, `open`, `eval`, `getattr`, …),
-синхронизированный с AST-запретами (`LM_SANITIZE_BUILTIN_BLOCKLIST` → `_MERGE_PP_EVAL_BUILTIN_BLOCKLIST`).
+«Песочница» макроса: **AST-санация** + blocklist builtins (`__import__`, `open`, `eval`, `getattr`, …),
+синхронизированный с AST (`LM_SANITIZE_BUILTIN_BLOCKLIST` → `_MERGE_PP_EVAL_BUILTIN_BLOCKLIST`).
 Compile B/C — **fail-closed**: если sanitize недоступен, код не выполняется.
 
-Библиотека санации даёт **статическую проверку AST и путей** до компиляции. Это не полная песочница ОС, а фильтр опасных конструкций и ограничение `file#` каталогом макроса.
+Библиотека даёт **статическую проверку** до компиляции. Это не полная песочница ОС.
 
 ---
 
@@ -31,7 +32,7 @@ Compile B/C — **fail-closed**: если sanitize недоступен, код 
 | Текст кода | `lm_sanitize_code` | AST + запрет import/exec, сети, base64/шифроконтента, записи в ФС, dunder |
 | Ссылка `path#func` | `lm_sanitize_file_ref` | Разбор, имя функции, путь только под `base_dir`, по умолчанию без abs |
 | Файл + функция | `lm_sanitize_load_file_function` | file_ref → чтение → вырезание `def` → `lm_sanitize_code` |
-| Builtins | `lm_sanitize_filtered_builtins` | Словарь builtins без blocklist (для будущей подстановки в eval) |
+| Builtins | `lm_sanitize_filtered_builtins` | Словарь builtins без blocklist (подключён в compile B/C) |
 
 Код **не выполняется**. Результат — `ok` / список `issues` (error / warning).
 
@@ -79,7 +80,8 @@ Compile B/C — **fail-closed**: если sanitize недоступен, код 
 - расширение должно быть `.py`;
 - имя функции — идентификатор (ASCII или кириллица).
 
-Это закрывает рекомендацию аудита **H-2** (сейчас макрос принимает любой abs path).
+Это закрывает рекомендацию аудита **H-2** в sanitize_lib; **макрос** пока ещё принимает abs path
+в `_merge_pp_resolve_script_path` — см. SECURITY_AUDIT H-2.
 
 Опционально: `allow_absolute=True` + `allowed_roots=[...]` для контролируемых корней.
 
@@ -156,15 +158,15 @@ print(san.lm_sanitize_format_issues(r['issues']))
 
 ---
 
-## Планируемая интеграция (ещё не сделано)
+## Интеграция в макрос (актуально)
 
-Точки в `collect_workbooks.py`:
+| Точка | Статус |
+|-------|--------|
+| `_merge_pp_compile_postprocess_code` | **Сделано:** `lm_sanitize_code` + fail-closed; `lm_sanitize_filtered_builtins` |
+| Лямбды / фильтры листов / строк | **Сделано:** через `lm_sanitize_code_or_raise` |
+| `_merge_pp_resolve_script_path` / file# | **Не сделано:** подключить `lm_sanitize_file_ref` / `lm_sanitize_load_file_function` |
 
-1. `_merge_pp_compile_postprocess_code` — перед `eval`/`exec` вызвать `lm_sanitize_code`; при `not ok` — лог и `None`.
-2. `_merge_pp_resolve_script_path` / `_merge_pp_load_function_from_file_ref` — заменить/обернуть `lm_sanitize_file_ref` + `lm_sanitize_load_file_function` (запрет abs вне каталога макроса).
-3. Опционально: собрать builtins через `lm_sanitize_filtered_builtins` вместо локального `_merge_pp_postprocess_eval_builtins`.
-
-После подключения: обновить [07_USER_FUNCTIONS.md](07_USER_FUNCTIONS.md), `functions_pp.py` (справка про blocklist) и строку статуса в [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
+После закрытия H-2 обновить [07_USER_FUNCTIONS.md](07_USER_FUNCTIONS.md) и строку статуса в [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
 
 **Не путать** с `_lm_safe_eval_*` / `_merge_safe_eval_*` — там whitelist символов для коротких арифметических выражений `{row_id±N}`, не пользовательский Python постобработки.
 
