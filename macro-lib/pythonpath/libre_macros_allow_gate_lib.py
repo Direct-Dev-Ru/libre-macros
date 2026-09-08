@@ -7,7 +7,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.704"
+MACRO_VERSION = "3.10.705"
 import os
 import sys
 
@@ -24,6 +24,7 @@ except Exception:
 # Имена по умолчанию для «функция_плагин», если allow_env / allow_global не заданы.
 PLUGIN_ALLOW_ENV_NAME = u"MERGE_ALLOW_PLUGINS"
 PLUGIN_ALLOW_GLOBAL_NAME = u"Merge_Allow_Plugins"
+PLUGIN_ALLOW_ERROR_DIALOG_TITLE = u"функция_плагин — невозможно выполнить"
 
 
 def _log(msg):
@@ -297,7 +298,8 @@ def verify_plugin_allow_gate(block, variables_map=None):
 
 def show_allow_gate_error_dialog(doc, text, title=None):
     """
-    Диалог ошибки гейта: крупный красный текст, алая полоса-титл.
+    Диалог ошибки гейта: тот же вид, что у предварительного скрипта
+    (крупный красный текст, алая полоса-титл).
     Возвращает True, если диалог показан.
     """
     try:
@@ -305,4 +307,15 @@ def show_allow_gate_error_dialog(doc, text, title=None):
     except Exception as err:
         _log(u"show_allow_gate_error_dialog import: %s" % err)
         return False
-    return show_pre_shell_error_dialog(doc, text, title=title)
+    caption = unicode(title or u"").strip()
+    if caption == u"":
+        body0 = unicode(text or u"")
+        try:
+            folded = body0.casefold()
+        except Exception:
+            folded = body0.lower()
+        if u"функция_плагин" in folded:
+            caption = PLUGIN_ALLOW_ERROR_DIALOG_TITLE
+        else:
+            caption = None
+    return show_pre_shell_error_dialog(doc, text, title=caption)

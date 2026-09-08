@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.704"
+MACRO_VERSION = "3.10.705"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -9246,24 +9246,34 @@ def show_message(text, doc=None):
 def show_collect_error(text, doc=None):
     """
     Ошибка сбора: для гейта допуска (pre-shell / функция_плагин) —
-    крупный красный диалог; иначе как show_message.
+    крупный красный диалог (как у предварительного скрипта); иначе как show_message.
     """
     body = unicode(text or u'')
     is_gate = False
     try:
         folded = body.casefold()
+    except Exception:
+        try:
+            folded = body.lower()
+        except Exception:
+            folded = body
+    try:
         is_gate = (u'запрещ' in folded) and (
             (u'функция_плагин' in folded)
             or (u'предварительный_скрипт' in folded)
             or (u'предварительн' in folded)
+            or (u'merge_allow_plugin' in folded)
+            or (u'merge_allow_pre_script' in folded)
         )
     except Exception:
         is_gate = False
     if is_gate and (not _cw_get('_MERGE_QA_HEADLESS', False)):
         title = None
         try:
-            if u'функция_плагин' in body.casefold():
+            if u'функция_плагин' in folded:
                 title = u'функция_плагин — невозможно выполнить'
+            elif (u'предварительный_скрипт' in folded) or (u'предварительн' in folded):
+                title = u'Предварительный_скрипт — невозможно выполнить'
         except Exception:
             title = None
         try:
@@ -27158,7 +27168,7 @@ def collect_pack(event=None):
             return False
         pre_err = _collect_pack_prevalidate(doc, plan)
         if pre_err:
-            show_message(pre_err, doc)
+            show_collect_error(pre_err, doc)
             return False
         if not merge_ensure_consent_before_run(doc):
             return False

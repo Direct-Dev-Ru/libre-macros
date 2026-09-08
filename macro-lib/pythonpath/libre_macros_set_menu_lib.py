@@ -22,7 +22,7 @@ from libre_macros_set_menu_cfg import (
     MACRO_VERSION as CFG_MACRO_VERSION,
 )
 
-MACRO_VERSION = "3.10.704"
+MACRO_VERSION = "3.10.705"
 def _menu_xml_with_version(xml, version=None):
     """Подставить MACRO_VERSION в подписи PythonMacros / Версия (__LM_VER__)."""
     ver = str(version or MACRO_VERSION or CFG_MACRO_VERSION or "").strip()

@@ -9,7 +9,7 @@ ldap3 + pyasn1 (LDAP/Active Directory, SIMPLE/NTLM) для LibreOffice pythonpat
   import ldap3_bundled
 """
 from __future__ import annotations
-MACRO_VERSION = "3.10.704"
+MACRO_VERSION = "3.10.705"
 import importlib.abc
 import importlib.util
 import sys

@@ -8,7 +8,7 @@ JSON в колонке B параметра «Предварительный_с�
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.704"
+MACRO_VERSION = "3.10.705"
 import datetime
 import json
 import os
@@ -707,7 +707,8 @@ def show_pre_shell_error_dialog(doc, text, title=None):
 
     dlg = sm.createInstanceWithContext(u"com.sun.star.awt.UnoControlDialog", ctx)
     dlg.setModel(dm)
-    prepare_dialog_soft_gray_warning(dlg, title_text=u"Ошибка")
+    # Та же алая полоса, что у гейта плагина; подпись = заголовок окна.
+    prepare_dialog_soft_gray_warning(dlg, title_text=caption)
     # После темы — снова красный крупный шрифт (тема могла перекрасить метки).
     try:
         err_m = dm.getByName(u"ErrLbl")
