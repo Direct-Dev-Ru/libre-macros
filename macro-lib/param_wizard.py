@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.702"
+MACRO_VERSION = "3.10.703"
 import ast
 import glob
 import json
@@ -670,59 +670,61 @@ def _show_plugin_function_dialog(parent_dialog, spec, initial_ref=u'', initial_e
     toolkit = sm.createInstanceWithContext('com.sun.star.awt.Toolkit', ctx)
     dm = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialogModel', ctx)
     dw = 560
-    # +56 под поля допуска (env / глобальная).
-    dh = _inner_dialog_height(_pw_cfg._INNER_GRID_DH + 56)
     m = 10
     dm.PositionX = 120
     dm.PositionY = 80
     dm.Width = dw
-    dm.Height = dh
+    # Высоту зададим после раскладки контента — футер вплотную снизу.
+    dm.Height = 360
     dm.Title = u'Пользовательская функция'
     _inner_dialog_set_sizeable(dm)
     y = m
-    _wizard_dlg_add_fixed(dm, 'HintLbl', u'B = «функция_плагин». Ссылка/код + extra. Допуск: env ↔ зашифрованная глобальная (пусто = MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins).', m, y, dw - m * 2, 28, multiline=True)
-    y += 34
+    _wizard_dlg_add_fixed(dm, 'HintLbl', u'B = «функция_плагин». Ссылка/код + extra. Допуск: env ↔ зашифрованная глобальная (пусто = MERGE_ALLOW_PLUGINS / Merge_Allow_Plugins).', m, y, dw - m * 2, 22, multiline=True)
+    y += 26
     col_gap = 10
     left_w = 190
     right_w = dw - m * 2 - left_w - col_gap
     rx = m + left_w + col_gap
-    _wizard_dlg_add_checkbox(dm, 'SameAllChk', u'Одинаково на всех листах', m, y, left_w + col_gap - 4, 16)
-    _wizard_dlg_add_fixed(dm, 'ParamsLbl', u'Параметры:', rx, y, right_w, 14)
-    fy = y + 16
-    y += 22
-    form_h = 16 + 18 + 20 + 14 + 56 + 24 + 14 + 18 + 14 + 18 + 14 + 18
-    list_top = y + 16
-    list_h = _inner_grid_list_height(dh, list_top, m, min_h=72)
-    list_h = min(list_h, max(72, dh - list_top - _pw_cfg._INNER_FOOTER_RESERVE - form_h - _pw_cfg._INNER_GRID_CONTROLS_H - _pw_cfg._INNER_GRID_LIST_GAP))
-    _wizard_dlg_add_fixed(dm, 'BlocksLbl', u'Блоки:', m, y, left_w, 14)
-    y += 16
+    _wizard_dlg_add_checkbox(dm, 'SameAllChk', u'Одинаково на всех листах', m, y, left_w + col_gap - 4, 14)
+    _wizard_dlg_add_fixed(dm, 'ParamsLbl', u'Параметры:', rx, y, right_w, 12)
+    fy = y + 14
+    y += 18
+    list_h = 80
+    _wizard_dlg_add_fixed(dm, 'BlocksLbl', u'Блоки:', m, y, left_w, 12)
+    y += 14
     _wizard_dlg_add_listbox(dm, 'BlocksLB', m, y, left_w, list_h, multiselect=False)
     _wizard_dlg_add_fixed(dm, 'RefLbl', u'Ссылка на функцию:', rx, fy, right_w, 12)
-    fy += 14
-    _wizard_dlg_add_combo(dm, 'RefCombo', rx, fy, right_w, 18)
-    fy += 22
-    _wizard_dlg_add_checkbox(dm, 'CodeChk', u'Свой Python-код вместо file#func', rx, fy, right_w, 16)
-    fy += 20
+    fy += 12
+    _wizard_dlg_add_combo(dm, 'RefCombo', rx, fy, right_w, 16)
+    fy += 18
+    _wizard_dlg_add_checkbox(dm, 'CodeChk', u'Свой Python-код вместо file#func', rx, fy, right_w, 14)
+    fy += 16
     _wizard_dlg_add_fixed(dm, 'CodeLbl', u'Код (lambda или def …):', rx, fy, right_w, 12)
-    fy += 14
-    _wizard_dlg_add_edit(dm, 'CodeEd', rx, fy, right_w, 56, multiline=True)
-    fy += 62
+    fy += 12
+    _wizard_dlg_add_edit(dm, 'CodeEd', rx, fy, right_w, 48, multiline=True)
+    fy += 52
     _wizard_dlg_add_fixed(dm, 'ExtraLbl', u'Доп. аргументы (extra):', rx, fy, right_w, 12)
-    fy += 14
-    _wizard_dlg_add_edit(dm, 'ExtraEd', rx, fy, right_w, 18)
-    fy += 22
+    fy += 12
+    _wizard_dlg_add_edit(dm, 'ExtraEd', rx, fy, right_w, 16)
+    fy += 18
     _wizard_dlg_add_fixed(dm, 'AllowEnvLbl', u'Допуск — env (пусто = MERGE_ALLOW_PLUGINS):', rx, fy, right_w, 12)
-    fy += 14
-    _wizard_dlg_add_edit(dm, 'AllowEnvEd', rx, fy, right_w, 18)
-    fy += 22
+    fy += 12
+    _wizard_dlg_add_edit(dm, 'AllowEnvEd', rx, fy, right_w, 16)
+    fy += 18
     _wizard_dlg_add_fixed(dm, 'AllowGlobalLbl', u'Допуск — глобальная (пусто = Merge_Allow_Plugins):', rx, fy, right_w, 12)
-    fy += 14
-    _wizard_dlg_add_edit(dm, 'AllowGlobalEd', rx, fy, right_w, 18)
-    y2 = y + list_h + 8
-    _wizard_dlg_add_fixed(dm, 'SheetLbl', u'Лист (пусто = все листы):', m, y2, left_w, 14)
-    _wizard_dlg_add_combo(dm, 'SheetEd', m, y2 + 16, left_w, 18)
-    _wizard_dlg_add_button(dm, 'AddBlockBtn', u'+ Блок', m, y2 + 40, 80, 16)
-    _wizard_dlg_add_button(dm, 'DelBlockBtn', u'Удалить', m + 90, y2 + 40, 80, 16)
+    fy += 12
+    _wizard_dlg_add_edit(dm, 'AllowGlobalEd', rx, fy, right_w, 16)
+    fy += 16
+    y2 = y + list_h + 6
+    _wizard_dlg_add_fixed(dm, 'SheetLbl', u'Лист (пусто = все листы):', m, y2, left_w, 12)
+    _wizard_dlg_add_combo(dm, 'SheetEd', m, y2 + 14, left_w, 16)
+    _wizard_dlg_add_button(dm, 'AddBlockBtn', u'+ Блок', m, y2 + 34, 80, 16)
+    _wizard_dlg_add_button(dm, 'DelBlockBtn', u'Удалить', m + 90, y2 + 34, 80, 16)
+    left_bottom = y2 + 50
+    content_bottom = max(left_bottom, fy)
+    footer_block = _pw_cfg._INNER_BTN_H + 4 + _pw_cfg._INNER_CHK_H
+    dh = content_bottom + 8 + footer_block + m
+    dm.Height = dh
     _inner_dialog_add_footer(dm, m, dh, help_btn=True, dw=dw)
     dlg = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialog', ctx)
     dlg.setModel(dm)
@@ -6002,8 +6004,10 @@ def _param_row_has_subdialog(spec, fn_key):
     if mode not in ('postprocess_range', 'postprocess_row'):
         return False
     fn = unicode(fn_key or u'').strip()
-    if fn == u'' or _pp_is_plugin_primary(fn):
+    if fn == u'':
         return False
+    if _pp_is_plugin_primary(fn):
+        return True
     try:
         from libre_macros_param_codec import normalize_fn_key
         fn = normalize_fn_key(fn) or fn
@@ -6038,6 +6042,14 @@ def _try_subdialog_from_row(sheet, catalog, spec, row):
         split_spec = _find_catalog_spec(catalog, u'разделить_листы')
         if split_spec is not None:
             return {'kind': 'split_sheets', 'spec': split_spec, 'row': row, 'initial': initial_text}
+    if _pp_is_plugin_primary(fn_b):
+        return {
+            'kind': 'plugin',
+            'spec': spec,
+            'row': row,
+            'initial_ref': initial_text,
+            'initial_extra': _cell_string(sheet.getCellByPosition(3, row)),
+        }
     if not _param_row_has_subdialog(spec, fn_b):
         return None
     if _is_pivot_table_pp_name(fn_b):
@@ -6237,6 +6249,23 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
             return False
         primary = _cell_string(sheet.getCellByPosition(1, row))
         row = apply_param_value(sheet, spec, primary, result, target_row=row, catalog=catalog, doc=doc)
+    elif kind == 'plugin':
+        result = _show_plugin_function_dialog(
+            None,
+            spec,
+            sub.get('initial_ref') or u'',
+            sub.get('initial_extra') or u'',
+            doc=doc,
+        )
+        if result is None:
+            return False
+        c_ref, d_extra = result
+        primary = _cell_string(sheet.getCellByPosition(1, row))
+        if not _pp_is_plugin_primary(primary):
+            primary = _pp_plugin_key()
+        row = apply_param_value(
+            sheet, spec, primary, d_extra, target_row=row, catalog=catalog, doc=doc, plugin_ref=c_ref,
+        )
     elif kind == 'delete_top_rows':
         result_text = show_delete_top_rows_param_dialog(None, sub.get('initial_text'), doc=doc)
         if result_text is None:

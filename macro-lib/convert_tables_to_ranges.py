@@ -5,7 +5,7 @@
 Диалог — здесь (как merge_ui_dialog_confirm_query в collect_workbooks).
 Логика — pythonpath/libre_macros_convert_tables_lib.py (импорт после диалога).
 """
-MACRO_VERSION = "3.10.702"
+MACRO_VERSION = "3.10.703"
 import unohelper
 from com.sun.star.awt import XActionListener
 from com.sun.star.awt.MessageBoxButtons import BUTTONS_YES_NO_CANCEL

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.702"
+MACRO_VERSION = "3.10.703"
 """
 Диалог ручного ввода значения в runtime-карту переменных (жёлтый title).
 """
