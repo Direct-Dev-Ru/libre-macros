@@ -8,7 +8,7 @@ JSON в колонке B параметра «Предварительный_с�
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.705"
+MACRO_VERSION = "3.10.706"
 import datetime
 import json
 import os
@@ -602,7 +602,7 @@ def _pre_shell_dlg_add_fixed(dm, name, label, x, y, w, h, multiline=False, text_
     return m
 
 
-def _pre_shell_dlg_add_edit(dm, name, x, y, w, h, multiline=False, readonly=False):
+def _pre_shell_dlg_add_edit(dm, name, x, y, w, h, multiline=False, readonly=False, font_height=None):
     edit = dm.createInstance(u"com.sun.star.awt.UnoControlEditModel")
     edit.Name = unicode(name)
     edit.PositionX = int(x)
@@ -618,8 +618,49 @@ def _pre_shell_dlg_add_edit(dm, name, x, y, w, h, multiline=False, readonly=Fals
             pass
     if readonly:
         edit.ReadOnly = True
+    if font_height is not None:
+        try:
+            fh = int(font_height)
+        except Exception:
+            fh = 0
+        if fh > 0:
+            try:
+                fd = edit.FontDescriptor
+                fd.Height = fh
+                edit.FontDescriptor = fd
+            except Exception:
+                try:
+                    edit.FontHeight = fh
+                except Exception:
+                    pass
     dm.insertByName(unicode(name), edit)
     return edit
+
+
+def _pre_shell_apply_edit_font(control_or_model, font_height):
+    """Крупный шрифт в Edit после темы (тема могла сбросить descriptor)."""
+    try:
+        fh = int(font_height)
+    except Exception:
+        return
+    if fh <= 0:
+        return
+    model = control_or_model
+    try:
+        model = control_or_model.Model
+    except Exception:
+        pass
+    if model is None:
+        return
+    try:
+        fd = model.FontDescriptor
+        fd.Height = fh
+        model.FontDescriptor = fd
+    except Exception:
+        try:
+            model.FontHeight = fh
+        except Exception:
+            pass
 
 
 def show_pre_shell_error_dialog(doc, text, title=None):
@@ -803,8 +844,17 @@ def confirm_pre_shell_before_run(doc, spec, table=None, param_sheet_name=u"", ma
     edit_h = inner_dialog_footer_y(dh, m) - y - 8
     if edit_h < 120:
         edit_h = 120
+    body_font = int(getattr(_cfg, u"PRE_SHELL_CONFIRM_BODY_FONT_HEIGHT", 12) or 12)
     _pre_shell_dlg_add_edit(
-        dm, u"BodyEd", m, y, dw - 2 * m, edit_h, multiline=True, readonly=True,
+        dm,
+        u"BodyEd",
+        m,
+        y,
+        dw - 2 * m,
+        edit_h,
+        multiline=True,
+        readonly=True,
+        font_height=body_font,
     )
     inner_dialog_add_ok_cancel_footer(
         dm, m, dh, ok_label=u"Продолжить", cancel_label=u"Отмена",
@@ -817,7 +867,9 @@ def confirm_pre_shell_before_run(doc, spec, table=None, param_sheet_name=u"", ma
         _log(u"confirm: createPeer failed")
         return True
     try:
-        dlg.getControl(u"BodyEd").setText(body)
+        body_ctl = dlg.getControl(u"BodyEd")
+        body_ctl.setText(body)
+        _pre_shell_apply_edit_font(body_ctl, body_font)
     except Exception:
         pass
 

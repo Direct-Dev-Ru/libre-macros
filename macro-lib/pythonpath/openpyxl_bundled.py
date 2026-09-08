@@ -9,7 +9,7 @@ openpyxl + et_xmlfile в одном файле для LibreOffice pythonpath.
   import openpyxl_bundled
 """
 from __future__ import annotations
-MACRO_VERSION = "3.10.705"
+MACRO_VERSION = "3.10.706"
 import importlib.abc
 import importlib.util
 import sys
