@@ -13,7 +13,7 @@ from __future__ import print_function, unicode_literals
 
 См. docs/16_CODE_SANITIZE.md.
 """
-MACRO_VERSION = "3.10.709"
+MACRO_VERSION = "3.10.710"
 import ast
 import os
 import re
@@ -336,15 +336,18 @@ for _name in ("Exec", "Print"):  # Py2
     if _cls is not None:
         _LM_SANITIZE_BANNED_NODE_TYPES = _LM_SANITIZE_BANNED_NODE_TYPES + (_cls,)
 
-# Builtins blocklist — совместим с _MERGE_PP_EVAL_BUILTIN_BLOCKLIST в макросе.
+# Builtins blocklist для eval/exec — должен покрывать introspection из AST
+# (_LM_SANITIZE_BANNED_CALLS / _LM_SANITIZE_SOFT_CALLS): getattr и др.
 LM_SANITIZE_BUILTIN_BLOCKLIST = frozenset(
     {
         "__import__",
         "eval",
         "exec",
+        "execfile",
         "compile",
         "open",
         "input",
+        "raw_input",
         "breakpoint",
         "help",
         "exit",
@@ -356,6 +359,16 @@ LM_SANITIZE_BUILTIN_BLOCKLIST = frozenset(
         "locals",
         "vars",
         "dir",
+        "getattr",
+        "setattr",
+        "delattr",
+        "hasattr",
+        "memoryview",
+        "bytearray",
+        "buffer",
+        "file",
+        "reload",
+        "__builtins__",
     }
 )
 

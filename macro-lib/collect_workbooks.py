@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.709"
+MACRO_VERSION = "3.10.710"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -1997,6 +1997,7 @@ def _merge_pp_compile_postprocess_code(code_text, namespace_getter=None):
 
     Поддерживает: lambda doc,sheet,…: …  и  def my_pp(doc, sheet, …): …
     Перед eval/exec — статическая санация (libre_macros_sanitize_lib).
+    Fail-closed: без успешной санации код не компилируется.
 
     Возвращает callable или None.
     """
@@ -2007,25 +2008,29 @@ def _merge_pp_compile_postprocess_code(code_text, namespace_getter=None):
         from libre_macros_sanitize_lib import (
             lm_sanitize_code,
             lm_sanitize_format_issues,
+            lm_sanitize_filtered_builtins,
         )
-
+    except Exception as err:
+        print('  ⚠ Санация Python-постобработки недоступна — код отклонён: %s' % err)
+        return None
+    try:
         san = lm_sanitize_code(code)
         if not san.ok:
             detail = lm_sanitize_format_issues(san.issues)
             print('  ⚠ Санация Python-постобработки в B: %s' % detail)
             return None
     except Exception as err:
-        print('  ⚠ Санация Python-постобработки недоступна: %s' % err)
+        print('  ⚠ Санация Python-постобработки сбой — код отклонён: %s' % err)
+        return None
     getter = namespace_getter if namespace_getter is not None else _merge_pp_postprocess_eval_namespace
     ns = getter()
     try:
-        from libre_macros_sanitize_lib import lm_sanitize_filtered_builtins
-
         builtins_map = lm_sanitize_filtered_builtins(
             blocklist=_cw_cfg._MERGE_PP_EVAL_BUILTIN_BLOCKLIST
         )
-    except Exception:
-        builtins_map = _merge_pp_postprocess_eval_builtins()
+    except Exception as err:
+        print('  ⚠ Builtins постобработки недоступны — код отклонён: %s' % err)
+        return None
     glo = {'__builtins__': builtins_map}
     glo.update(ns)
     try:

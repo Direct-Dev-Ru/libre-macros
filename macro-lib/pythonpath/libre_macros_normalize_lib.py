@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.709"
+MACRO_VERSION = "3.10.710"
 """
 Ядро стека текстовых операций (ops) для PP ``текстовые_операции``
 (legacy-алиас: ``нормализация_текста``).

@@ -16,7 +16,9 @@
 1. **Inline** — колонка B (`lambda` / `def`) или поле `"code"` в JSON колонки C.
 2. **file#func** — ссылка вида `functions_pp.py#pp_range_zagotovka` (файл на диске → вырезание `def` → тот же eval/exec).
 
-Текущая «песочница» в макросе — blocklist builtins (`__import__`, `open`, `eval`, …). Её можно обойти через `getattr` / `__subclasses__` и т.п. (см. C-1).
+Текущая «песочница» в макросе — blocklist builtins (`__import__`, `open`, `eval`, `getattr`, …),
+синхронизированный с AST-запретами (`LM_SANITIZE_BUILTIN_BLOCKLIST` → `_MERGE_PP_EVAL_BUILTIN_BLOCKLIST`).
+Compile B/C — **fail-closed**: если sanitize недоступен, код не выполняется.
 
 Библиотека санации даёт **статическую проверку AST и путей** до компиляции. Это не полная песочница ОС, а фильтр опасных конструкций и ограничение `file#` каталогом макроса.
 

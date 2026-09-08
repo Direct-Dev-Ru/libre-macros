@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.709"
+MACRO_VERSION = "3.10.710"
 import re
 
 try:
@@ -170,27 +170,43 @@ _MERGE_LO_COLOR_NAMES = {
     "excel_header": (31, 78, 121),  # #1F4E79 — тёмно-синий заголовок Excel
 }
 _MERGE_DELETE_TOP_ROWS_SEPS = ("->", "=", "\\")
-_MERGE_PP_EVAL_BUILTIN_BLOCKLIST = frozenset(
-    {
-        "__import__",
-        "eval",
-        "exec",
-        "compile",
-        "open",
-        "input",
-        "breakpoint",
-        "help",
-        "exit",
-        "quit",
-        "copyright",
-        "credits",
-        "license",
-        "globals",
-        "locals",
-        "vars",
-        "dir",
-    }
-)
+# Источник истины — LM_SANITIZE_BUILTIN_BLOCKLIST (совпадает с AST-запретами).
+try:
+    from libre_macros_sanitize_lib import LM_SANITIZE_BUILTIN_BLOCKLIST as _MERGE_PP_EVAL_BUILTIN_BLOCKLIST
+except Exception:
+    _MERGE_PP_EVAL_BUILTIN_BLOCKLIST = frozenset(
+        {
+            "__import__",
+            "eval",
+            "exec",
+            "execfile",
+            "compile",
+            "open",
+            "input",
+            "raw_input",
+            "breakpoint",
+            "help",
+            "exit",
+            "quit",
+            "copyright",
+            "credits",
+            "license",
+            "globals",
+            "locals",
+            "vars",
+            "dir",
+            "getattr",
+            "setattr",
+            "delattr",
+            "hasattr",
+            "memoryview",
+            "bytearray",
+            "buffer",
+            "file",
+            "reload",
+            "__builtins__",
+        }
+    )
 _MERGE_PP_EVAL_BUILTINS_CACHE = None
 _MERGE_PP_FILE_FN_CACHE = {}
 _MERGE_FINAL_FILE_FN_CACHE = {}
