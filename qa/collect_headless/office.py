@@ -187,7 +187,6 @@ def install_macros_to_profile(profile_dir, macro_lib=None):
         "bundle_odfpy.py",
         "bundle_openpyxl.py",
         "bundle_python_lib.py",
-        "bundle_ldap3.py",
         "bundle_segno.py",
         "bundle_qr_template.py",
         "bundle_set_menu_images.py",

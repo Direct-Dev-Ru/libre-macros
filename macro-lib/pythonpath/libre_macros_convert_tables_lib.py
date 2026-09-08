@@ -11,7 +11,7 @@ DatabaseRange / Excel Table: преобразовать в диапазон ил
    .ods: content.xml+styles.xml; .xlsx: xl/tables).
 """
 from __future__ import print_function
-MACRO_VERSION = "3.10.708"
+MACRO_VERSION = "3.10.709"
 import os
 import re
 import tempfile

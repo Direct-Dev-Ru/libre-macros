@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы context_menu (AlterOffice 2026: модульный код .py-скрипта вырезается)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.708"
+MACRO_VERSION = "3.10.709"
 MENU_NS = "http://openoffice.org/2001/menu"
 REL_POPUP = ("config", "soffice.cfg", "modules", "scalc", "popupmenu", "cell.xml")
 REL_POPUP_AO = ("config", "aoffice.cfg", "modules", "acell", "popupmenu", "cell.xml")

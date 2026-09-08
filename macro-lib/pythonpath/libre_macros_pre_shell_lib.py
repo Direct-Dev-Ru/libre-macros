@@ -8,7 +8,7 @@ JSON в колонке B параметра «Предварительный_с�
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.708"
+MACRO_VERSION = "3.10.709"
 import datetime
 import json
 import os
@@ -284,8 +284,8 @@ def _sanitize_path_value(raw):
 
 def sanitize_env_from_office(env):
     """
-    Очистить окружение AO/LO, чтобы дочерний /usr/bin/python3 и ldapsearch
-    не подхватывали встроенный python-core (иначе TypeError fork_exec).
+    Очистить окружение AO/LO, чтобы дочерний /usr/bin/python3
+    не подхватывал встроенный python-core (иначе TypeError fork_exec).
     """
     if env is None:
         env = {}

@@ -7,7 +7,7 @@
 
 Точка входа: set_menu()
 """
-MACRO_VERSION = "3.10.708"
+MACRO_VERSION = "3.10.709"
 import os
 import sys
 import tempfile

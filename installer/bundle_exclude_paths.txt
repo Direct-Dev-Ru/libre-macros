@@ -1,10 +1,5 @@
 # Исключения для build_ods_bundled.py (glob, путь относительно корня репозитория)
 
-# AD-модули и макросы
-macro-lib/ad_*.py
-macro-lib/pythonpath/libre_macros_ad_*.py
-macro-lib/pythonpath/ldap3_bundled.py
-
 # Тесты Python в macro-lib и pythonpath
 macro-lib/test*.py
 macro-lib/pythonpath/test*.py
