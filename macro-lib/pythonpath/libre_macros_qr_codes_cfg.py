@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы макроса generate_qr_codes."""
 
-MACRO_VERSION = "3.10.706"
+MACRO_VERSION = "3.10.707"
 SHEET_GENERATOR = "Генератор_QR"
 SHEET_PRINT_TEMPLATE = "QR_Print"
 

@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.706"
+MACRO_VERSION = "3.10.707"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -13224,6 +13224,102 @@ def _sheet_spec_select_token(spec):
         st = unicode(st.split(u'->', 1)[0] or u'').strip()
     return st
 
+def _sheet_spec_rename_target(spec):
+    """Правая часть «source->target» или пусто, если переименования нет."""
+    try:
+        st = unicode(spec or u'').strip()
+    except Exception:
+        st = str(spec or '').strip()
+    if st == u'' or u'->' not in st:
+        return u''
+    _left, right = st.split(u'->', 1)
+    return unicode(right or u'').strip()
+
+def _sheet_spec_is_all_select(sel):
+    """True, если токен выбора — «все» / «all» / «*»."""
+    try:
+        s = unicode(sel or u'').strip()
+    except Exception:
+        s = str(sel or '').strip()
+    if s == u'*' or s == '*':
+        return True
+    try:
+        return merge_identity_key(s) == u'все' or s.casefold() == u'all'
+    except Exception:
+        return s.lower() in (u'все', u'all', 'все', 'all')
+
+def _merge_parse_sheet_rename_entries(sheet_specs):
+    """
+    Токены «Листы» → [(match_spec, target_or_None), …].
+    Служебные !hidden пропускаются (флаг видимости — отдельно в iter_*).
+    """
+    IGNORE_HIDDEN_TOKENS = set([u'!hidden', u'ignore_hidden', u'игнорировать_скрытые'])
+    ARROW_SEP = u'->'
+    rename_entries = []
+    for spec in sheet_specs or []:
+        try:
+            s = unicode(spec or u'').strip()
+        except Exception:
+            s = str(spec or '').strip()
+        if s == u'':
+            continue
+        if unicode(s).casefold() in IGNORE_HIDDEN_TOKENS:
+            continue
+        if ARROW_SEP in s:
+            left, right = s.split(ARROW_SEP, 1)
+            left = unicode(left or u'').strip()
+            right = unicode(right or u'').strip()
+            if left != u'':
+                rename_entries.append((left, right if right != u'' else None))
+            continue
+        rename_entries.append((s, None))
+    return rename_entries
+
+def _merge_resolve_sheet_rename_target(source_name, source_index_1based, sheet_specs):
+    """
+    Имя приёмника по карте «Листы» для одного листа источника.
+    Индекс 1-based (CSV = 1). None → оставить source_name.
+    """
+    try:
+        sn = unicode(source_name or u'').strip()
+    except Exception:
+        sn = str(source_name or '').strip()
+    try:
+        idx1 = int(source_index_1based)
+    except (TypeError, ValueError):
+        idx1 = 0
+    for match_spec, tgt in _merge_parse_sheet_rename_entries(sheet_specs):
+        if tgt is None or unicode(tgt).strip() == u'':
+            continue
+        desired = unicode(tgt).strip()
+        ms = unicode(match_spec or u'').strip()
+        if ms.isdigit():
+            try:
+                if int(ms) == idx1:
+                    return desired
+            except (TypeError, ValueError):
+                pass
+            continue
+        if text_match(sn, ms):
+            return desired
+        # CSV: служебное имя «CSV» тоже матчится шаблоном
+        if text_match(u'CSV', ms):
+            return desired
+    return None
+
+def _merge_csv_resolve_target_name(logical_title, sheet_specs):
+    """Имя листа-приёмника для единственного логического листа CSV."""
+    try:
+        sn = unicode(logical_title or u'').strip()
+    except Exception:
+        sn = str(logical_title or '').strip()
+    if sn == u'':
+        sn = u'CSV'
+    renamed = _merge_resolve_sheet_rename_target(sn, 1, sheet_specs)
+    if renamed is not None and unicode(renamed).strip() != u'':
+        return unicode(renamed).strip()
+    return sn
+
 def classify_sheet_specs(specs):
     """
     Классификация фильтра «Листы» для iter_sheet_slots.
@@ -13240,6 +13336,8 @@ def classify_sheet_specs(specs):
     Примечание:
         Для «1->Заказы» классификация по левой части стрелки (INDEX), иначе токен
         целиком не isdigit → NAME и 0 совпадений имён.
+        «*->csv» / «все->Итог» — NAME (иначе ALL игнорирует переименование).
+        Голые «*» / «все» / «all» без стрелки — ALL.
     """
     cleaned = []
     for s in (specs or []):
@@ -13256,10 +13354,24 @@ def classify_sheet_specs(specs):
 
     if len(specs) == 0:
         return 'ALL'
+    only_all_without_rename = True
+    has_all_with_rename = False
     for s in specs:
         sel = _sheet_spec_select_token(s)
-        if sel.strip().lower() in ('все', 'all', '*'):
-            return 'ALL'
+        if sel == u'':
+            continue
+        if _sheet_spec_is_all_select(sel):
+            if _sheet_spec_rename_target(s) != u'':
+                has_all_with_rename = True
+                only_all_without_rename = False
+            continue
+        only_all_without_rename = False
+    if only_all_without_rename and (not has_all_with_rename):
+        for s in specs:
+            sel = _sheet_spec_select_token(s)
+            if sel != u'' and _sheet_spec_is_all_select(sel):
+                return 'ALL'
+        return 'ALL'
     has_num = False
     has_name = False
     for s in specs:
@@ -13269,6 +13381,7 @@ def classify_sheet_specs(specs):
         if sel.strip().isdigit():
             has_num = True
         else:
+            # «*->цель» и шаблоны с * / имена — NAME
             has_name = True
     if has_num and has_name:
         return 'MIXED'
@@ -14462,6 +14575,9 @@ def iter_sheet_slots(source_doc, sheet_specs, sheet_kind, filter_fn=_cw_cfg._MER
         rename_entries.append((s, None))
 
     if sheet_kind == 'ALL':
+        # Голый «*» — имена как в источнике; если есть «*->Цель» (защитный путь) —
+        # цель + суффиксы _2, _3 при нескольких листах.
+        used_tgt = set()
         i = 0
         while i < source_doc.Sheets.getCount():
             sh = source_doc.Sheets.getByIndex(i)
@@ -14470,7 +14586,15 @@ def iter_sheet_slots(source_doc, sheet_specs, sheet_kind, filter_fn=_cw_cfg._MER
                 continue
             n = sh.Name
             if _merge_sheet_slot_include_filter_passes(n, filter_fn):
-                yield {'target_key': n, 'source_name': n, 'source_index': i}
+                desired = n
+                for match_spec, tgt in rename_entries:
+                    if tgt is None or unicode(tgt).strip() == u'':
+                        continue
+                    if _sheet_spec_is_all_select(match_spec) or text_match(n, match_spec):
+                        desired = unicode(tgt).strip()
+                        break
+                tkey = _merge_unique_slot_target_name(desired, used_tgt)
+                yield {'target_key': tkey, 'source_name': n, 'source_index': i}
             i = i + 1
         return
     if sheet_kind == 'INDEX':
@@ -20857,31 +20981,34 @@ def _merge_csv_included_by_sheet_specs(src_title, sheet_specs, sheet_kind):
     if kind == 'INDEX':
         i = 0
         while i < len(sheet_specs or []):
+            sel = _sheet_spec_select_token(sheet_specs[i])
+            if sel == u'':
+                i = i + 1
+                continue
             try:
-                if int(str(sheet_specs[i]).strip()) == 1:
+                if int(unicode(sel).strip()) == 1:
                     return True
             except (TypeError, ValueError):
                 pass
             i = i + 1
         return False
-    # NAME
+    # NAME: «*» / «Отчет*» / точное имя; CSV всегда индекс 1
     title = unicode(src_title or u'')
     i = 0
     while i < len(sheet_specs or []):
-        spec = sheet_specs[i]
-        spec_s = unicode(spec or u'').strip()
-        if spec_s == u'':
+        left = _sheet_spec_select_token(sheet_specs[i])
+        if left == u'':
             i = i + 1
             continue
-        if spec_s.casefold() in (u'!hidden', u'ignore_hidden', u'игнорировать_скрытые'):
+        if left.isdigit():
+            try:
+                if int(left) == 1:
+                    return True
+            except (TypeError, ValueError):
+                pass
             i = i + 1
             continue
-        if u'->' in spec_s:
-            left, _right = spec_s.split(u'->', 1)
-            left = unicode(left or u'').strip()
-        else:
-            left = spec_s
-        if left != u'' and (text_match(title, left) or text_match(u'CSV', left)):
+        if text_match(title, left) or text_match(u'CSV', left):
             return True
         i = i + 1
     return False
@@ -21418,11 +21545,20 @@ def _merge_iter_book_sheet_slots(fpath, sheet_specs, sheet_kind, filter_fn=_cw_c
         rename_entries.append((s, None))
 
     if sheet_kind == 'ALL':
+        used_tgt = set()
         i = 0
         while i < len(names):
             n = names[i]
             if _merge_sheet_slot_include_filter_passes(n, filter_fn):
-                yield {u'target_key': n, u'source_name': n, u'source_index': i}
+                desired = n
+                for match_spec, tgt in rename_entries:
+                    if tgt is None or unicode(tgt).strip() == u'':
+                        continue
+                    if _sheet_spec_is_all_select(match_spec) or text_match(n, match_spec):
+                        desired = unicode(tgt).strip()
+                        break
+                tkey = _merge_unique_slot_target_name(desired, used_tgt)
+                yield {u'target_key': tkey, u'source_name': n, u'source_index': i}
             i = i + 1
         return
     if sheet_kind == 'INDEX':
@@ -22826,7 +22962,8 @@ def merge_on_copy_sheets(target_doc, files, is_current_book_flags, per_file_shee
                     report.stats['sheets_skipped'] = report.stats.get('sheets_skipped', 0) + 1
                     report.log_stat(src_label, '', tname, '', 'пропуск', 'CSV не входит в фильтр «Листы»')
                 else:
-                    target_name = _merge_copy_sheets_resolve_name(target_doc, tname, used_names)
+                    desired = _merge_csv_resolve_target_name(tname, sheet_specs)
+                    target_name = _merge_copy_sheets_resolve_name(target_doc, desired, used_names)
                     report.status(u'  → CSV «%s» ← %s (setDataArray)' % (target_name, fname))
                     if _merge_ui_is_dialog_mode():
                         merge_ui_yield(force=True)
@@ -23626,32 +23763,7 @@ def merge_on_many_sheets(target_doc, files, is_current_book_flags, per_file_shee
             if _merge_path_is_csv(fpath):
                 sn = _merge_csv_logical_sheet_title(fpath)
                 if _merge_csv_included_by_sheet_specs(sn, sheet_specs, file_sheet_kind):
-                    # Переименование для CSV: ищем токен `Старое->Новое`, матчимся по left.
-                    tn = sn
-                    try:
-                        for spec in sheet_specs or []:
-                            spec_s = unicode(spec or u'').strip()
-                            if spec_s.casefold() in (u'!hidden', u'ignore_hidden', u'игнорировать_скрытые'):
-                                continue
-                            if u'->' in spec_s:
-                                left, right = spec_s.split(u'->', 1)
-                                left = unicode(left or u'').strip()
-                                right = unicode(right or u'').strip()
-                                if left == u'':
-                                    continue
-                                if left.isdigit():
-                                    if int(left) == 1 and right != u'':
-                                        tn = right
-                                        break
-                                elif right != u'' and text_match(sn, left):
-                                    tn = right
-                                    break
-                            elif file_sheet_kind == 'INDEX' and spec_s.isdigit() and int(spec_s) == 1:
-                                # CSV = один логический лист (индекс 1)
-                                tn = sn
-                                break
-                    except Exception:
-                        tn = sn
+                    tn = _merge_csv_resolve_target_name(sn, sheet_specs)
                     ikey = merge_identity_key(tn)
                     if ikey != '':
                         if ikey not in name_to_info:
@@ -23853,12 +23965,20 @@ def merge_on_many_sheets(target_doc, files, is_current_book_flags, per_file_shee
         try:
             if is_csv_source and (not csv_shadow_xlsx):
                 sn = _merge_csv_logical_sheet_title(fpath)
-                ikey = merge_identity_key(sn)
+                try:
+                    _csv_specs = per_file_sheet_specs[fi] if fi < len(per_file_sheet_specs) else []
+                except Exception:
+                    _csv_specs = []
+                tn = _merge_csv_resolve_target_name(sn, _csv_specs)
+                ikey = merge_identity_key(tn)
+                if ikey not in name_targets:
+                    # fallback: слот мог быть зарегистрирован под логическим именем
+                    ikey = merge_identity_key(sn)
                 if ikey in name_targets:
                     target_info = name_targets[ikey]
                     ts = target_info['sheet']
                     out_row = target_info['out_row']
-                    report.status(u'  → %s ← CSV %s' % (sn, fname))
+                    report.status(u'  → %s ← CSV %s' % (target_info.get('display_name') or tn or sn, fname))
                     skip_spec = ''
                     if fi < len(per_file_skip_row_specs):
                         skip_spec = per_file_skip_row_specs[fi]
@@ -23913,15 +24033,20 @@ def merge_on_many_sheets(target_doc, files, is_current_book_flags, per_file_shee
                     if is_csv_source:
                         logical = _merge_csv_logical_sheet_title(fpath)
                         logical_key = merge_identity_key(logical)
-                        if logical_key in name_targets and (
-                            ikey not in name_targets
-                            or ikey == merge_identity_key(u'CSV')
-                        ):
+                        # Слот уже под target (*→csv / 1→Итог) — не откатывать на логическое имя.
+                        if ikey in name_targets:
+                            if ss is None:
+                                ss = _merge_csv_shadow_source_sheet(src, logical)
+                        elif logical_key in name_targets:
                             if ss is None:
                                 ss = _merge_csv_shadow_source_sheet(src, logical)
                             ikey = logical_key
                             tn = logical
-                            sn = logical
+                            if merge_identity_key(sn) in (
+                                merge_identity_key(u'CSV'),
+                                logical_key,
+                            ):
+                                sn = logical
                     if ikey not in name_targets:
                         continue
                     if ss is None:
@@ -23936,7 +24061,7 @@ def merge_on_many_sheets(target_doc, files, is_current_book_flags, per_file_shee
                     ts = target_info['sheet']
                     out_row = target_info['out_row']
                     _merge_note_result_skipped_top(ts.Name, skipped_top_0)
-                    report.status('  → %s ← %s' % (sn, fname))
+                    report.status('  → %s ← %s' % (ts.Name if ts is not None else tn, fname))
                     maybe_prefetch_cell_to_column(cell_to_column_cache, ctc_per_file_specs, fi, fpath if not is_current_book else '', is_current_book, path_display, sn, src)
                     maybe_prefetch_add_to_variables_map(_cw_cfg._MERGE_ADD_TO_VARIABLES_PER_FILE, fi, fpath if not is_current_book else '', is_current_book, path_display, sn, src, report=report)
                     if _merge_uses_header_column_matching():

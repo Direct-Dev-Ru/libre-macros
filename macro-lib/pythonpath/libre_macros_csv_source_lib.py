@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.706"
+MACRO_VERSION = "3.10.707"
 """
 Чтение CSV-источников для collect_workbooks.
 
