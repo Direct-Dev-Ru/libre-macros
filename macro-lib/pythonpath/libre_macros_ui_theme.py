@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.716"
+MACRO_VERSION = "3.10.717"
 """
 Общая soft-gray тема диалогов (визард параметров, collect_workbooks, ВПР и т.п.).
 
@@ -33,6 +33,9 @@ MANUAL_INPUT_TITLE_FG = 0x212121
 # Тёмно-синяя полоса-титл (макросы задач / todo_task)
 DARK_BLUE_TITLE_BG = 0x0D47A1
 DARK_BLUE_TITLE_FG = 0xFFFFFF
+# Зелёная полоса-титл (вспомогательные макросы / file_list)
+GREEN_TITLE_BG = 0x2E7D32
+GREEN_TITLE_FG = 0xFFFFFF
 # Размеры футера микродиалогов (как в libre_macros_param_wizard_cfg)
 INNER_BTN_W = 80
 INNER_BTN_H = 16
@@ -515,4 +518,24 @@ def prepare_dialog_soft_gray_dark_blue(dlg, title_text=None):
         title_text=title_text,
         title_bg=DARK_BLUE_TITLE_BG,
         title_fg=DARK_BLUE_TITLE_FG,
+    )
+
+
+def apply_soft_gray_green_theme(dm, title_text=None):
+    """Soft-gray форма с зелёной полосой-титлом."""
+    return apply_soft_gray_theme(
+        dm,
+        title_text=title_text,
+        title_bg=GREEN_TITLE_BG,
+        title_fg=GREEN_TITLE_FG,
+    )
+
+
+def prepare_dialog_soft_gray_green(dlg, title_text=None):
+    """Soft-gray форма с зелёной полосой-титлом."""
+    return prepare_dialog_soft_gray(
+        dlg,
+        title_text=title_text,
+        title_bg=GREEN_TITLE_BG,
+        title_fg=GREEN_TITLE_FG,
     )

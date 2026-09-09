@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.716"
+MACRO_VERSION = "3.10.717"
 import json
 import os
 import sys
@@ -1497,6 +1497,12 @@ def create_file_analyzer_dialog():
         _add_button(dialog_model, "ClearButton", "Очистить", m + 110, btn_y, 100, 28)
         _add_button(dialog_model, "CancelButton", "Отмена", m + 220, btn_y, 100, 28)
 
+        try:
+            from libre_macros_ui_theme import apply_soft_gray_green_theme
+            apply_soft_gray_green_theme(dialog_model, title_text=dialog_model.Title)
+        except Exception:
+            pass
+
         dialog = XSCRIPTCONTEXT.getComponentContext().getServiceManager().createInstanceWithContext(
             "com.sun.star.awt.UnoControlDialog", XSCRIPTCONTEXT.getComponentContext()
         )
@@ -1612,6 +1618,11 @@ def create_file_analyzer_dialog():
             dialog.getControl(btn).addActionListener(handler)
 
         dialog.createPeer(toolkit, _parent_window())
+        try:
+            from libre_macros_ui_theme import GREEN_TITLE_BG, GREEN_TITLE_FG, try_paint_titlebar
+            try_paint_titlebar(dialog, title_bg=GREEN_TITLE_BG, title_fg=GREEN_TITLE_FG)
+        except Exception:
+            pass
         dialog.execute()
         return handler.result
 

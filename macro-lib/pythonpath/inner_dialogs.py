@@ -6,7 +6,7 @@
 маршрутизация show_inner_param_dialog().
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.716"
+MACRO_VERSION = "3.10.717"
 try:
     unicode
 except NameError:
