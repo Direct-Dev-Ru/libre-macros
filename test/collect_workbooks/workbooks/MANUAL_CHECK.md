@@ -1,7 +1,7 @@
 # Ручная сверка collect_workbooks
 
-Сгенерировано: 2026-09-07 15:35
-Версия макроса: 3.10.696
+Сгенерировано: 2026-09-09 10:21
+Версия макроса: 3.10.713
 
 Колонка C для постобработки — **JSON**. Справочник полей: [docs/13_JSON_PARAMS.md](../../docs/13_JSON_PARAMS.md).
 Пайплайн xml_excel_ods: [docs/17_POSTPROCESS_XML.md](../../docs/17_POSTPROCESS_XML.md).

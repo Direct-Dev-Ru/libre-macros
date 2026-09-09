@@ -9,6 +9,10 @@
 
 Уровни объёма: low / middle / high (разное число строк и составной ключ).
 
+Заказы: несколько неповторяющихся товаров в одном Номер_заказа;
+Количество — случайное, в т.ч. дробное; товары повторяются между заказами.
+Справочник_цен: ~450 позиций ассортимента + колонка Наименование.
+
 Запуск:
   python test/collect_workbooks/generate_vlookup_sources.py
   python test/collect_workbooks/generate_vlookup_sources.py --cardinality 1to1 --tier low
@@ -38,11 +42,14 @@ DEFAULT_OUT_DIR = os.path.join(BASE_DIR, "sources", "vlookup")
 LEFT_SHEET = "Заказы"
 RIGHT_SHEET = "Справочник_цен"
 
+# Базовый ассортимент товаров (уникальные SKU / POS).
+ASSORTMENT_SIZE = 450
+
 # Базовые параметры объёма (dup задаётся отдельно для 1to1 / 1toN)
 _VOLUME = {
-    "low": {"rows_left": 180, "rows_right": 140, "key_cols": 1, "seed": 101},
-    "middle": {"rows_left": 850, "rows_right": 420, "key_cols": 2, "seed": 202},
-    "high": {"rows_left": 3000, "rows_right": 1100, "key_cols": 3, "seed": 303},
+    "low": {"rows_left": 180, "rows_right": 450, "key_cols": 1, "seed": 101, "assortment": 450},
+    "middle": {"rows_left": 850, "rows_right": 520, "key_cols": 2, "seed": 202, "assortment": 450},
+    "high": {"rows_left": 3000, "rows_right": 1200, "key_cols": 3, "seed": 303, "assortment": 450},
 }
 
 _DUP = {
@@ -64,7 +71,33 @@ SUPPLIERS = ("Поставщик_A", "Поставщик_B", "Поставщик
 WAREHOUSES = ("Склад_01", "Склад_02", "Склад_03", "Склад_04", "Склад_05")
 MANAGERS = ("Иванов", "Петров", "Сидоров", "Козлова", "Новикова")
 
-EXTRACT_COLUMNS = ("Цена", "Валюта", "Поставщик")
+PRODUCT_KINDS = (
+    "Кабель",
+    "Разъём",
+    "Модуль",
+    "Датчик",
+    "Блок питания",
+    "Контроллер",
+    "Крепёж",
+    "Корпус",
+    "Фильтр",
+    "Переходник",
+    "Антенна",
+    "Реле",
+)
+PRODUCT_ATTRS = (
+    "медный",
+    "оптоволоконный",
+    "экранированный",
+    "промышленный",
+    "бытовой",
+    "влагозащитный",
+    "миниатюрный",
+    "усиленный",
+)
+
+# Колонки извлечения для JSON ВПР в сценариях (после ключей справа).
+EXTRACT_COLUMNS = ("Наименование", "Цена", "Валюта")
 
 
 def left_headers(key_cols):
@@ -99,6 +132,7 @@ def right_headers(key_cols):
     if key_cols == 1:
         return [
             "Код_позиции",
+            "Наименование",
             "Цена",
             "Валюта",
             "Поставщик",
@@ -107,6 +141,7 @@ def right_headers(key_cols):
             "Комментарий",
         ]
     base = keys + [
+        "Наименование",
         "Цена",
         "Валюта",
         "Поставщик",
@@ -133,22 +168,53 @@ def tier_filename(tier):
     return "vlookup_%s.xlsx" % tier
 
 
-def _make_key_tuple(rng, key_cols, index):
+def product_sku(index):
+    """Уникальный код товара в ассортименте (1-based)."""
+    return "SKU-%05d" % (int(index) + 1)
+
+
+def product_pos(index):
+    """Код позиции для одноколоночного ключа."""
+    return "POS-%06d" % (100000 + int(index))
+
+
+def product_name(index):
+    """Человекочитаемое наименование товара."""
+    i = int(index)
+    kind = PRODUCT_KINDS[i % len(PRODUCT_KINDS)]
+    attr = PRODUCT_ATTRS[(i // len(PRODUCT_KINDS)) % len(PRODUCT_ATTRS)]
+    return "%s %s %s" % (kind, attr, product_sku(i))
+
+
+def _make_key_tuple(key_cols, assort_index, region_offset=0):
+    """Ключ справочника/заказа по индексу ассортимента 0..assortment-1."""
+    i = int(assort_index)
     if key_cols == 1:
-        return ("POS-%06d" % (100000 + index),)
-    region = REGIONS[index % len(REGIONS)]
-    product = "SKU-%05d" % (index % 5000 + 1)
+        return (product_pos(i),)
+    region = REGIONS[(i + int(region_offset)) % len(REGIONS)]
+    product = product_sku(i)
     if key_cols == 2:
         return (region, product)
-    warehouse = WAREHOUSES[index % len(WAREHOUSES)]
+    warehouse = WAREHOUSES[i % len(WAREHOUSES)]
     return (region, product, warehouse)
+
+
+def _random_qty(rng):
+    """Случайное количество: целое или дробное (1 знак)."""
+    if rng.random() < 0.45:
+        return rng.randint(1, 120)
+    # дробное: 0.1 … 99.9, не ноль
+    q = round(rng.uniform(0.1, 99.9), 1)
+    if q == int(q):
+        q = q + 0.5
+    return q
 
 
 def build_right_catalog(rng, key_cols, unique_keys, dup_min, dup_max):
     catalog = []
     ki = 0
     while ki < unique_keys:
-        key = _make_key_tuple(rng, key_cols, ki)
+        key = _make_key_tuple(key_cols, ki)
         if dup_min == dup_max == 1:
             dup_n = 1
         elif ki % 3 != 2:
@@ -161,6 +227,7 @@ def build_right_catalog(rng, key_cols, unique_keys, dup_min, dup_max):
             catalog.append(
                 {
                     "key": key,
+                    "Наименование": product_name(ki),
                     "Цена": base_price + rng.randint(0, 50),
                     "Валюта": CURRENCIES[di % len(CURRENCIES)],
                     "Поставщик": SUPPLIERS[(ki + di) % len(SUPPLIERS)],
@@ -168,6 +235,7 @@ def build_right_catalog(rng, key_cols, unique_keys, dup_min, dup_max):
                     "Срок_дней": 7 + (ki % 30),
                     "Коэф_наценки": round(1.0 + (di * 0.05), 2),
                     "Комментарий": "ref/%d/%d" % (ki + 1, di + 1),
+                    "assort_index": ki,
                 }
             )
             di += 1
@@ -194,46 +262,84 @@ def catalog_to_rows(catalog, key_cols, headers):
     return rows
 
 
-def build_left_rows(rng, key_cols, headers, row_count, catalog):
-    key_names = key_field_names(key_cols)
-    catalog_keys = [rec["key"] for rec in catalog]
-    unique_catalog_keys = []
+def _unique_catalog_entries(catalog):
+    """Один представитель на уникальный ключ (для выбора товаров в заказ)."""
+    unique = []
     seen = set()
-    for k in catalog_keys:
-        if k not in seen:
-            seen.add(k)
-            unique_catalog_keys.append(k)
+    for rec in catalog:
+        k = rec["key"]
+        if k in seen:
+            continue
+        seen.add(k)
+        unique.append(rec)
+    return unique
+
+
+def build_left_rows(rng, key_cols, headers, row_count, catalog):
+    """
+    Строки заказов: несколько неповторяющихся товаров в одном Номер_заказа.
+    Количество — вразнобой и дробное; товары повторяются между заказами.
+    Часть строк — ключи вне справочника (для #Н/Д).
+    """
+    key_names = key_field_names(key_cols)
+    unique_recs = _unique_catalog_entries(catalog)
+    if not unique_recs:
+        return []
 
     rows = []
-    i = 0
-    while i < row_count:
-        if i % 17 == 0:
-            key = _make_key_tuple(rng, key_cols, 900000 + i)
-        elif i % 5 == 0 and unique_catalog_keys:
-            key = unique_catalog_keys[i % len(unique_catalog_keys)]
-        else:
-            key = catalog_keys[i % len(catalog_keys)]
+    order_no = 1
+    line_i = 0
+    while len(rows) < row_count:
+        # 1–6 позиций в заказе (не больше уникальных товаров в справочнике).
+        max_items = min(6, len(unique_recs))
+        n_items = rng.randint(1, max_items) if max_items > 0 else 1
+        if len(rows) + n_items > row_count:
+            n_items = row_count - len(rows)
 
-        row_map = {}
-        ki = 0
-        while ki < len(key_names):
-            row_map[key_names[ki]] = key[ki]
-            ki += 1
-        if key_cols == 1:
-            row_map["Код_позиции"] = key[0]
-        row_map["Количество"] = (i % 50) + 1
-        row_map["Сумма_база"] = 1000 + (i % 200) * 17
-        row_map["Дата_заказа"] = datetime(2024, 3, 1) + timedelta(days=i % 90)
-        row_map["Менеджер"] = MANAGERS[i % len(MANAGERS)]
-        row_map["Номер_заказа"] = "ORD-%07d" % (i + 1)
-        row_map["Статус"] = "Новый" if i % 4 else "В работе"
-        row_map["Комментарий"] = "ord/%d" % (i + 1)
+        # Неповторяющиеся товары внутри заказа.
+        picked = rng.sample(unique_recs, n_items)
+        order_id = "ORD-%07d" % order_no
+        order_comment = "ord/%d" % order_no
+        order_date = datetime(2024, 3, 1) + timedelta(days=(order_no - 1) % 90)
+        manager = MANAGERS[(order_no - 1) % len(MANAGERS)]
+        status = "Новый" if order_no % 4 else "В работе"
 
-        out = []
-        for h in headers:
-            out.append(row_map.get(h, ""))
-        rows.append(out)
-        i += 1
+        ji = 0
+        while ji < len(picked):
+            rec = picked[ji]
+            # ~6% строк — ключ вне справочника (для проверки «не найдено»).
+            if line_i % 17 == 0:
+                key = _make_key_tuple(key_cols, ASSORTMENT_SIZE + line_i, region_offset=line_i)
+            else:
+                key = rec["key"]
+
+            row_map = {}
+            ki = 0
+            while ki < len(key_names):
+                row_map[key_names[ki]] = key[ki]
+                ki += 1
+            if key_cols == 1:
+                row_map["Код_позиции"] = key[0]
+            elif "Код_позиции" in headers:
+                # Для составного ключа — код товара (удобно смотреть глазами).
+                row_map["Код_позиции"] = key[1] if len(key) > 1 else ""
+
+            row_map["Количество"] = _random_qty(rng)
+            row_map["Сумма_база"] = round(1000 + rng.uniform(0, 5000), 2)
+            row_map["Дата_заказа"] = order_date
+            row_map["Менеджер"] = manager
+            row_map["Номер_заказа"] = order_id
+            row_map["Статус"] = status
+            row_map["Комментарий"] = order_comment
+
+            out = []
+            for h in headers:
+                out.append(row_map.get(h, ""))
+            rows.append(out)
+            line_i += 1
+            ji += 1
+
+        order_no += 1
     return rows
 
 
@@ -251,17 +357,31 @@ def write_tier_file(out_dir, tier, cfg):
     dup_min = int(cfg["dup_min"])
     dup_max = int(cfg["dup_max"])
 
-    unique_keys = max(40, int(cfg["rows_right"]) // max(dup_max, 1))
+    unique_keys = int(cfg.get("assortment", ASSORTMENT_SIZE))
+    if unique_keys < 1:
+        unique_keys = ASSORTMENT_SIZE
     catalog = build_right_catalog(rng, key_cols, unique_keys, dup_min, dup_max)
-    right_rows = catalog_to_rows(catalog, key_cols, rh)
-    target_right = int(cfg["rows_right"])
-    if len(right_rows) > target_right:
-        right_rows = right_rows[:target_right]
-    while len(right_rows) < target_right:
-        src = dict(catalog[len(right_rows) % len(catalog)])
-        src["Цена"] = int(src["Цена"]) + len(right_rows)
-        src["Комментарий"] = "ref/extra/%d" % (len(right_rows) + 1)
-        right_rows.append(catalog_to_rows([src], key_cols, rh)[0])
+    kept_unique = []
+    seen_keys = set()
+    for rec in catalog:
+        k = rec["key"]
+        if k in seen_keys:
+            continue
+        seen_keys.add(k)
+        kept_unique.append(rec)
+
+    if dup_max <= 1:
+        # 1to1: ровно ассортимент, без дублей ключей.
+        right_rows = catalog_to_rows(kept_unique, key_cols, rh)
+    else:
+        # 1toN: полный каталог с дублями (ассортимент × 2–4).
+        right_rows = catalog_to_rows(catalog, key_cols, rh)
+        target_right = max(int(cfg["rows_right"]), len(right_rows))
+        while len(right_rows) < target_right:
+            src = dict(catalog[len(right_rows) % len(catalog)])
+            src["Цена"] = int(src["Цена"]) + len(right_rows)
+            src["Комментарий"] = "ref/extra/%d" % (len(right_rows) + 1)
+            right_rows.append(catalog_to_rows([src], key_cols, rh)[0])
 
     left_rows = build_left_rows(rng, key_cols, lh, int(cfg["rows_left"]), catalog)
 
@@ -281,8 +401,21 @@ def write_tier_file(out_dir, tier, cfg):
         k = rec["key"]
         key_counts[k] = key_counts.get(k, 0) + 1
     multi_keys = sum(1 for c in key_counts.values() if c > 1)
+
+    # Статистика заказов слева
+    order_col = None
+    if "Номер_заказа" in lh:
+        order_col = lh.index("Номер_заказа")
+    order_sizes = {}
+    if order_col is not None:
+        for row in left_rows:
+            oid = row[order_col]
+            order_sizes[oid] = order_sizes.get(oid, 0) + 1
+    multi_orders = sum(1 for c in order_sizes.values() if c > 1)
+
     print(
-        "  %s — %s, левый %d×%d, правый %d×%d, ключ [%s], ключей с дублями: %d, %.1f с"
+        "  %s — %s, левый %d×%d, правый %d×%d, ключ [%s], ассортимент=%d, "
+        "ключей с дублями: %d, заказов с >1 позицией: %d, %.1f с"
         % (
             os.path.basename(path),
             cfg.get("cardinality", "?"),
@@ -291,7 +424,9 @@ def write_tier_file(out_dir, tier, cfg):
             len(right_rows),
             len(rh),
             ",".join(key_field_names(key_cols)),
+            unique_keys,
             multi_keys,
+            multi_orders,
             time.time() - t0,
         )
     )
@@ -339,9 +474,21 @@ def write_readme(out_dir):
         "Файлы `vlookup_{1to1|1toN}_{low|middle|high}.xlsx` — две вкладки:",
         "",
         "- **Заказы** — левая таблица (без цен из справочника)",
-        "- **Справочник_цен** — правая таблица",
+        "- **Справочник_цен** — правая таблица (есть **Наименование**)",
         "",
         "Строка 1 — заголовки, данные с строки 2.",
+        "",
+        "## Содержимое Заказов",
+        "",
+        "- Несколько **неповторяющихся** товаров в одном `Номер_заказа`",
+        "  (тот же `Комментарий` = `ord/N` на всех строках заказа).",
+        "- `Количество` — случайное, в том числе **дробное**.",
+        "- Товары **повторяются между заказами**; не весь ассортимент обязан",
+        "  попасть в заказы.",
+        "",
+        "## Справочник",
+        "",
+        "- Ассортимент ≈ **450** позиций (`SKU-*****` / `POS-******`) + наименование.",
         "",
         "## Типы соответствия",
         "",
@@ -354,9 +501,9 @@ def write_readme(out_dir):
         "",
         "| Уровень | Строк (левый) | Строк (правый) | Ключ |",
         "|---------|---------------|----------------|------|",
-        "| low | ~180 | ~140 | Код_позиции |",
-        "| middle | ~850 | ~420 | Регион, Код_товара |",
-        "| high | ~3000 | ~1100 | Регион, Код_товара, Склад |",
+        "| low | ~180 | ≥450 (1to1) / с дублями | Код_позиции |",
+        "| middle | ~850 | ≥450 + запас | Регион, Код_товара |",
+        "| high | ~3000 | ≥450 + запас | Регион, Код_товара, Склад |",
         "",
         "Сценарии: `workbooks/11_vlookup_{tier}.xltx` — режим «Копирование листов»,",
         "ВПР (JSON в C) между шагами постобработки.",

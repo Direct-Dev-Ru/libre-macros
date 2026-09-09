@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.712"
+MACRO_VERSION = "3.10.713"
 import ast
 import glob
 import json
@@ -3530,7 +3530,7 @@ def _wp_example_vlookup_json_tier(tier):
     """JSON ВПР для vlookup_{tier}.xlsx (Заказы + Справочник_цен, заголовок в строке 1)."""
     tiers = {u'1to1_low': ([u'Код_позиции'], False), u'1to1_middle': ([u'Регион', u'Код_товара'], False), u'1to1_high': ([u'Регион', u'Код_товара', u'Склад'], False), u'1toN_low': ([u'Код_позиции'], True), u'1toN_middle': ([u'Регион', u'Код_товара'], True), u'1toN_high': ([u'Регион', u'Код_товара', u'Склад'], True)}
     keys, fill_dup = tiers.get(unicode(tier), ([u'Код_позиции'], False))
-    return _default_wizard_json({u'v': 1, u'fn': u'впр', u'left': {u'sheet': u'Заказы', u'start_row': 2, u'start_col': 1, u'header_row': 1}, u'right': {u'sheet': u'Справочник_цен', u'start_row': 2, u'start_col': 1, u'header_row': 1}, u'keys_same': True, u'keys_left': list(keys), u'keys_right': list(keys), u'extract_columns': [u'B', u'C', u'D'], u'highlight_color': u'#FFF2CC', u'fill_duplicates': bool(fill_dup), u'not_found_fill': u'#Н/Д', u'multi_match_one_cell': False, u'trim_keys': False, u'column_suffix': True})
+    return _default_wizard_json({u'v': 1, u'fn': u'впр', u'left': {u'sheet': u'Заказы', u'start_row': 2, u'start_col': 1, u'header_row': 1}, u'right': {u'sheet': u'Справочник_цен', u'start_row': 2, u'start_col': 1, u'header_row': 1}, u'keys_same': True, u'keys_left': list(keys), u'keys_right': list(keys), u'extract_columns': [u'Наименование', u'Цена', u'Валюта'], u'highlight_color': u'#FFF2CC', u'fill_duplicates': bool(fill_dup), u'not_found_fill': u'#Н/Д', u'multi_match_one_cell': False, u'trim_keys': False, u'column_suffix': True})
 
 def _wp_macro_version_for_presets():
     cw = _try_import_collect()
