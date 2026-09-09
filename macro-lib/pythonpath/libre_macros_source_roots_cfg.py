@@ -6,7 +6,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.713"
+MACRO_VERSION = "3.10.714"
 # Режим по умолчанию: strict | off
 #   strict — путь/glob только под разрешёнными корнями
 #   off    — проверка выключена (как раньше)
@@ -28,6 +28,7 @@ SOURCE_ROOTS_ALLOW_REMOTE = False
 # C:\Users\{user}\**\* , S:\{user}\**\* , весь диск H:\
 SOURCE_ROOTS_WINDOWS_TEMPLATES = (
     u"C:\\Users\\{user}",
+    u"S:\\",
     u"S:\\{user}",
     u"H:\\",
 )

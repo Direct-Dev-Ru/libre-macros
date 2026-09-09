@@ -9,7 +9,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.713"
+MACRO_VERSION = "3.10.714"
 import os
 import re
 import sys
@@ -44,6 +44,18 @@ def _is_windows():
         return os.name == "nt" or sys.platform.startswith("win")
     except Exception:
         return False
+
+
+def _path_mod():
+    """os.path на текущей ОС; ntpath если принудительно Windows-логика."""
+    if _is_windows():
+        try:
+            import ntpath
+
+            return ntpath
+        except Exception:
+            pass
+    return os.path
 
 
 def _fold_key(s):
@@ -98,7 +110,7 @@ def split_roots_text(text):
 
 
 def normalize_root_path(path):
-    """abspath + normpath; пусто → ''."""
+    """abspath + normpath; пусто → ''. На Windows корень диска остаётся X:\\ ."""
     p = _u(path).strip().strip(u'"').strip(u"'")
     if p == u"":
         return u""
@@ -110,15 +122,37 @@ def normalize_root_path(path):
         p = os.path.expandvars(p)
     except Exception:
         pass
+    pm = _path_mod()
+    # Windows: сохранить «H:\» (весь том). posixpath.splitdrive не видит букву диска.
+    if _is_windows():
+        drive, tail = pm.splitdrive(p.replace(u"/", u"\\"))
+        if drive and len(drive) == 2 and drive[1] == u":":
+            t = _u(tail).lstrip(u"\\/")
+            if t == u"":
+                return _u(drive) + u"\\"
     try:
-        p = os.path.abspath(p)
+        if _is_windows() and pm is not os.path:
+            # Не вызывать posix abspath для Windows-путей (склеивает с cwd Linux).
+            p = pm.normpath(p.replace(u"/", u"\\"))
+        else:
+            p = os.path.abspath(p)
+            p = os.path.normpath(p)
     except Exception:
-        pass
-    try:
-        p = os.path.normpath(p)
-    except Exception:
-        pass
-    return _u(p)
+        try:
+            p = pm.normpath(p)
+        except Exception:
+            pass
+    p = _u(p)
+    if _is_windows():
+        drive, tail = pm.splitdrive(p.replace(u"/", u"\\"))
+        if drive and len(drive) == 2 and drive[1] == u":":
+            t = _u(tail).replace(u"/", u"\\")
+            if t in (u"", u"\\", u"."):
+                return _u(drive) + u"\\"
+            if t.startswith(u"\\"):
+                return _u(drive) + t
+            return _u(drive) + u"\\" + t
+    return p
 
 
 def real_path_safe(path):
@@ -132,9 +166,21 @@ def real_path_safe(path):
     except Exception:
         pass
     try:
+        if _is_windows():
+            return normalize_root_path(p)
         return _u(os.path.normpath(os.path.abspath(p)))
     except Exception:
         return p
+
+
+def _norm_key(path):
+    """Ключ без realpath (сохраняет букву диска H:\\ при сравнении с UNC)."""
+    p = normalize_root_path(path)
+    if p == u"":
+        return u""
+    if _is_windows():
+        return _fold_key(p)
+    return p
 
 
 def _path_key(path):
@@ -147,19 +193,13 @@ def _path_key(path):
     return p
 
 
-def path_is_under_root(path, root):
-    """
-    True, если path == root или path лежит строго внутри root
-    (после realpath; на Windows без учёта регистра).
-    """
-    pk = _path_key(path)
-    rk = _path_key(root)
+def _keys_under(pk, rk):
+    """pk лежит под rk (оба уже ключи сравнения)."""
     if pk == u"" or rk == u"":
         return False
     if pk == rk:
         return True
     if _is_windows():
-        # rk/pk уже casefold; допускаем \ и /
         if rk.endswith(u"\\") or rk.endswith(u"/"):
             return pk.startswith(rk)
         return pk.startswith(rk + u"\\") or pk.startswith(rk + u"/")
@@ -167,6 +207,35 @@ def path_is_under_root(path, root):
     if rk.endswith(sep):
         return pk.startswith(rk)
     return pk.startswith(rk + sep)
+
+
+def path_is_under_root(path, root):
+    """
+    True, если path == root или path лежит строго внутри root.
+
+    Сравниваем и «буквенную» форму (H:\\…), и realpath (\\\\server\\share\\…):
+    иначе корень H:\\ после realpath → UNC, а префикс маски остаётся H:\\… —
+    и startswith ломается.
+    """
+    if _keys_under(_norm_key(path), _norm_key(root)):
+        return True
+    if _keys_under(_path_key(path), _path_key(root)):
+        return True
+    if _is_windows():
+        if _keys_under(_path_key(path), _norm_key(root)):
+            return True
+        # Буква диска корня vs буква пути (весь том H: доверен).
+        try:
+            pm = _path_mod()
+            r_drive, r_tail = pm.splitdrive(normalize_root_path(root).replace(u"/", u"\\"))
+            p_drive, _p_tail = pm.splitdrive(normalize_root_path(path).replace(u"/", u"\\"))
+            if r_drive and p_drive and _fold_key(r_drive) == _fold_key(p_drive):
+                rt = _u(r_tail).replace(u"/", u"\\").rstrip(u"\\")
+                if rt == u"" or rt == u".":
+                    return True
+        except Exception:
+            pass
+    return False
 
 
 def path_is_under_any_root(path, roots):
@@ -181,34 +250,54 @@ def glob_literal_prefix_dir(pattern):
     Каталог-префикс маски до первого сегмента с * ? [.
     Для ``C:\\Users\\me\\data\\*.xlsx`` → ``C:\\Users\\me\\data``.
     Для ``C:\\Users\\me\\**\\*.xlsx`` → ``C:\\Users\\me``.
+    Для ``H:\\SOME1\\SOME2\\*.xlsx`` → ``H:\\SOME1\\SOME2``.
     """
-    p = normalize_root_path(pattern)
-    if p == u"":
+    raw = _u(pattern).strip().strip(u'"').strip(u"'")
+    if raw == u"":
         return u""
-    drive, tail = os.path.splitdrive(p)
+    p = raw
+    try:
+        p = os.path.expanduser(p)
+    except Exception:
+        pass
+    try:
+        p = os.path.expandvars(p)
+    except Exception:
+        pass
+    p = _u(p)
+    pm = _path_mod()
+    if _is_windows():
+        p = p.replace(u"/", u"\\")
+        drive, tail = pm.splitdrive(p)
+        sep = u"\\"
+    else:
+        drive, tail = os.path.splitdrive(p)
+        sep = os.sep
+        if not drive and (p.startswith(u"/") or (os.altsep and p.startswith(os.altsep))):
+            drive = u""
+            tail = p
     parts = []
-    raw_parts = tail.replace(u"/", os.sep).split(os.sep)
+    raw_parts = _u(tail).replace(u"/", sep).split(sep)
     i = 0
     while i < len(raw_parts):
         part = raw_parts[i]
-        i += 1
+        i = i + 1
         if part == u"":
             continue
         if part == u"**" or any(c in part for c in u"*?["):
             break
         parts.append(part)
     if not parts:
-        # Маска с корня диска/ФС: C:\*.xlsx или /*.csv
         if drive:
-            return normalize_root_path(drive + os.sep)
+            return normalize_root_path(drive + sep)
         if p.startswith(os.sep) or (os.altsep and p.startswith(os.altsep)):
             return normalize_root_path(os.sep)
         return u""
-    joined = os.sep.join(parts)
+    joined = sep.join(parts)
     if drive:
-        out = drive + os.sep + joined
+        out = drive + sep + joined
     elif p.startswith(os.sep) or (os.altsep and p.startswith(os.altsep)):
-        out = os.sep + joined
+        out = sep + joined
     else:
         out = joined
     return normalize_root_path(out)

@@ -1,5 +1,5 @@
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.713"
+MACRO_VERSION = "3.10.714"
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Собрать pythonpath/todo_task_help_blob.py из todo_task_help_ru.md."""
