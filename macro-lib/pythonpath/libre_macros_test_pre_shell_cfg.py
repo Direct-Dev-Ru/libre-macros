@@ -2,7 +2,7 @@
 """Хардкод параметров тестового макроса test_pre_shell (AO subprocess)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.714"
+MACRO_VERSION = "3.10.715"
 # Аргументы subprocess.run / Popen — без shell=True.
 PRE_SHELL_ARGV = [
     u"/bin/sh",

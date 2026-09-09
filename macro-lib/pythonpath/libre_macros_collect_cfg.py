@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.714"
+MACRO_VERSION = "3.10.715"
 import re
 
 try:
@@ -796,6 +796,13 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         "mark_duplicates — как dedup Excel по выбранным столбцам",
         '[{"v":1,"fn":"удалить_дубликаты","key_columns":["ФИО"],"keep":"first"}]',
     ),
+    "группировать_строки": (
+        "JSON: key_columns[] + aggregations[{op,column,as}]; output inplace|new_sheet; "
+        "sort_keys, key_trim, key_case_sensitive, skip_empty_keys — сжатие строк (Group By)",
+        '[{"v":1,"fn":"группировать_строки","key_columns":["\'Отдел\'","\'Месяц\'"],'
+        '"aggregations":[{"op":"sum","column":"\'Сумма\'","as":"Сумма"},'
+        '{"op":"count","as":"Количество"}],"output":"inplace"}]',
+    ),
     "копировать_переместить_лист": (
         "JSON: source_sheet + copy=false|true; copy=false (по умолч.) — переместить "
         "лист before/after anchor_sheet; copy=true — копия в dest_sheet",
@@ -1029,6 +1036,9 @@ _PP_RANGE_MAP_SPEC = (
     ("переставить_столбцы", "merge_pp_range_reorder_columns"),
     ("количество_значений", "merge_pp_range_value_count"),
     ("удалить_дубликаты", "merge_pp_range_remove_duplicates"),
+    ("группировать_строки", "merge_pp_range_group_by_rows"),
+    ("group_by", "merge_pp_range_group_by_rows"),
+    ("groupby", "merge_pp_range_group_by_rows"),
     ("копировать_переместить_лист", "merge_pp_range_copy_sheet"),
     ("копирование_диапазонов", "merge_pp_range_copy_ranges"),
     ("копировать_диапазон", "merge_pp_range_copy_ranges"),
@@ -1202,6 +1212,11 @@ MERGE_FINAL_PROCESSING_REST_HINTS = {
     ),
     "количество_значений": MERGE_POSTPROCESS_RANGE_REST_HINTS["количество_значений"],
     "удалить_дубликаты": MERGE_POSTPROCESS_RANGE_REST_HINTS["удалить_дубликаты"],
+    "группировать_строки": MERGE_POSTPROCESS_RANGE_REST_HINTS["группировать_строки"],
+    "group_by": (
+        "алиас «группировать_строки»",
+        MERGE_POSTPROCESS_RANGE_REST_HINTS["группировать_строки"][1],
+    ),
     "копировать_переместить_лист": MERGE_POSTPROCESS_RANGE_REST_HINTS["копировать_переместить_лист"],
     "копирование_диапазонов": MERGE_POSTPROCESS_RANGE_REST_HINTS["копирование_диапазонов"],
     "копировать_диапазон": (
@@ -1300,6 +1315,9 @@ _FINAL_MAP_SPEC = (
     ("переставить_столбцы", "merge_final_reorder_columns"),
     ("количество_значений", "merge_final_value_count"),
     ("удалить_дубликаты", "merge_final_remove_duplicates"),
+    ("группировать_строки", "merge_final_group_by_rows"),
+    ("group_by", "merge_final_group_by_rows"),
+    ("groupby", "merge_final_group_by_rows"),
     ("копировать_переместить_лист", "merge_final_copy_sheet"),
     ("активировать_лист", "merge_final_activate_sheet"),
     ("объединить_листы_в_один", "merge_final_merge_sheets_into_one"),

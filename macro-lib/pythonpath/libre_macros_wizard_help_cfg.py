@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.714"
+MACRO_VERSION = "3.10.715"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -1096,6 +1096,29 @@ _FN_HELP_TEXTS = {
         u"Подробнее: docs/05_POSTPROCESS.md\n"
         u"\n"
     ),
+    u"группировать_строки": (
+        u"══════════════════════════════════════\n"
+        u"ГРУППИРОВАТЬ СТРОКИ (Group By)\n"
+        u"══════════════════════════════════════\n"
+        u"\n"
+        u"Сжимает таблицу до уникальных ключей + агрегаты.\n"
+        u"Не путать с группировка_по_столбцу (SUBTOTAL/outline).\n"
+        u"\n"
+        u"key_columns — столбцы ключа (columns_pick).\n"
+        u"aggregations[]: op=sum|count|min|max|avg|first|last, column, as.\n"
+        u"count без column = COUNT(*).\n"
+        u"output: inplace | new_sheet (+ dest_sheet).\n"
+        u"Флаги: sort_keys, key_trim, key_case_sensitive, skip_empty_keys.\n"
+        u"\n"
+        u"Пример:\n"
+        u"[{\"v\":1,\"fn\":\"группировать_строки\",\"key_columns\":[\"'Отдел'\"],"
+        u"\"aggregations\":[{\"op\":\"sum\",\"column\":\"'Сумма'\",\"as\":\"Сумма\"}],"
+        u"\"output\":\"inplace\"}]\n"
+        u"\n"
+        u"Алиасы: group_by, groupby, group by.\n"
+        u"Подробнее: docs/05_POSTPROCESS.md, docs/13_JSON_PARAMS.md\n"
+        u"\n"
+    ),
     u"удалить_столбцы": (
         u"══════════════════════════════════════\n"
         u"УДАЛИТЬ СТОЛБЦЫ\n"
@@ -1220,6 +1243,10 @@ _FN_HELP_ALIASES = {
     u"условное_форматирование": u"подсветка_по_порогу",
     u"unpivot": u"развернуть_столбцы",
     u"unpivot_columns": u"развернуть_столбцы",
+    u"group_by": u"группировать_строки",
+    u"groupby": u"группировать_строки",
+    u"group by": u"группировать_строки",
+    u"group_by_rows": u"группировать_строки",
     u"transpose": u"транспонировать_таблицу",
     u"transpose_table": u"транспонировать_таблицу",
     u"form_to_table": u"анкета_в_таблицу",

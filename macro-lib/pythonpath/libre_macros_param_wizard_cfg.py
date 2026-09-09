@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.714"
+MACRO_VERSION = "3.10.715"
 import re
 
 try:
@@ -187,7 +187,7 @@ _FALLBACK_PP_RANGE_CHOICES = [
     u"таблица_в_анкету",
     u"заполнение_вниз_вычислить", u"копировать_значения", u"замена_значений", u"текстовые_операции", u"переименовать_лист",
     u"переименовать_столбцы", u"переставить_столбцы",
-    u"количество_значений", u"удалить_дубликаты", u"копировать_переместить_лист",
+    u"количество_значений", u"удалить_дубликаты", u"группировать_строки", u"копировать_переместить_лист",
     u"копирование_диапазонов", u"создать_лист",
     u"сводная_таблица",
     u"удаление_листов", u"скрытие_листов",
@@ -223,7 +223,7 @@ _FALLBACK_FINAL_CHOICES = [
     u"сетка", u"тонкая_сетка", u"толстая_сетка",
     u"удалить_столбцы", u"конкатенация_столбцов", u"разделить_по_столбцам",
     u"условный_столбец", u"добавить_столбец", u"применить_формулу",
-    u"количество_значений", u"удалить_дубликаты", u"копировать_переместить_лист",
+    u"количество_значений", u"удалить_дубликаты", u"группировать_строки", u"копировать_переместить_лист",
     u"активировать_лист", u"копирование_диапазонов", u"создать_лист",
     u"отправить_по_почте",
     u"заполнение_вниз", u"заполнить_вверх",
@@ -314,6 +314,12 @@ _FALLBACK_FINAL_REST_HINTS = {
         u"JSON: key_columns, keep, output (на месте|новый лист|смещение|маркировка); "
         u"dest_cell — левый верх результата на этом же листе (A1)",
         u'[{"v":1,"fn":"удалить_дубликаты","key_columns":["ФИО"],"keep":"first"}]',
+    ),
+    u"группировать_строки": (
+        u"JSON: key_columns + aggregations[{op,column,as}]; output inplace|new_sheet; "
+        u"сжимает строки до уникальных ключей (не путать с группировка_по_столбцу / SUBTOTAL)",
+        u'[{"v":1,"fn":"группировать_строки","key_columns":["\'Отдел\'"],'
+        u'"aggregations":[{"op":"sum","column":"\'Сумма\'","as":"Сумма"}],"output":"inplace"}]',
     ),
     u"копировать_переместить_лист": (
         u"JSON: source_sheet + copy (по умолчанию false=перемещение).\n"
@@ -624,6 +630,12 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u"JSON: key_columns, keep, output (на месте|новый лист|смещение|маркировка), "
         u"dest_cell — якорь A1 на этом же листе для «смещение»",
         u'[{"v":1,"fn":"удалить_дубликаты","key_columns":["ФИО"],"keep":"first"}]',
+    ),
+    u"группировать_строки": (
+        u"JSON: key_columns + aggregations[{op,column,as}]; output inplace|new_sheet — "
+        u"сжатие строк (Group By); не путать с группировка_по_столбцу",
+        u'[{"v":1,"fn":"группировать_строки","key_columns":["\'Отдел\'"],'
+        u'"aggregations":[{"op":"sum","column":"\'Сумма\'","as":"Сумма"}],"output":"inplace"}]',
     ),
     u"копировать_переместить_лист": (
         u"JSON: source_sheet + copy=false|true; false — перемещение before/after anchor_sheet, true — копия в dest_sheet",
@@ -1881,6 +1893,33 @@ UNPIVOT_OUTPUT_LABEL = {code: label for code, label in UNPIVOT_OUTPUT_CHOICES}
 UNPIVOT_OUTPUT_CODE = {label.casefold(): code for code, label in UNPIVOT_OUTPUT_CHOICES}
 for _up_out_code, _up_out_label in UNPIVOT_OUTPUT_CHOICES:
     UNPIVOT_OUTPUT_CODE[_up_out_code.casefold()] = _up_out_code
+
+GROUP_BY_ROWS_OP_CHOICES = (
+    (u"sum", u"Сумма"),
+    (u"count", u"Количество"),
+    (u"min", u"Минимум"),
+    (u"max", u"Максимум"),
+    (u"avg", u"Среднее"),
+    (u"first", u"Первое"),
+    (u"last", u"Последнее"),
+)
+GROUP_BY_ROWS_OP_LABEL = {code: label for code, label in GROUP_BY_ROWS_OP_CHOICES}
+GROUP_BY_ROWS_OP_CODE = {label.casefold(): code for code, label in GROUP_BY_ROWS_OP_CHOICES}
+for _gbr_op_code, _gbr_op_label in GROUP_BY_ROWS_OP_CHOICES:
+    GROUP_BY_ROWS_OP_CODE[_gbr_op_code.casefold()] = _gbr_op_code
+GROUP_BY_ROWS_OP_CODE[u"сумма"] = u"sum"
+GROUP_BY_ROWS_OP_CODE[u"кол-во"] = u"count"
+GROUP_BY_ROWS_OP_CODE[u"количество"] = u"count"
+GROUP_BY_ROWS_OP_CODE[u"минимум"] = u"min"
+GROUP_BY_ROWS_OP_CODE[u"максимум"] = u"max"
+GROUP_BY_ROWS_OP_CODE[u"среднее"] = u"avg"
+GROUP_BY_ROWS_OP_CODE[u"average"] = u"avg"
+GROUP_BY_ROWS_OP_CODE[u"первый"] = u"first"
+GROUP_BY_ROWS_OP_CODE[u"последний"] = u"last"
+
+GROUP_BY_ROWS_OUTPUT_CHOICES = UNPIVOT_OUTPUT_CHOICES
+GROUP_BY_ROWS_OUTPUT_LABEL = UNPIVOT_OUTPUT_LABEL
+GROUP_BY_ROWS_OUTPUT_CODE = UNPIVOT_OUTPUT_CODE
 
 TRANSPOSE_OUTPUT_CHOICES = (
     (u"inplace", u"На месте"),
@@ -3625,6 +3664,83 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "label": u"Учитывать регистр",
                 "type": "bool",
                 "default": False,
+            },
+        ),
+    },
+    u"группировать_строки": {
+        "title": u"Группировать строки (Group By)",
+        "hint": (
+            u"Сжимает таблицу до уникальных ключей и считает агрегаты (SUM/COUNT/…).\n"
+            u"Не путать с «группировка_по_столбцу» (SUBTOTAL/outline — строки не удаляются).\n"
+            u"Столбцы ключа — из заголовков ('кавычки'). Несколько агрегатов — в JSON "
+            u"поле aggregations[] (визард задаёт первый; остальные допишите в C).\n"
+            u"count без столбца = COUNT(*). «Новый лист» — dest_sheet с A1."
+        ),
+        "hint_lines": 6,
+        "form_bottom_pad": 28,
+        "dialog_fit_content": True,
+        "fields": (
+            {
+                "id": "key_columns",
+                "label": u"Столбцы ключа",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"Отдел",
+            },
+            {
+                "id": "agg_op",
+                "label": u"Агрегат (op)",
+                "type": "combo",
+                "choices": tuple(label for _code, label in GROUP_BY_ROWS_OP_CHOICES),
+                "default": u"Сумма",
+            },
+            {
+                "id": "agg_column",
+                "label": u"Столбец агрегата",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"Сумма",
+            },
+            {
+                "id": "agg_as",
+                "label": u"Имя столбца результата",
+                "default": u"Сумма",
+            },
+            {
+                "id": "output",
+                "label": u"Режим вывода",
+                "type": "combo",
+                "choices": tuple(label for _code, label in GROUP_BY_ROWS_OUTPUT_CHOICES),
+                "default": u"На месте",
+            },
+            {
+                "id": "dest_sheet",
+                "label": u"Лист результата (новый лист)",
+                "default": u"Свод",
+            },
+            {
+                "id": "sort_keys",
+                "label": u"Сортировать по ключам",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "key_trim",
+                "label": u"Обрезать пробелы ключа",
+                "type": "bool",
+                "default": True,
+            },
+            {
+                "id": "key_case_sensitive",
+                "label": u"Учитывать регистр ключа",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "skip_empty_keys",
+                "label": u"Пропускать пустые ключи",
+                "type": "bool",
+                "default": True,
             },
         ),
     },

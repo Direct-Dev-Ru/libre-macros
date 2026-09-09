@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.714"
+MACRO_VERSION = "3.10.715"
 import json
 import re
 
@@ -35,6 +35,11 @@ _FN_ALIASES = {
     "normalize_text": "текстовые_операции",
     "убрать_повторы_строк": "удалить_дубликаты",
     "dedup": "удалить_дубликаты",
+    "group_by": "группировать_строки",
+    "group by": "группировать_строки",
+    "groupby": "группировать_строки",
+    "group_by_rows": "группировать_строки",
+    "сжать_строки": "группировать_строки",
     "разделить_столбец": "разделить_по_столбцам",
     "split_column": "разделить_по_столбцам",
     "разбить_столбец": "разделить_по_столбцам",
@@ -120,6 +125,7 @@ _SHEET_BLOCK_FORM_FNS = frozenset(
         "переставить_столбцы",
         "количество_значений",
         "удалить_дубликаты",
+        "группировать_строки",
         "копировать_переместить_лист",
         "активировать_лист",
         "копирование_диапазонов",
@@ -301,6 +307,8 @@ def _normalize_block_for_fn(fn_key, block):
         return _normalize_value_count_block(block)
     if fn_key == "удалить_дубликаты":
         return _normalize_remove_duplicates_block(block)
+    if fn_key == "группировать_строки":
+        return _normalize_group_by_rows_block(block)
     if fn_key == "копировать_переместить_лист":
         return _normalize_copy_sheet_block(block)
     if fn_key == "активировать_лист":
@@ -510,6 +518,8 @@ def _decode_json_blocks(fn_key, items):
         return [_normalize_value_count_block(b) for b in items]
     if fn_key == "удалить_дубликаты":
         return [_normalize_remove_duplicates_block(b) for b in items]
+    if fn_key == "группировать_строки":
+        return [_normalize_group_by_rows_block(b) for b in items]
     if fn_key == "копировать_переместить_лист":
         return [_normalize_copy_sheet_block(b) for b in items]
     if fn_key == "активировать_лист":
@@ -3538,6 +3548,143 @@ def _normalize_value_count_block(block):
         out["case_sensitive"] = bool(out.get("case_sensitive"))
     else:
         out["case_sensitive"] = False
+    return _attach_sheet(out, out.get("sheet"))
+def _normalize_group_by_rows_block(block):
+    out = _normalize_block("группировать_строки", block)
+    out["key_columns"] = _normalize_column_token_list(out.get("key_columns"))
+    out.pop("columns", None)
+    aggs = []
+    raw_aggs = out.get("aggregations")
+    if isinstance(raw_aggs, (list, tuple)):
+        for item in raw_aggs:
+            if not isinstance(item, dict):
+                continue
+            op = unicode(
+                item.get("op") or item.get("fn") or item.get("agg_fn") or u"sum"
+            ).strip().casefold()
+            op_aliases = {
+                u"sum": u"sum",
+                u"сумма": u"sum",
+                u"count": u"count",
+                u"количество": u"count",
+                u"кол-во": u"count",
+                u"min": u"min",
+                u"минимум": u"min",
+                u"max": u"max",
+                u"максимум": u"max",
+                u"avg": u"avg",
+                u"average": u"avg",
+                u"среднее": u"avg",
+                u"first": u"first",
+                u"первый": u"first",
+                u"last": u"last",
+                u"последний": u"last",
+            }
+            op = op_aliases.get(op, u"sum")
+            col = item.get("column")
+            if col is None:
+                col = item.get("columns")
+            if isinstance(col, (list, tuple)):
+                col_list = _normalize_column_token_list(col)
+                col = col_list[0] if col_list else u""
+            else:
+                col_list = _normalize_column_token_list([col] if col else [])
+                col = col_list[0] if col_list else u""
+            as_name = unicode(
+                item.get("as") or item.get("name") or item.get("alias") or u""
+            ).strip()
+            if as_name == u"":
+                if op == u"count" and col == u"":
+                    as_name = u"Количество"
+                elif col != u"":
+                    as_name = u"%s_%s" % (op, unicode(col).strip(u"'"))
+                else:
+                    as_name = op
+            entry = {u"op": op, u"as": as_name}
+            if col != u"":
+                entry[u"column"] = col
+            aggs.append(entry)
+    if not aggs:
+        op = unicode(out.get("agg_op") or out.get("op") or out.get("agg_fn") or u"sum").strip().casefold()
+        op_aliases = {
+            u"sum": u"sum",
+            u"сумма": u"sum",
+            u"count": u"count",
+            u"количество": u"count",
+            u"кол-во": u"count",
+            u"min": u"min",
+            u"минимум": u"min",
+            u"max": u"max",
+            u"максимум": u"max",
+            u"avg": u"avg",
+            u"average": u"avg",
+            u"среднее": u"avg",
+            u"first": u"first",
+            u"первый": u"first",
+            u"last": u"last",
+            u"последний": u"last",
+        }
+        op = op_aliases.get(op, u"sum")
+        col = out.get("agg_column") or out.get("column") or u""
+        if isinstance(col, (list, tuple)):
+            col_list = _normalize_column_token_list(col)
+            col = col_list[0] if col_list else u""
+        else:
+            col_list = _normalize_column_token_list([col] if col else [])
+            col = col_list[0] if col_list else u""
+        as_name = unicode(out.get("agg_as") or out.get("as") or u"").strip()
+        if as_name == u"":
+            if op == u"count" and col == u"":
+                as_name = u"Количество"
+            elif col != u"":
+                as_name = u"%s_%s" % (op, unicode(col).strip(u"'"))
+            else:
+                as_name = op
+        entry = {u"op": op, u"as": as_name}
+        if col != u"":
+            entry[u"column"] = col
+        aggs.append(entry)
+    out["aggregations"] = aggs
+    out.pop("agg_op", None)
+    out.pop("agg_column", None)
+    out.pop("agg_as", None)
+    out.pop("op", None)
+    out.pop("column", None)
+    out.pop("as", None)
+    out.pop("agg_fn", None)
+    output = unicode(out.get("output") or u"inplace").strip().casefold()
+    if output not in (u"inplace", u"new_sheet"):
+        output = u"inplace"
+    out["output"] = output
+    dest_sheet = unicode(
+        out.get("dest_sheet") or out.get("dest") or out.get("target_sheet") or u""
+    ).strip()
+    if dest_sheet != u"":
+        out["dest_sheet"] = dest_sheet
+    else:
+        out.pop("dest_sheet", None)
+    out.pop("dest", None)
+    out.pop("target_sheet", None)
+    if "sort_keys" in out:
+        out["sort_keys"] = bool(out.get("sort_keys"))
+    else:
+        out["sort_keys"] = False
+    if "key_trim" in out:
+        out["key_trim"] = bool(out.get("key_trim"))
+    else:
+        out["key_trim"] = True
+    if "key_case_sensitive" in out:
+        out["key_case_sensitive"] = bool(out.get("key_case_sensitive"))
+    else:
+        out["key_case_sensitive"] = False
+    if "skip_empty_keys" in out:
+        out["skip_empty_keys"] = bool(out.get("skip_empty_keys"))
+    else:
+        out["skip_empty_keys"] = True
+    if "as_values" in out:
+        out["as_values"] = bool(out.get("as_values"))
+    else:
+        out["as_values"] = True
     return _attach_sheet(out, out.get("sheet"))
 def _normalize_remove_duplicates_block(block):
     out = _normalize_block("удалить_дубликаты", block)

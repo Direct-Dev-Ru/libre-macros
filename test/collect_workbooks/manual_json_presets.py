@@ -179,6 +179,19 @@ PRESET = {
         trim=True,
         case_sensitive=False,
     ),
+    "группировать_строки": jone(
+        "группировать_строки",
+        key_columns=["'Отдел'", "'Месяц'"],
+        aggregations=[
+            {"op": "sum", "column": "'Сумма'", "as": "Сумма"},
+            {"op": "count", "as": "Количество"},
+        ],
+        output="inplace",
+        sort_keys=False,
+        key_trim=True,
+        key_case_sensitive=False,
+        skip_empty_keys=True,
+    ),
     "копировать_лист": jone(
         "копировать_лист",
         source_sheet="Шаблон",
@@ -307,4 +320,6 @@ SHEET_FN_ALIASES = {
     "условное_форматирование": "подсветка_по_порогу",
     "пропуск_пустых_строк": "удаление_строк",
     "раскрасить": "раскрасить_блоки",
+    "group_by": "группировать_строки",
+    "groupby": "группировать_строки",
 }

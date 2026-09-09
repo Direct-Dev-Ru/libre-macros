@@ -474,6 +474,7 @@ def fn(doc, sheet, data_range, header_row_range, color_name):
 | `lm_pp_range_pivot_table` | `сводная_таблица` | JSON макета (визард) | Новый лист со сводной таблицей по данным диапазона |
 | `lm_pp_range_value_count` | `количество_значений` | JSON: `new_column`, `key_columns` | Число строк с тем же ключом в диапазоне |
 | `lm_pp_range_remove_duplicates` | `удалить_дубликаты` | JSON: `key_columns`, `keep`, `output`, … | Удалить повторы строк по ключу |
+| `lm_pp_range_group_by_rows` | `группировать_строки` | JSON: `key_columns`, `aggregations[]`, `output`, … | Сжать строки по ключам + агрегаты (Group By) |
 | `lm_pp_range_copy_sheet` | `копировать_лист` | JSON: `source_sheet`, `dest_sheet` | Полная копия вкладки в книге |
 | `lm_pp_range_copy_ranges` / `lm_final_copy_ranges` | `копирование_диапазонов` | JSON: `source_*` → `dest_*`, `mode`, `content`, … | Блок ячеек между листами (replace/insert) |
 

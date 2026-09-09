@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.714"
+MACRO_VERSION = "3.10.715"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -24736,6 +24736,13 @@ def lm_pp_range_unpivot_columns(doc, sheet, data_range, header_row_range, *extra
     return _fn(doc, sheet, data_range, header_row_range, *extra_args)
 
 
+def lm_pp_range_group_by_rows(doc, sheet, data_range, header_row_range, *extra_args):
+    """RANGE: группировать_строки / group by (lazy import)."""
+    from libre_macros_group_by_rows_lib import lm_pp_range_group_by_rows as _fn
+
+    return _fn(doc, sheet, data_range, header_row_range, *extra_args)
+
+
 def lm_pp_range_transpose_table(doc, sheet, data_range, header_row_range, *extra_args):
     """RANGE: транспонировать_таблицу (lazy import)."""
     from libre_macros_transpose_lib import lm_pp_range_transpose_table as _fn
@@ -24792,6 +24799,7 @@ from libre_macros_values_lib import (  # noqa: E402
     lm_final_freeze_header,
     lm_final_grid,
     lm_final_group_by_column,
+    lm_final_group_by_rows,
     lm_final_header_plus_height,
     lm_final_highlight_threshold,
     lm_final_indent,
@@ -24868,6 +24876,7 @@ LM_PP_PUBLIC_NAMES = (
     "lm_pp_range_fill_down_empty",
     "lm_pp_range_fill_up_empty",
     "lm_pp_range_unpivot_columns",
+    "lm_pp_range_group_by_rows",
     "lm_pp_range_transpose_table",
     "lm_pp_range_form_to_table",
     "lm_pp_range_table_to_form",

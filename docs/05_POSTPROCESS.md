@@ -785,6 +785,8 @@ Legacy (без JSON): имена через `,` / `;`. JSON с `sheets` обра
 
 **Когда вызывать:** Обязательно range-шагом **ПЕРЕД** «полосы_по_пути» в POSTPROCESS_ROW.
 
+> Для **сжатия** строк с агрегатами (без outline/SUBTOTAL) используйте `группировать_строки`.
+
 ---
 
 ### 22. `группировка_по_столбцу` — merge_pp_range_group_by_column
@@ -861,6 +863,39 @@ Legacy (без JSON): имена через `,` / `;`. JSON с `sheets` обра
 ```
 
 Ключ и нормализация — как у `количество_значений`. Опции: `keep` (`first`|`last`), `pre_sort`, `output` (`inplace`|`new_sheet`|`offset`), `mark_duplicates`, `exclude_columns`, `compare_as`, `empty_key_policy`. Финал: `merge_final_remove_duplicates`. В `Постобработка_xml` (v1) — только UNO.
+
+---
+
+### `группировать_строки` — merge_pp_range_group_by_rows
+
+**Назначение:** Сжать таблицу до уникальных ключей и посчитать агрегаты (аналог Power Query *Group By*). В отличие от `группировка_по_столбцу` (SUBTOTAL/outline), **уменьшает число строк**.
+
+**JSON в C:**
+
+```json
+[{"v":1,"fn":"группировать_строки",
+  "key_columns":["'Отдел'","'Месяц'"],
+  "aggregations":[
+    {"op":"sum","column":"'Сумма'","as":"Сумма"},
+    {"op":"count","as":"Количество"}
+  ],
+  "output":"inplace",
+  "sort_keys":false,
+  "key_trim":true,
+  "key_case_sensitive":false,
+  "skip_empty_keys":true}]
+```
+
+| Поле | Описание |
+|------|----------|
+| `key_columns` | Столбцы ключа (минимум 1); `'…'` = точное имя |
+| `aggregations` | `[{op, column?, as}]`; `op`: `sum`/`count`/`min`/`max`/`avg`/`first`/`last` |
+| `column` у count | Пусто → COUNT(*); задан → непустые значения |
+| `output` | `inplace` (по умолч.) или `new_sheet` (+ `dest_sheet`) |
+| `sort_keys` | Сортировать результат по ключам (по умолч. `false`) |
+| `key_trim` / `key_case_sensitive` / `skip_empty_keys` | Нормализация ключа (по умолч. trim+casefold; `skip_empty_keys` — пропуск, если **любая** часть ключа пуста) |
+
+Алиасы fn: `group_by`, `group by`, `groupby`. Финал: `merge_final_group_by_rows`. Ручной сценарий: `17_group_by_rows.xltx`.
 
 ---
 
@@ -1583,6 +1618,7 @@ Legacy-пары:
 | `пропуск_пустых_строк` | merge_pp_range_skip_empty_rows | `столбцы` или формула «пустая» (ИСТИНА → удалить) |
 | `сброс_стрипов` | merge_pp_range_init_path_stripe_state | — |
 | `группировка_по_столбцу` | merge_pp_range_group_by_column | JSON: `marker`, `agg_*` / `aggs[]`; склейка подряд с одним marker+sheet |
+| `группировать_строки` | merge_pp_range_group_by_rows | JSON: `key_columns`, `aggregations[]`, `output`; сжатие строк (Group By) |
 | `закрепить_заголовок` | merge_pp_range_freeze_header | — |
 | `ширина_столбцов` | merge_pp_range_set_column_widths | `N` мм, `столбцы / N` (пусто = 30 мм) |
 | `автофильтр` | merge_pp_range_add_filter | — |

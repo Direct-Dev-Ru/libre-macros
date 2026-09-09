@@ -464,6 +464,40 @@
 
 Алиасы fn: `убрать_повторы_строк`, `dedup`.
 
+### `группировать_строки`
+
+Сжатие таблицы по ключам с агрегатами (Group By). Не путать с `группировка_по_столбцу` (SUBTOTAL).
+
+```json
+[{"v":1,"fn":"группировать_строки",
+  "key_columns":["'Отдел'","'Месяц'"],
+  "aggregations":[
+    {"op":"sum","column":"'Сумма'","as":"Сумма"},
+    {"op":"count","as":"Количество"}
+  ],
+  "output":"inplace",
+  "sort_keys":false,
+  "key_trim":true,
+  "key_case_sensitive":false,
+  "skip_empty_keys":true}]
+```
+
+| Поле | Описание |
+|------|----------|
+| `key_columns` | Столбцы ключа (минимум 1) |
+| `aggregations` | Массив `{op, column?, as}`; `op`: `sum`/`count`/`min`/`max`/`avg`/`first`/`last` |
+| `column` | Для `count` можно опустить (= COUNT(*)); иначе обязателен |
+| `as` | Имя выходного столбца |
+| `output` | `inplace` (по умолч.) или `new_sheet` |
+| `dest_sheet` | Для `new_sheet` |
+| `sort_keys` | Сортировка результата по ключам (по умолч. `false`) |
+| `key_trim` | Trim строковых ключей (по умолч. `true`) |
+| `key_case_sensitive` | Учёт регистра ключей (по умолч. `false`) |
+| `skip_empty_keys` | Пропуск строк, у которых **любая** часть ключа пуста (по умолч. `true`) |
+| `sheet` | Лист результата; пусто — все листы |
+
+Алиасы fn: `group_by`, `group by`, `groupby`.
+
 ### `копировать_лист`
 
 Полная копия вкладки в той же книге (`Sheets.copyByName`).

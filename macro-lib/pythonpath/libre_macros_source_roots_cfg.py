@@ -6,7 +6,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.714"
+MACRO_VERSION = "3.10.715"
 # Режим по умолчанию: strict | off
 #   strict — путь/glob только под разрешёнными корнями
 #   off    — проверка выключена (как раньше)

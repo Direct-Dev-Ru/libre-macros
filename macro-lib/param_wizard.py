@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.714"
+MACRO_VERSION = "3.10.715"
 import ast
 import glob
 import json
@@ -9861,6 +9861,16 @@ def _block_field_to_text(block, field_id, fn_key=None):
                 raw, unicode(block.get('output') or u'inplace')
             )
         if fk in (
+            u'группировать_строки'.casefold(),
+            u'group_by',
+            u'groupby',
+            u'group by',
+            u'group_by_rows',
+        ):
+            return _pw_cfg.GROUP_BY_ROWS_OUTPUT_LABEL.get(
+                raw, unicode(block.get('output') or u'inplace')
+            )
+        if fk in (
             u'транспонировать_таблицу'.casefold(),
             u'transpose',
             u'transpose_table',
@@ -9919,6 +9929,28 @@ def _block_field_to_text(block, field_id, fn_key=None):
     if field_id == 'agg_fn':
         raw = unicode(block.get(field_id) or u'sum').strip().casefold()
         return _pw_cfg.GROUP_AGG_FN_LABEL.get(raw, unicode(block.get(field_id) or u'sum'))
+    if field_id == 'agg_op':
+        aggs = block.get('aggregations')
+        raw = u''
+        if isinstance(aggs, (list, tuple)) and len(aggs) > 0 and isinstance(aggs[0], dict):
+            raw = unicode(aggs[0].get('op') or u'').strip()
+        if raw == u'':
+            raw = unicode(block.get('agg_op') or block.get('op') or u'sum').strip()
+        raw_cf = raw.casefold()
+        return _pw_cfg.GROUP_BY_ROWS_OP_LABEL.get(raw_cf, raw or u'Сумма')
+    if field_id == 'agg_column':
+        aggs = block.get('aggregations')
+        if isinstance(aggs, (list, tuple)) and len(aggs) > 0 and isinstance(aggs[0], dict):
+            col = aggs[0].get('column')
+            if isinstance(col, (list, tuple)):
+                return unicode(col[0] if col else u'').strip()
+            return unicode(col or u'').strip()
+        return unicode(block.get('agg_column') or block.get('column') or u'').strip()
+    if field_id == 'agg_as':
+        aggs = block.get('aggregations')
+        if isinstance(aggs, (list, tuple)) and len(aggs) > 0 and isinstance(aggs[0], dict):
+            return unicode(aggs[0].get('as') or aggs[0].get('name') or u'').strip()
+        return unicode(block.get('agg_as') or block.get('as') or u'').strip()
     if fn_key == u'зебра_диапазон' and field_id in ('header', 'even', 'odd'):
         roles = block.get('roles') or {}
         spec = roles.get(field_id) or {}
@@ -10301,6 +10333,12 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
         if code in _pw_cfg.GROUP_AGG_FN_LABEL:
             return code
         return u'sum'
+    if field_id == 'agg_op':
+        t = unicode(text or u'').strip().casefold()
+        code = _pw_cfg.GROUP_BY_ROWS_OP_CODE.get(t, t)
+        if code in _pw_cfg.GROUP_BY_ROWS_OP_LABEL:
+            return code
+        return u'sum'
     if field_id == 'output':
         t = unicode(text or u'').strip().casefold()
         if unicode(fn_key or u'').casefold() in (
@@ -10309,6 +10347,17 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
             u'unpivot_columns',
         ):
             code = _pw_cfg.UNPIVOT_OUTPUT_CODE.get(t, t)
+            if code in (u'inplace', u'new_sheet'):
+                return code
+            return u'inplace'
+        if unicode(fn_key or u'').casefold() in (
+            u'группировать_строки'.casefold(),
+            u'group_by',
+            u'groupby',
+            u'group by',
+            u'group_by_rows',
+        ):
+            code = _pw_cfg.GROUP_BY_ROWS_OUTPUT_CODE.get(t, t)
             if code in (u'inplace', u'new_sheet'):
                 return code
             return u'inplace'

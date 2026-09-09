@@ -65,6 +65,10 @@ from generate_transpose_sources import (
     OUT_XLSX as TRANSPOSE_XLSX,
     generate_transpose_sources,
 )
+from generate_group_by_rows_sources import (
+    OUT_XLSX as GROUP_BY_ROWS_XLSX,
+    generate_group_by_rows_sources,
+)
 from help_sheet_content import (
     HELP_SHEET_NAME,
     collect_help_sheet_content,
@@ -105,6 +109,10 @@ def abs_form_source():
 
 def abs_transpose_source():
     return TRANSPOSE_XLSX
+
+
+def abs_group_by_rows_source():
+    return GROUP_BY_ROWS_XLSX
 
 
 def vlookup_row(tier):
@@ -1115,6 +1123,63 @@ def scenario_16_transpose_table():
     ]
 
 
+def scenario_17_group_by_rows():
+    """Копирование → группировать_строки (inplace + new_sheet)."""
+    import json
+
+    j_inplace = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "группировать_строки",
+                "sheet": "Продажи",
+                "key_columns": ["'Отдел'", "'Месяц'"],
+                "aggregations": [
+                    {"op": "sum", "column": "'Сумма'", "as": "Сумма"},
+                    {"op": "count", "as": "Количество"},
+                ],
+                "output": "inplace",
+                "sort_keys": True,
+                "key_trim": True,
+                "key_case_sensitive": False,
+                "skip_empty_keys": True,
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    j_new = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "группировать_строки",
+                "sheet": "Продажи",
+                "key_columns": ["'Отдел'"],
+                "aggregations": [
+                    {"op": "sum", "column": "'Сумма'", "as": "Сумма_отдел"},
+                    {"op": "count", "column": "'ID'", "as": "Строк_с_ID"},
+                ],
+                "output": "new_sheet",
+                "dest_sheet": "Свод_по_отделу",
+                "sort_keys": True,
+                "skip_empty_keys": True,
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return [
+        ("Файлы-Источники", (abs_group_by_rows_source(),)),
+        ("Листы", ("Продажи",)),
+    ] + block_rows(start_row="2", header_row="1") + [
+        ("Режим", ("Копирование листов",)),
+        (P_RANGE, "группировать_строки", j_new),
+        (P_RANGE, "группировать_строки", j_inplace),
+        pp_range("тонкая_сетка"),
+        pp_range("авто_ширина"),
+    ]
+
+
 VLOOKUP_SCENARIOS = [
     ("11_vlookup_1to1_low.xltx",) + scenario_vlookup("1to1_low") + (5,),
     ("11_vlookup_1to1_middle.xltx",) + scenario_vlookup("1to1_middle") + (5,),
@@ -1166,6 +1231,12 @@ SCENARIOS = [
         "16_transpose_table.xltx",
         "Сценарий 16: транспонировать_таблицу (обычный + headers_from_column).",
         scenario_16_transpose_table(),
+        3,
+    ),
+    (
+        "17_group_by_rows.xltx",
+        "Сценарий 17: группировать_строки (new_sheet + inplace; sum/count).",
+        scenario_17_group_by_rows(),
         3,
     ),
 ] + VLOOKUP_SCENARIOS
@@ -1248,6 +1319,22 @@ def write_manual_check():
             "блоки через пустую строку, шапка блока Бланк/Дата |",
             "",
             "В логе: `анкета_в_таблицу` / `таблица_в_анкету` — ok, без ошибок JSON.",
+            "",
+            "## 16_transpose_table.xltx",
+            "",
+            "Источник `sources/transpose/source_transpose.xlsx`, режим «Копирование листов».",
+            "Ожидание: листы `Матрица_T`, `Метки_T`, `Матрица_H`.",
+            "",
+            "## 17_group_by_rows.xltx",
+            "",
+            "Источник `sources/group_by_rows/source_group_by_rows.xlsx`, режим «Копирование листов».",
+            "",
+            "1. `группировать_строки` → лист `Свод_по_отделу` (ключ Отдел, sum+count).",
+            "2. `группировать_строки` inplace на `Продажи` (ключ Отдел+Месяц): "
+            "4 группы (МСУЗ/Янв 160×3, МСУЗ/Фев 200×1, ИТ/Янв 105×3, Склад/Фев 100×3); "
+            "пустые ключи пропущены.",
+            "",
+            "В логе: `группировать_строки` — ok, групп/пропущено без ошибок JSON.",
         ]
     )
     lines.append("")
@@ -1362,6 +1449,11 @@ def main():
         action="store_true",
         help="Не пересоздавать sources/transpose/source_transpose.xlsx",
     )
+    ap.add_argument(
+        "--skip-group-by-rows",
+        action="store_true",
+        help="Не пересоздавать sources/group_by_rows/source_group_by_rows.xlsx",
+    )
     ap.add_argument("--odf", action="store_true", help="Конвертировать в workbooks/ODF/*.ots")
     args = ap.parse_args()
     if not args.skip_sources:
@@ -1380,6 +1472,9 @@ def main():
     if not args.skip_transpose:
         print("Источники transpose:")
         generate_transpose_sources()
+    if not args.skip_group_by_rows:
+        print("Источники group_by_rows:")
+        generate_group_by_rows_sources()
     for fn, comment, body, cols in SCENARIOS:
         path = write_workbook(fn, comment, body, value_cols=cols)
         print("  %s" % path)

@@ -499,6 +499,7 @@ Legacy B–F (если ещё записан):
 | `переставить_столбцы` | — | блок (`sheet`, `columns`, `position`, `relative_column`) |
 | `количество_значений` | — | блок (`new_column`, `key_columns`, …) |
 | `удалить_дубликаты` | `dedup`, `убрать_повторы_строк` | блок (`key_columns`, `keep`, `output`, …) |
+| `группировать_строки` | `group_by`, `groupby`, `group by` | блок (`key_columns`, `aggregations[]`, `output`, …) — сжатие строк |
 | `копировать_лист` | `копировать_переместить_лист` | блок (`source_sheet`, `dest_sheet`) |
 | `копирование_диапазонов` | `копировать_диапазон`, `copy_ranges`, `copy_range`, `вставить_диапазон` | блок (`source_sheet`, `source_range` / rows/cols, `dest_sheet(s)`, `dest_cell`, `mode`, `insert_axis`, `content`, `with_formatting`, `clear_source`, `create_missing_dest`, `involve_dest`, `header_row`) — см. [13_JSON_PARAMS.md](13_JSON_PARAMS.md) |
 | `транспонировать_таблицу` | `transpose`, `transpose_table` | блок (`output`, `dest_sheet` / `dest_cell`, `range`, `header_row`, `columns`, `headers_from_column`, `header_column`, `result_headers`, `skip_*`, `as_values`) — [13_JSON_PARAMS.md](13_JSON_PARAMS.md), [05_POSTPROCESS.md](05_POSTPROCESS.md) |
