@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.711"
+MACRO_VERSION = "3.10.712"
 import re
 
 try:
@@ -4256,11 +4256,18 @@ _VLOOKUP_HELP_TEXT = (
     u"\n"
     u"• «Колонки в Лев. из Прав. (←)» (extract_columns) — что взять\n"
     u"  с правой таблицы и дописать справа на левый лист.\n"
+    u"• Режим колонок (extract_mode):\n"
+    u"    Новые колонки (new) — по умолчанию: создать столбцы справа;\n"
+    u"    Заменить значения (replace) — писать в СУЩЕСТВУЮЩИЕ колонки\n"
+    u"      слева (суффикс _R не применяется); первый матч очищает ячейку,\n"
+    u"      дальше — склейка через перевод строки; нет колонки → как new;\n"
+    u"    Объединить значения (merge) — как replace, но первый матч\n"
+    u"      не стирает текущее значение слева, а дописывает через \\n.\n"
     u"• «Колонки в Прав. из Лев. (→)» (extract_columns_right) — только\n"
     u"  при join_type=full: зеркальный перенос на правый лист.\n"
     u"• Переименование на приёмнике:\n"
     u"    'ФИО'              — то же имя, что у источника;\n"
-    u"    'ФИО -> Новое'     — или 'ФИО = Новое' — новое имя колонки;\n"
+    u"    'ФИО -> Новое'     — или 'ФИО = Новое' — имя колонки на левом;\n"
     u"    B / 2              — столбец по букве/номеру.\n"
     u"\n"
     u"Пример:\n"
@@ -4293,7 +4300,12 @@ _VLOOKUP_HELP_TEXT = (
     u"  перед сравнением (слева и справа).\n"
     u"• Суффикс _R (column_suffix) — к именам новых колонок с правой\n"
     u"  добавлять суффикс, чтобы не конфликтовать с уже существующими\n"
-    u"  на левом (по умолчанию Да).\n"
+    u"  на левом (по умолчанию Да). В режимах replace/merge для уже\n"
+    u"  найденных колонок слева суффикс игнорируется.\n"
+    u"• Кол-во Совпадений (match_count) — после колонок извлечения\n"
+    u"  добавить столбец «Кол-во Совпадений» с числом матчей справа\n"
+    u"  (0 / 1 / N). В режиме «Дубли» одно и то же N на каждой строке\n"
+    u"  дубля; в «Мульти» — одно значение в ячейке. По умолчанию Выкл.\n"
     u"\n"
     u"══════════════════════════════════════\n"
     u"ПРИМЕР JSON (колонка C)\n"
@@ -4372,6 +4384,22 @@ for _alias in (u"первая", u"first_row", u"первое"):
     _VLOOKUP_MULTI_MATCH_CODE[_alias] = u"first"
 for _alias in (u"последняя", u"last_row", u"последнее"):
     _VLOOKUP_MULTI_MATCH_CODE[_alias] = u"last"
+# Режим записи колонок из правой таблицы в левую (JSON: extract_mode).
+_VLOOKUP_EXTRACT_MODE_CHOICES = (
+    (u"new", u"Новые колонки"),
+    (u"replace", u"Заменить значения"),
+    (u"merge", u"Объединить значения"),
+)
+_VLOOKUP_EXTRACT_MODE_LABEL = {code: label for code, label in _VLOOKUP_EXTRACT_MODE_CHOICES}
+_VLOOKUP_EXTRACT_MODE_CODE = {label.casefold(): code for code, label in _VLOOKUP_EXTRACT_MODE_CHOICES}
+for _alias in (u"новые", u"new_columns", u"новые_колонки", u"создать"):
+    _VLOOKUP_EXTRACT_MODE_CODE[_alias] = u"new"
+for _alias in (u"заменить", u"replace_values", u"замена", u"overwrite"):
+    _VLOOKUP_EXTRACT_MODE_CODE[_alias] = u"replace"
+for _alias in (u"объединить", u"merge_values", u"append", u"склеить"):
+    _VLOOKUP_EXTRACT_MODE_CODE[_alias] = u"merge"
+# Имя колонки счётчика совпадений (JSON: match_count=true).
+_VLOOKUP_MATCH_COUNT_COLUMN = u"Кол-во Совпадений"
 _VLOOKUP_NOT_FOUND_FROM_F_RE = re.compile(
     r"Заполнитель_для_не_найдено\s*:\s*([^;\r\n]+)",
     re.IGNORECASE | re.UNICODE,

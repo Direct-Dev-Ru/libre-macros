@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.711"
+MACRO_VERSION = "3.10.712"
 import re
 
 try:
@@ -229,6 +229,11 @@ VLOOKUP_DEFAULT_NOT_FOUND_FILL = u"#Н/Д"
 VLOOKUP_HIGHLIGHT_COLOR_NONE = u"Нет"
 VLOOKUP_NOT_FOUND_EMPTY = u"_ПУСТО_"
 VLOOKUP_NOT_FOUND_EMPTY_ALIASES = (u"_ПУСТО_", u"__ПУСТО__", u"_EMPTY_")
+# Колонка счётчика совпадений справа (JSON match_count); режим extract_mode.
+VLOOKUP_MATCH_COUNT_COLUMN = u"Кол-во Совпадений"
+VLOOKUP_EXTRACT_MODE_NEW = u"new"
+VLOOKUP_EXTRACT_MODE_REPLACE = u"replace"
+VLOOKUP_EXTRACT_MODE_MERGE = u"merge"
 VLOOKUP_PARAM_COLUMN_HEADERS = (
     u"Левая_Таблица",
     u"Правая_Таблица",

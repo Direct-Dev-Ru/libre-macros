@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.711"
+MACRO_VERSION = "3.10.712"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -23622,16 +23622,90 @@ def _lm_vlookup_apply_collect_defaults_to_column( doc, left_sheet, new_col, head
                 pass
 
 
-def _lm_vlookup_seed_key_col_map_from_headers(sheet, bounds, extract_specs, run_suffix, key_col_map):
-    """Заполнить key_col_map уже существующими столбцами выхода (full join, append-pass)."""
-    if sheet is None or not extract_specs:
-        return
+def _lm_vlookup_normalize_extract_mode(raw, default="new"):
+    s = str(raw or "").strip()
+    if s == "":
+        return default
+    low = s.casefold()
+    aliases = {
+        "new": "new",
+        "новые": "new",
+        "новые колонки": "new",
+        "новые_колонки": "new",
+        "new_columns": "new",
+        "создать": "new",
+        "replace": "replace",
+        "заменить": "replace",
+        "заменить значения": "replace",
+        "замена": "replace",
+        "replace_values": "replace",
+        "overwrite": "replace",
+        "merge": "merge",
+        "объединить": "merge",
+        "объединить значения": "merge",
+        "merge_values": "merge",
+        "append": "merge",
+        "склеить": "merge",
+    }
+    if low in ("new", "replace", "merge"):
+        return low
+    return aliases.get(low, default)
+
+
+def _lm_vlookup_find_header_col(sheet, bounds, title):
+    """0-based индекс столбца с заголовком title (identity), или None."""
+    if sheet is None or title is None:
+        return None
+    want = lm_identity_key(str(title).strip())
+    if want == "":
+        return None
     hr = int(bounds.get("header_row", 0) or 0)
     sc = int(bounds.get("start_col", 0) or 0)
     ec = int(bounds.get("end_col", 0) or 0)
+    # После прошлых ВПР колонки могли выйти за исходный end_col — ищем шире.
+    try:
+        _ua_sc, _ua_sr, ua_ec, _ua_er = _lm_vlookup_sheet_used_area(sheet)
+        if ua_ec is not None and int(ua_ec) > ec:
+            ec = int(ua_ec)
+    except Exception:
+        pass
+    c = sc
+    while c <= ec:
+        try:
+            htxt = cell_text(sheet.getCellByPosition(c, hr)).strip()
+        except Exception:
+            htxt = ""
+        if htxt != "" and lm_identity_key(htxt) == want:
+            return c
+        c = c + 1
+    return None
+
+
+def _lm_vlookup_match_count_column_title():
+    try:
+        from libre_macros_collect_cfg import VLOOKUP_MATCH_COUNT_COLUMN
+        t = str(VLOOKUP_MATCH_COUNT_COLUMN or "").strip()
+        if t:
+            return t
+    except Exception:
+        pass
+    return u"Кол-во Совпадений"
+
+
+def _lm_vlookup_seed_key_col_map_from_headers(sheet, bounds, extract_specs, run_suffix, key_col_map, extract_mode="new"):
+    """Заполнить key_col_map уже существующими столбцами выхода (full join, append-pass)."""
+    if sheet is None or not extract_specs:
+        return
+    mode = _lm_vlookup_normalize_extract_mode(extract_mode, default="new")
     ei = 0
     while ei < len(extract_specs):
         _ec_idx, base_title = extract_specs[ei]
+        if mode in ("replace", "merge"):
+            found = _lm_vlookup_find_header_col(sheet, bounds, base_title)
+            if found is not None:
+                key_col_map[base_title] = found
+                ei = ei + 1
+                continue
         col_title = base_title + run_suffix
         if col_title in key_col_map:
             ei = ei + 1
@@ -23642,18 +23716,7 @@ def _lm_vlookup_seed_key_col_map_from_headers(sheet, bounds, extract_specs, run_
         found_col = None
         ci = 0
         while ci < len(candidates) and found_col is None:
-            cand = candidates[ci]
-            hkey = lm_identity_key(cand)
-            c = sc
-            while c <= ec:
-                try:
-                    htxt = cell_text(sheet.getCellByPosition(c, hr)).strip()
-                except Exception:
-                    htxt = ""
-                if htxt != "" and lm_identity_key(htxt) == hkey:
-                    found_col = c
-                    break
-                c = c + 1
+            found_col = _lm_vlookup_find_header_col(sheet, bounds, candidates[ci])
             ci = ci + 1
         if found_col is not None:
             key_col_map[col_title] = found_col
@@ -23708,16 +23771,34 @@ def _lm_vlookup_ensure_output_column( sheet, key_col_map, col_title, bounds, tem
     return new_col
 
 
-def _lm_vlookup_ensure_all_output_columns( sheet, key_col_map, extract_specs, run_suffix, bounds, template_col, highlight_style=None, doc=None, right_sheet=None, right_bounds=None):
-    """Создать все столбцы извлечения до обхода строк."""
+def _lm_vlookup_ensure_all_output_columns( sheet, key_col_map, extract_specs, run_suffix, bounds, template_col, highlight_style=None, doc=None, right_sheet=None, right_bounds=None, extract_mode="new", match_count=False):
+    """
+    Создать/привязать столбцы извлечения.
+    Возвращает (template_col, out_specs, match_count_title|None).
+    out_specs: (map_key, base_title, write_mode), write_mode = new|replace|merge.
+    """
+    mode = _lm_vlookup_normalize_extract_mode(extract_mode, default="new")
+    out_specs = []
     ei = 0
     while ei < len(extract_specs):
         ec_idx, base_title = extract_specs[ei]
-        col_title = base_title + run_suffix
+        write_mode = "new"
+        map_key = base_title + run_suffix
+        if mode in ("replace", "merge"):
+            found = _lm_vlookup_find_header_col(sheet, bounds, base_title)
+            if found is not None:
+                map_key = base_title
+                key_col_map[map_key] = found
+                write_mode = mode
+                out_specs.append((map_key, base_title, write_mode))
+                ei = ei + 1
+                continue
+            map_key = base_title + run_suffix
+            write_mode = "new"
         template_col = _lm_vlookup_ensure_output_column(
             sheet,
             key_col_map,
-            col_title,
+            map_key,
             bounds,
             template_col,
             highlight_style,
@@ -23726,8 +23807,24 @@ def _lm_vlookup_ensure_all_output_columns( sheet, key_col_map, extract_specs, ru
             right_col=ec_idx,
             right_bounds=right_bounds,
         )
+        out_specs.append((map_key, base_title, write_mode))
         ei = ei + 1
-    return template_col
+    match_count_title = None
+    if match_count:
+        match_count_title = _lm_vlookup_match_count_column_title()
+        template_col = _lm_vlookup_ensure_output_column(
+            sheet,
+            key_col_map,
+            match_count_title,
+            bounds,
+            template_col,
+            highlight_style,
+            doc=doc,
+            right_sheet=None,
+            right_col=None,
+            right_bounds=None,
+        )
+    return (template_col, out_specs, match_count_title)
 
 
 def _lm_vlookup_copy_left_row(sheet, src_row, dest_row, start_col, end_col):
@@ -23773,48 +23870,96 @@ def _lm_vlookup_set_cell_multiline_value(cell, text):
         pass
 
 
-def _lm_vlookup_fill_multi_match_row( sheet, row, key_col_map, extract_specs, run_suffix, matches, highlight_style ):
+def _lm_vlookup_join_multiline(existing, parts):
+    """Склеить existing + parts через \\n; пустые parts пропускаются."""
+    chunks = []
+    ex = str(existing if existing is not None else "")
+    if ex.strip() != "":
+        chunks.append(ex)
+    i = 0
+    while i < len(parts):
+        p = _lm_vlookup_multiline_part(parts[i])
+        if p != "":
+            chunks.append(p)
+        i = i + 1
+    return "\n".join(chunks)
+
+
+def _lm_vlookup_fill_match_count_cell(sheet, row, key_col_map, match_count_title, count, highlight_style):
+    if not match_count_title:
+        return
+    out_col = key_col_map.get(match_count_title)
+    if out_col is None:
+        return
+    cell = sheet.getCellByPosition(out_col, row)
+    try:
+        cell.Value = float(int(count))
+    except Exception:
+        try:
+            cell.String = str(int(count))
+        except Exception:
+            pass
+    _lm_vlookup_apply_cell_highlight(cell, highlight_style)
+
+
+def _lm_vlookup_fill_multi_match_row( sheet, row, key_col_map, out_specs, matches, highlight_style ):
     """Несколько совпадений справа → одна ячейка на столбец, значения через \\n."""
     ei = 0
-    while ei < len(extract_specs):
-        _ec_idx, base_title = extract_specs[ei]
-        col_title = base_title + run_suffix
-        out_col = key_col_map.get(col_title)
+    while ei < len(out_specs):
+        map_key, base_title, write_mode = out_specs[ei]
+        out_col = key_col_map.get(map_key)
         if out_col is None:
             ei = ei + 1
             continue
         parts = []
         mi = 0
         while mi < len(matches):
-            parts.append(_lm_vlookup_multiline_part(matches[mi].get(base_title)))
+            parts.append(matches[mi].get(base_title))
             mi = mi + 1
         cell = sheet.getCellByPosition(out_col, row)
-        _lm_vlookup_set_cell_multiline_value(cell, "\n".join(parts))
+        if write_mode == "merge":
+            existing = cell_text(cell)
+            text = _lm_vlookup_join_multiline(existing, parts)
+        else:
+            text = _lm_vlookup_join_multiline("", parts)
+        _lm_vlookup_set_cell_multiline_value(cell, text)
         _lm_vlookup_apply_cell_highlight(cell, highlight_style)
         ei = ei + 1
 
 
-def _lm_vlookup_fill_extract_row( sheet, row, key_col_map, extract_specs, run_suffix, match_record, highlight_style ):
+def _lm_vlookup_fill_extract_row( sheet, row, key_col_map, out_specs, match_record, highlight_style ):
     ei = 0
-    while ei < len(extract_specs):
-        _ec_idx, base_title = extract_specs[ei]
-        col_title = base_title + run_suffix
-        out_col = key_col_map.get(col_title)
+    while ei < len(out_specs):
+        map_key, base_title, write_mode = out_specs[ei]
+        out_col = key_col_map.get(map_key)
         if out_col is None:
             ei = ei + 1
             continue
         cell = sheet.getCellByPosition(out_col, row)
-        _lm_vlookup_set_cell_value(cell, match_record.get(base_title))
+        val = match_record.get(base_title)
+        if write_mode == "merge":
+            existing = cell_text(cell)
+            text = _lm_vlookup_join_multiline(existing, [val])
+            if "\n" in text:
+                _lm_vlookup_set_cell_multiline_value(cell, text)
+            else:
+                _lm_vlookup_set_cell_value(cell, val if existing.strip() == "" else text)
+        elif write_mode == "replace":
+            _lm_vlookup_set_cell_value(cell, val)
+        else:
+            _lm_vlookup_set_cell_value(cell, val)
         _lm_vlookup_apply_cell_highlight(cell, highlight_style)
         ei = ei + 1
 
 
-def _lm_vlookup_fill_not_found_row( sheet, row, key_col_map, extract_specs, run_suffix, fill_text, highlight_style ):
+def _lm_vlookup_fill_not_found_row( sheet, row, key_col_map, out_specs, fill_text, highlight_style ):
     ei = 0
-    while ei < len(extract_specs):
-        _ec_idx, base_title = extract_specs[ei]
-        col_title = base_title + run_suffix
-        out_col = key_col_map.get(col_title)
+    while ei < len(out_specs):
+        map_key, base_title, write_mode = out_specs[ei]
+        if write_mode in ("replace", "merge"):
+            ei = ei + 1
+            continue
+        out_col = key_col_map.get(map_key)
         if out_col is None:
             ei = ei + 1
             continue
@@ -24005,10 +24150,15 @@ def _lm_vlookup_append_right_only_rows(doc, left_sheet, right_sheet, spec):
             except Exception:
                 pass
     _lm_vlookup_seed_key_col_map_from_headers(
-        left_sheet, left_bounds, extract_specs, run_suffix, key_col_map
+        left_sheet,
+        left_bounds,
+        extract_specs,
+        run_suffix,
+        key_col_map,
+        extract_mode=spec.get("extract_mode", "new"),
     )
     template_col = left_bounds["end_col"]
-    template_col = _lm_vlookup_ensure_all_output_columns(
+    template_col, out_specs, match_count_title = _lm_vlookup_ensure_all_output_columns(
         left_sheet,
         key_col_map,
         extract_specs,
@@ -24019,6 +24169,8 @@ def _lm_vlookup_append_right_only_rows(doc, left_sheet, right_sheet, spec):
         doc=doc,
         right_sheet=right_sheet,
         right_bounds=right_bounds,
+        extract_mode=spec.get("extract_mode", "new"),
+        match_count=bool(spec.get("match_count", False)),
     )
 
     keymap = _lm_vlookup_build_keymap(
@@ -24053,10 +24205,12 @@ def _lm_vlookup_append_right_only_rows(doc, left_sheet, right_sheet, spec):
             left_sheet,
             append_at,
             key_col_map,
-            extract_specs,
-            run_suffix,
+            out_specs,
             matches[0],
             highlight_style,
+        )
+        _lm_vlookup_fill_match_count_cell(
+            left_sheet, append_at, key_col_map, match_count_title, len(matches), highlight_style
         )
         left_key_set.add(key)
         append_at = append_at + 1
@@ -24231,6 +24385,9 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
         except Exception:
             trim_keys = False
 
+    extract_mode = _lm_vlookup_normalize_extract_mode(spec.get("extract_mode"), default="new")
+    match_count = bool(spec.get("match_count", False))
+
     left_name = left_sheet.Name if left_sheet is not None else "?"
     right_name = right_sheet.Name if right_sheet is not None else "?"
     extract_map = []
@@ -24246,12 +24403,14 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
         "впр",
         "%s → %s" % (left_name, right_name),
         "старт",
-        "ключи L=[%s] R=[%s]; extract=[%s]; suffix=«%s»; trim=%s; fill_dup=%s; multi=%s; multi_match=%s; join=%s; nf=«%s»; L(hdr=%d data=%d..%d col=%d..%d) R(hdr=%d data=%d..%d col=%d..%d)"
+        "ключи L=[%s] R=[%s]; extract=[%s]; suffix=«%s»; mode=%s; match_count=%s; trim=%s; fill_dup=%s; multi=%s; multi_match=%s; join=%s; nf=«%s»; L(hdr=%d data=%d..%d col=%d..%d) R(hdr=%d data=%d..%d col=%d..%d)"
         % (
             ",".join([str(t) for t in left_key_tokens]),
             ",".join([str(t) for t in right_key_tokens]),
             "; ".join(extract_map) if extract_map else "—",
             run_suffix,
+            extract_mode,
+            u"да" if match_count else u"нет",
             u"да" if trim_keys else u"нет",
             u"да" if fill_duplicates else u"нет",
             u"да" if multi_match_one_cell else u"нет",
@@ -24289,7 +24448,7 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
 
     key_col_map = {}
     template_col = left_bounds["end_col"]
-    template_col = _lm_vlookup_ensure_all_output_columns(
+    template_col, out_specs, match_count_title = _lm_vlookup_ensure_all_output_columns(
         left_sheet,
         key_col_map,
         extract_specs,
@@ -24300,6 +24459,8 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
         doc=doc,
         right_sheet=right_sheet,
         right_bounds=right_bounds,
+        extract_mode=extract_mode,
+        match_count=match_count,
     )
     rows_added = 0
     rows_processed = 0
@@ -24345,15 +24506,21 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
             rows_matched = rows_matched + 1
             if n_match > 1:
                 rows_multi = rows_multi + 1
-            if multi_match_one_cell and n_match > 1:
+            # replace/merge: все матчи в текущую ячейку (первый replace очищает, дальше \\n).
+            stack_in_cell = (multi_match_one_cell and n_match > 1) or (
+                extract_mode in ("replace", "merge") and n_match > 1
+            )
+            if stack_in_cell:
                 _lm_vlookup_fill_multi_match_row(
                     left_sheet,
                     row,
                     key_col_map,
-                    extract_specs,
-                    run_suffix,
+                    out_specs,
                     matches,
                     highlight_style,
+                )
+                _lm_vlookup_fill_match_count_cell(
+                    left_sheet, row, key_col_map, match_count_title, n_match, highlight_style
                 )
                 row = row + 1
             else:
@@ -24379,9 +24546,16 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
                         left_sheet,
                         target_row,
                         key_col_map,
-                        extract_specs,
-                        run_suffix,
+                        out_specs,
                         matches[mi],
+                        highlight_style,
+                    )
+                    _lm_vlookup_fill_match_count_cell(
+                        left_sheet,
+                        target_row,
+                        key_col_map,
+                        match_count_title,
+                        n_match,
                         highlight_style,
                     )
                     mi = mi + 1
@@ -24395,10 +24569,12 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
                     left_sheet,
                     row,
                     key_col_map,
-                    extract_specs,
-                    run_suffix,
+                    out_specs,
                     not_found_fill,
                     highlight_style,
+                )
+                _lm_vlookup_fill_match_count_cell(
+                    left_sheet, row, key_col_map, match_count_title, 0, highlight_style
                 )
             row = row + 1
 

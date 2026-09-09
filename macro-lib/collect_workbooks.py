@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.711"
+MACRO_VERSION = "3.10.712"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -3684,6 +3684,33 @@ def _vlookup_normalize_multi_match(raw, default='all'):
     }
     return aliases.get(low, default)
 
+def _vlookup_normalize_extract_mode(raw, default='new'):
+    s = str(raw or '').strip()
+    if s == '':
+        return default
+    low = s.casefold()
+    aliases = {
+        'new': 'new',
+        'новые': 'new',
+        'новые колонки': 'new',
+        'новые_колонки': 'new',
+        'new_columns': 'new',
+        'создать': 'new',
+        'replace': 'replace',
+        'заменить': 'replace',
+        'заменить значения': 'replace',
+        'замена': 'replace',
+        'replace_values': 'replace',
+        'overwrite': 'replace',
+        'merge': 'merge',
+        'объединить': 'merge',
+        'объединить значения': 'merge',
+        'merge_values': 'merge',
+        'append': 'merge',
+        'склеить': 'merge',
+    }
+    return aliases.get(low, default if low not in ('new', 'replace', 'merge') else low)
+
 def _vlookup_derive_fields_from_range_a1(text):
     """A1 → derived 1-based поля стороны (без листа)."""
     import re
@@ -3857,6 +3884,8 @@ def vlookup_json_block_to_spec(block):
         'not_found_fill': not_found_fill,
         'trim_keys': vlookup_parse_bool_option(block.get('trim_keys'), default=False),
         'column_suffix': vlookup_parse_bool_option(block.get('column_suffix'), default=True),
+        'match_count': vlookup_parse_bool_option(block.get('match_count'), default=False),
+        'extract_mode': _vlookup_normalize_extract_mode(block.get('extract_mode'), default='new'),
     }
     return (spec, None)
 
@@ -3923,6 +3952,11 @@ def vlookup_fields_to_json_block(fields):
         )
     if not vlookup_parse_bool_option(fields.get('column_suffix'), default=True):
         block['column_suffix'] = False
+    extract_mode = _vlookup_normalize_extract_mode(fields.get('extract_mode'), default='new')
+    if extract_mode != 'new':
+        block['extract_mode'] = extract_mode
+    if vlookup_parse_bool_option(fields.get('match_count'), default=False):
+        block['match_count'] = True
     return block
 
 def encode_vlookup_json(block_or_blocks):
@@ -3989,6 +4023,8 @@ def vlookup_json_block_to_dialog_fields(block):
         'not_found_fill': nf,
         'trim_keys': spec.get('trim_keys', False),
         'column_suffix': spec.get('column_suffix', True),
+        'match_count': spec.get('match_count', False),
+        'extract_mode': spec.get('extract_mode') or 'new',
         'json_c': encode_vlookup_json(block),
     }
 
@@ -4049,7 +4085,7 @@ def parse_vlookup_spec(raw_values, doc=None):
     not_found_fill = vlookup_not_found_fill_text(options.get('not_found_fill'))
     if vlookup_not_found_fill_is_empty_cell(not_found_fill):
         not_found_fill = _cw_cfg.VLOOKUP_NOT_FOUND_EMPTY
-    spec = {'left_sheet': left['sheet'], 'left_start_row': left['start_row'], 'left_start_col': left['start_col'], 'left_header_row': left['header_row'], 'right_sheet': right['sheet'], 'right_start_row': right['start_row'], 'right_start_col': right['start_col'], 'right_header_row': right['header_row'], 'join_keys': left_keys, 'join_keys_left': left_keys, 'join_keys_right': right_keys, 'extract_cols': cols, 'highlight_color': color, 'fill_duplicates': fill_duplicates, 'multi_match_one_cell': options.get('multi_match_one_cell', False), 'multi_match': _vlookup_normalize_multi_match(options.get('multi_match'), default='all'), 'not_found_fill': not_found_fill, 'trim_keys': options.get('trim_keys', False), 'column_suffix': options.get('column_suffix', True)}
+    spec = {'left_sheet': left['sheet'], 'left_start_row': left['start_row'], 'left_start_col': left['start_col'], 'left_header_row': left['header_row'], 'right_sheet': right['sheet'], 'right_start_row': right['start_row'], 'right_start_col': right['start_col'], 'right_header_row': right['header_row'], 'join_keys': left_keys, 'join_keys_left': left_keys, 'join_keys_right': right_keys, 'extract_cols': cols, 'highlight_color': color, 'fill_duplicates': fill_duplicates, 'multi_match_one_cell': options.get('multi_match_one_cell', False), 'multi_match': _vlookup_normalize_multi_match(options.get('multi_match'), default='all'), 'not_found_fill': not_found_fill, 'trim_keys': options.get('trim_keys', False), 'column_suffix': options.get('column_suffix', True), 'match_count': False, 'extract_mode': 'new'}
     return (spec, None)
 
 def parse_merge_sheets_spec(raw_values, doc=None):

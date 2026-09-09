@@ -10,7 +10,7 @@
 """
 
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.711"
+MACRO_VERSION = "3.10.712"
 import calendar
 import os
 import re
@@ -13097,6 +13097,18 @@ def _direct_vlookup_normalize_multi_match(raw, default=u"all"):
     return default
 
 
+
+def _direct_vlookup_normalize_extract_mode(raw, default=u"new"):
+    s = unicode(raw or u"").strip().casefold()
+    if s in (u"", u"new", u"новые", u"новые колонки", u"новые_колонки", u"new_columns", u"создать"):
+        return u"new"
+    if s in (u"replace", u"заменить", u"заменить значения", u"замена", u"replace_values", u"overwrite"):
+        return u"replace"
+    if s in (u"merge", u"объединить", u"объединить значения", u"merge_values", u"append", u"склеить"):
+        return u"merge"
+    return default
+
+
 def _direct_vlookup_select_matches(matches, mode):
     if not matches:
         return matches
@@ -13374,7 +13386,10 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
                 row_obj[r_extract_titles[ei]] = row[ci] if ci < len(row) else None
             keymap[key].append(row_obj)
         # выходные колонки на левом листе
+        extract_mode = _direct_vlookup_normalize_extract_mode(spec.get("extract_mode"), default=u"new")
+        match_count_flag = bool(spec.get("match_count", False))
         out_cols = []
+        out_write_modes = []
         col_out_index_by_title = {}
         header_row_1 = l_header + 1
         max_lc = int(left_ws.max_column or 1)
@@ -13385,20 +13400,9 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
             used_id_keys.add(_merge_identity_key(unicode(hv if hv is not None else u"")))
             ci = ci + 1
 
-        for title in r_extract_titles:
-            out_title = unicode(title)
-            if bool(spec.get("column_suffix", True)) and run_suffix:
-                out_title = out_title + unicode(run_suffix)
-
-            # Внутри одного ВПР: не дублировать одинаковые extract_cols.
-            if out_title in col_out_index_by_title:
-                out_cols.append(col_out_index_by_title[out_title])
-                continue
-
+        def _direct_vlookup_add_new_out_col(out_title):
+            nonlocal max_lc
             desired_key = _merge_identity_key(out_title)
-
-            # 1) Коллизия имён: если out_title уже есть среди заголовков,
-            #    то новый столбец должен получить уникальное имя out_title_2, out_title_3, ...
             header_to_write = out_title
             if desired_key in used_id_keys:
                 nn = 2
@@ -13407,20 +13411,12 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
                     nn = nn + 1
                     cand = unicode(out_title) + u"_%d" % nn
                 header_to_write = cand
-
-            # 2) Добавляем новый столбец справа
-            found = max_lc  # 0-based индекс в out_cols
+            found = max_lc
             left_ws.cell(row=header_row_1, column=found + 1, value=header_to_write)
-            out_cols.append(found)
-            col_out_index_by_title[out_title] = found
-
             used_id_keys.add(_merge_identity_key(header_to_write))
             max_lc = max_lc + 1
-
-            # Оформление заголовка: копируем стиль слева (столбец found)
             try:
                 from copy import copy as _copy
-
                 if found >= 1:
                     src_cell = left_ws.cell(row=header_row_1, column=found)
                     dst_cell = left_ws.cell(row=header_row_1, column=found + 1)
@@ -13438,8 +13434,6 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
                         pass
             except Exception:
                 pass
-
-            # Автоширина только по заголовку (полный скан столбца на тысячах строк тормозит ВПР)
             try:
                 col_1 = found + 1
                 v = left_ws.cell(row=header_row_1, column=col_1).value
@@ -13452,6 +13446,58 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
                     pass
             except Exception:
                 pass
+            return found
+
+        for title in r_extract_titles:
+            base_title = unicode(title)
+            write_mode = u"new"
+            if extract_mode in (u"replace", u"merge"):
+                found_ex = None
+                want = _merge_identity_key(base_title)
+                ci = 1
+                while ci <= max_lc:
+                    hv = left_ws.cell(row=header_row_1, column=ci).value
+                    if _merge_identity_key(unicode(hv if hv is not None else u"")) == want:
+                        found_ex = ci - 1
+                        break
+                    ci = ci + 1
+                if found_ex is not None:
+                    map_key = base_title
+                    if map_key in col_out_index_by_title:
+                        out_cols.append(col_out_index_by_title[map_key])
+                        out_write_modes.append(extract_mode)
+                        continue
+                    out_cols.append(found_ex)
+                    out_write_modes.append(extract_mode)
+                    col_out_index_by_title[map_key] = found_ex
+                    continue
+            out_title = base_title
+            if bool(spec.get("column_suffix", True)) and run_suffix:
+                out_title = out_title + unicode(run_suffix)
+            if out_title in col_out_index_by_title:
+                out_cols.append(col_out_index_by_title[out_title])
+                out_write_modes.append(u"new")
+                continue
+            found = _direct_vlookup_add_new_out_col(out_title)
+            out_cols.append(found)
+            out_write_modes.append(u"new")
+            col_out_index_by_title[out_title] = found
+
+        match_count_col = None
+        if match_count_flag:
+            mc_title = u"Кол-во Совпадений"
+            try:
+                from libre_macros_collect_cfg import VLOOKUP_MATCH_COUNT_COLUMN
+                if VLOOKUP_MATCH_COUNT_COLUMN:
+                    mc_title = unicode(VLOOKUP_MATCH_COUNT_COLUMN)
+            except Exception:
+                pass
+            if mc_title in col_out_index_by_title:
+                match_count_col = col_out_index_by_title[mc_title]
+            else:
+                match_count_col = _direct_vlookup_add_new_out_col(mc_title)
+                col_out_index_by_title[mc_title] = match_count_col
+
         nf = _direct_vlookup_not_found_fill(spec)
         multi_one = bool(spec.get("multi_match_one_cell", False))
         multi_match_mode = _direct_vlookup_normalize_multi_match(
@@ -13479,7 +13525,7 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
         ):
             input_rows.append(list(row))
 
-        # (row_vals, single_match|None, multi_matches|None)
+        # (row_vals, single_match|None, multi_matches|None, match_count_n)
         output_specs = []
         processed = 0
         dbg_logged = 0
@@ -13511,54 +13557,80 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
             if not matches:
                 if is_inner:
                     continue
-                output_specs.append((row_vals, None, None))
-            elif multi_one and len(matches) > 1:
-                output_specs.append((row_vals, None, matches))
+                output_specs.append((row_vals, None, None, 0))
+            elif (multi_one or extract_mode in (u"replace", u"merge")) and len(matches) > 1:
+                output_specs.append((row_vals, None, matches, len(matches)))
             elif fill_duplicates and len(matches) > 1:
                 mi = 0
                 while mi < len(matches):
-                    output_specs.append((row_vals, matches[mi], None))
+                    output_specs.append((row_vals, matches[mi], None, len(matches)))
                     mi += 1
                 rows_added += len(matches) - 1
             else:
-                output_specs.append((row_vals, matches[0], None))
+                output_specs.append((row_vals, matches[0], None, len(matches)))
 
-        def _write_vlookup_out_cells(rr, single, multi):
+        def _join_ml(existing, parts):
+            chunks = []
+            ex = unicode(existing if existing is not None else u"")
+            if ex.strip() != u"":
+                chunks.append(ex)
+            for p in parts:
+                ps = unicode(p if p is not None else u"")
+                if ps != u"":
+                    chunks.append(ps)
+            return u"\n".join(chunks)
+
+        def _write_vlookup_out_cells(rr, row_vals, single, multi, n_count):
             if single is None and multi is None:
-                for oc in out_cols:
+                for ei in range(len(out_cols)):
+                    wm = out_write_modes[ei] if ei < len(out_write_modes) else u"new"
+                    if wm in (u"replace", u"merge"):
+                        continue
+                    oc = out_cols[ei]
                     cell = left_ws.cell(row=rr, column=oc + 1, value=nf)
                     if hl_fill is not None:
                         try:
                             cell.fill = hl_fill
                         except Exception:
                             pass
-                return
-            if multi is not None:
+            elif multi is not None:
                 for ei in range(len(out_cols)):
                     base = r_extract_titles[ei]
+                    wm = out_write_modes[ei] if ei < len(out_write_modes) else u"new"
+                    oc = out_cols[ei]
                     parts = []
                     for m in multi:
-                        parts.append(
-                            unicode(m.get(base) if m.get(base) is not None else u"")
-                        )
-                    cell = left_ws.cell(
-                        row=rr,
-                        column=out_cols[ei] + 1,
-                        value=u"\n".join(parts),
-                    )
+                        parts.append(m.get(base) if m.get(base) is not None else u"")
+                    if wm == u"merge":
+                        existing = row_vals[oc] if oc < len(row_vals) else u""
+                        val = _join_ml(existing, parts)
+                    else:
+                        val = _join_ml(u"", parts)
+                    cell = left_ws.cell(row=rr, column=oc + 1, value=val)
                     if hl_fill is not None:
                         try:
                             cell.fill = hl_fill
                         except Exception:
                             pass
-                return
-            for ei in range(len(out_cols)):
-                base = r_extract_titles[ei]
-                cell = left_ws.cell(
-                    row=rr,
-                    column=out_cols[ei] + 1,
-                    value=single.get(base),
-                )
+            else:
+                for ei in range(len(out_cols)):
+                    base = r_extract_titles[ei]
+                    wm = out_write_modes[ei] if ei < len(out_write_modes) else u"new"
+                    oc = out_cols[ei]
+                    rval = single.get(base)
+                    if wm == u"merge":
+                        existing = row_vals[oc] if oc < len(row_vals) else u""
+                        val = _join_ml(existing, [rval])
+                    else:
+                        val = rval
+                    cell = left_ws.cell(row=rr, column=oc + 1, value=val)
+                    if hl_fill is not None:
+                        try:
+                            cell.fill = hl_fill
+                        except Exception:
+                            pass
+            if match_count_col is not None:
+                cell = left_ws.cell(row=rr, column=match_count_col + 1, value=int(n_count))
                 if hl_fill is not None:
                     try:
                         cell.fill = hl_fill
@@ -13575,20 +13647,20 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
                 left_ws.insert_rows(data_start, new_n)
             i = 0
             while i < new_n:
-                row_vals, single, multi = output_specs[i]
+                row_vals, single, multi, n_count = output_specs[i]
                 rr = data_start + i
                 cc = 0
                 while cc < len(row_vals):
                     left_ws.cell(row=rr, column=cc + 1, value=row_vals[cc])
                     cc += 1
-                _write_vlookup_out_cells(rr, single, multi)
+                _write_vlookup_out_cells(rr, row_vals, single, multi, n_count)
                 i += 1
         else:
             i = 0
             while i < new_n:
-                row_vals, single, multi = output_specs[i]
+                row_vals, single, multi, n_count = output_specs[i]
                 rr = data_start + i
-                _write_vlookup_out_cells(rr, single, multi)
+                _write_vlookup_out_cells(rr, row_vals, single, multi, n_count)
                 i += 1
 
         if _direct_debug_enabled():
@@ -13607,7 +13679,7 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
         return {
             "rows_processed": processed,
             "rows_added": rows_added,
-            "columns_added": len(out_cols),
+            "columns_added": len(out_cols) + (1 if match_count_col is not None else 0),
             "keymap_size": len(keymap),
             "join_type": u"inner" if is_inner else u"left",
         }
@@ -13830,11 +13902,18 @@ def _direct_vlookup_run_for_ods(path, spec, run_suffix=u""):
             keymap[key].append(row_obj)
 
         # output columns: append at end, ensure unique header names
+        extract_mode = _direct_vlookup_normalize_extract_mode(spec.get("extract_mode"), default=u"new")
+        match_count_flag = bool(spec.get("match_count", False))
         used_keys = set()
+        existing_by_key = {}
         if l_header < len(left_rows):
             for col_idx, val in _ods_row_col_values(left_rows[l_header]):
-                used_keys.add(_merge_identity_key(unicode(val if val is not None else u"")))
+                ik = _merge_identity_key(unicode(val if val is not None else u""))
+                used_keys.add(ik)
+                if ik and ik not in existing_by_key:
+                    existing_by_key[ik] = int(col_idx)
         out_cols = []
+        out_write_modes = []
         col_out_by_title = {}
         # find current max col index in header row
         max_col0 = -1
@@ -13844,13 +13923,8 @@ def _direct_vlookup_run_for_ods(path, spec, run_suffix=u""):
         if max_col0 < 0:
             max_col0 = l_start_col - 1
 
-        for title in r_extract_titles:
-            out_title = unicode(title)
-            if bool(spec.get("column_suffix", True)) and run_suffix:
-                out_title = out_title + unicode(run_suffix)
-            if out_title in col_out_by_title:
-                out_cols.append(col_out_by_title[out_title])
-                continue
+        def _ods_add_out_col(out_title):
+            nonlocal max_col0
             header_to_write = out_title
             if _merge_identity_key(header_to_write) in used_keys:
                 nn = 2
@@ -13861,15 +13935,54 @@ def _direct_vlookup_run_for_ods(path, spec, run_suffix=u""):
                 header_to_write = cand
             max_col0 += 1
             target_col = max_col0
-            # ensure header row exists
             while l_header >= len(left_rows):
                 new_r = TableRow()
                 left_tbl.addElement(new_r)
                 left_rows.append(new_r)
             _direct_ods_set_cell_at_col(left_rows[l_header], target_col, _ods_make_cell(header_to_write))
             used_keys.add(_merge_identity_key(header_to_write))
+            return target_col
+
+        for title in r_extract_titles:
+            base_title = unicode(title)
+            if extract_mode in (u"replace", u"merge"):
+                found_ex = existing_by_key.get(_merge_identity_key(base_title))
+                if found_ex is not None:
+                    map_key = base_title
+                    if map_key in col_out_by_title:
+                        out_cols.append(col_out_by_title[map_key])
+                        out_write_modes.append(extract_mode)
+                        continue
+                    out_cols.append(found_ex)
+                    out_write_modes.append(extract_mode)
+                    col_out_by_title[map_key] = found_ex
+                    continue
+            out_title = base_title
+            if bool(spec.get("column_suffix", True)) and run_suffix:
+                out_title = out_title + unicode(run_suffix)
+            if out_title in col_out_by_title:
+                out_cols.append(col_out_by_title[out_title])
+                out_write_modes.append(u"new")
+                continue
+            target_col = _ods_add_out_col(out_title)
             out_cols.append(target_col)
+            out_write_modes.append(u"new")
             col_out_by_title[out_title] = target_col
+
+        match_count_col = None
+        if match_count_flag:
+            mc_title = u"Кол-во Совпадений"
+            try:
+                from libre_macros_collect_cfg import VLOOKUP_MATCH_COUNT_COLUMN
+                if VLOOKUP_MATCH_COUNT_COLUMN:
+                    mc_title = unicode(VLOOKUP_MATCH_COUNT_COLUMN)
+            except Exception:
+                pass
+            if mc_title in col_out_by_title:
+                match_count_col = col_out_by_title[mc_title]
+            else:
+                match_count_col = _ods_add_out_col(mc_title)
+                col_out_by_title[mc_title] = match_count_col
 
         # apply to left rows (план в памяти, как в XLSX)
         rows_added = 0
@@ -13911,45 +14024,66 @@ def _direct_vlookup_run_for_ods(path, spec, run_suffix=u""):
             if not matches:
                 if is_inner:
                     continue
-                output_specs.append((by_col, None, None))
-            elif multi_one and len(matches) > 1:
-                output_specs.append((by_col, None, matches))
+                output_specs.append((by_col, None, None, 0))
+            elif (multi_one or extract_mode in (u"replace", u"merge")) and len(matches) > 1:
+                output_specs.append((by_col, None, matches, len(matches)))
             elif fill_duplicates and len(matches) > 1:
                 mi = 0
                 while mi < len(matches):
-                    output_specs.append((by_col, matches[mi], None))
+                    output_specs.append((by_col, matches[mi], None, len(matches)))
                     mi += 1
                 rows_added += len(matches) - 1
             else:
-                output_specs.append((by_col, matches[0], None))
+                output_specs.append((by_col, matches[0], None, len(matches)))
 
         base_max_col0 = max_col0
 
-        def _vlookup_out_values(single, multi):
+        def _join_ml(existing, parts):
+            chunks = []
+            ex = unicode(existing if existing is not None else u"")
+            if ex.strip() != u"":
+                chunks.append(ex)
+            for p in parts:
+                ps = unicode(p if p is not None else u"")
+                if ps != u"":
+                    chunks.append(ps)
+            return u"\n".join(chunks)
+
+        def _vlookup_out_values(by_col, single, multi, n_count):
+            out = {}
             if single is None and multi is None:
-                out = {}
-                for oc in out_cols:
+                for ei in range(len(out_cols)):
+                    wm = out_write_modes[ei] if ei < len(out_write_modes) else u"new"
+                    if wm in (u"replace", u"merge"):
+                        continue
+                    oc = out_cols[ei]
                     out[int(oc)] = u"" if nf_is_empty else nf
-                return out
-            if multi is not None:
-                out = {}
+            elif multi is not None:
                 for ei in range(len(out_cols)):
                     base = r_extract_titles[ei]
-                    parts = []
-                    for m in multi:
-                        parts.append(
-                            unicode(m.get(base) if m.get(base) is not None else u"")
-                        )
-                    out[int(out_cols[ei])] = u"\n".join(parts)
-                return out
-            out = {}
-            for ei in range(len(out_cols)):
-                base = r_extract_titles[ei]
-                out[int(out_cols[ei])] = single.get(base)
+                    wm = out_write_modes[ei] if ei < len(out_write_modes) else u"new"
+                    oc = out_cols[ei]
+                    parts = [m.get(base) if m.get(base) is not None else u"" for m in multi]
+                    if wm == u"merge":
+                        out[int(oc)] = _join_ml(by_col.get(int(oc)), parts)
+                    else:
+                        out[int(oc)] = _join_ml(u"", parts)
+            else:
+                for ei in range(len(out_cols)):
+                    base = r_extract_titles[ei]
+                    wm = out_write_modes[ei] if ei < len(out_write_modes) else u"new"
+                    oc = out_cols[ei]
+                    rval = single.get(base)
+                    if wm == u"merge":
+                        out[int(oc)] = _join_ml(by_col.get(int(oc)), [rval])
+                    else:
+                        out[int(oc)] = rval
+            if match_count_col is not None:
+                out[int(match_count_col)] = int(n_count)
             return out
 
-        def _write_vlookup_out_row(row_elem, single, multi):
-            out_vals = _vlookup_out_values(single, multi)
+        def _write_vlookup_out_row(row_elem, by_col, single, multi, n_count):
+            out_vals = _vlookup_out_values(by_col, single, multi, n_count)
             for oc, val in out_vals.items():
                 _direct_ods_set_cell_at_col(
                     row_elem,
@@ -13957,13 +14091,15 @@ def _direct_vlookup_run_for_ods(path, spec, run_suffix=u""):
                     _ods_make_cell(val if val is not None else u""),
                 )
 
-        def _build_vlookup_data_row(by_col, single, multi):
+        def _build_vlookup_data_row(by_col, single, multi, n_count):
             from odf.table import TableRow
 
-            out_vals = _vlookup_out_values(single, multi)
+            out_vals = _vlookup_out_values(by_col, single, multi, n_count)
             max_c = int(base_max_col0)
             if out_cols:
                 max_c = max(max_c, max(int(oc) for oc in out_cols))
+            if match_count_col is not None:
+                max_c = max(max_c, int(match_count_col))
             nr = TableRow()
             c = 0
             while c <= max_c:
@@ -13985,17 +14121,17 @@ def _direct_vlookup_run_for_ods(path, spec, run_suffix=u""):
                 left_rows.pop()
             i = 0
             while i < len(output_specs):
-                by_col, single, multi = output_specs[i]
-                nr = _build_vlookup_data_row(by_col, single, multi)
+                by_col, single, multi, n_count = output_specs[i]
+                nr = _build_vlookup_data_row(by_col, single, multi, n_count)
                 left_tbl.addElement(nr)
                 left_rows.append(nr)
                 i += 1
         else:
             i = 0
             while i < len(output_specs):
-                by_col, single, multi = output_specs[i]
+                by_col, single, multi, n_count = output_specs[i]
                 row_elem = left_rows[l_header + 1 + i]
-                _write_vlookup_out_row(row_elem, single, multi)
+                _write_vlookup_out_row(row_elem, by_col, single, multi, n_count)
                 i += 1
 
         if _direct_debug_enabled():

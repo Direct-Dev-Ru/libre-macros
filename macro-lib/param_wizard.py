@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.711"
+MACRO_VERSION = "3.10.712"
 import ast
 import glob
 import json
@@ -22016,6 +22016,21 @@ def _vlookup_multi_match_label(code):
     c = _vlookup_normalize_multi_match(code, default=u'all')
     return _pw_cfg._VLOOKUP_MULTI_MATCH_LABEL.get(c, u'Все')
 
+def _vlookup_normalize_extract_mode(raw, default=u'new'):
+    s = unicode(raw or u'').strip()
+    if s == u'':
+        return default
+    code = _pw_cfg._VLOOKUP_EXTRACT_MODE_CODE.get(s.casefold())
+    if code:
+        return code
+    if s.casefold() in (u'new', u'replace', u'merge'):
+        return s.casefold()
+    return default
+
+def _vlookup_extract_mode_label(code):
+    c = _vlookup_normalize_extract_mode(code, default=u'new')
+    return _pw_cfg._VLOOKUP_EXTRACT_MODE_LABEL.get(c, u'Новые колонки')
+
 def _vlookup_derive_fields_from_range_a1(text):
     """
     A1 → derived 1-based start_row/start_col/header_row (+ end_* при прямоугольнике).
@@ -22161,6 +22176,8 @@ def _vlookup_json_block_to_dialog_fields_local(block, json_c_raw=None):
         'not_found_fill': nf,
         'trim_keys': _vlookup_parse_bool_option(block.get('trim_keys'), default=False),
         'column_suffix': _vlookup_parse_bool_option(block.get('column_suffix'), default=True),
+        'match_count': _vlookup_parse_bool_option(block.get('match_count'), default=False),
+        'extract_mode': _vlookup_normalize_extract_mode(block.get('extract_mode'), default=u'new'),
         'json_c': json_c,
     }
     fields.update(_vlookup_json_side_dialog_fields('left_', block.get('left') or {}))
@@ -22237,6 +22254,11 @@ def _vlookup_pack_json_values(packed):
         )
     if not _vlookup_parse_fill_duplicates(packed.get('column_suffix'), default=True):
         block['column_suffix'] = False
+    extract_mode = _vlookup_normalize_extract_mode(packed.get('extract_mode'), default=u'new')
+    if extract_mode != u'new':
+        block['extract_mode'] = extract_mode
+    if _vlookup_parse_fill_duplicates(packed.get('match_count'), default=False):
+        block['match_count'] = True
     return json.dumps([block], ensure_ascii=False, separators=(u',', u':'))
 
 def _vlookup_cw_format(label, value):
@@ -22574,7 +22596,7 @@ def _vlookup_parse_f_options(f_raw):
         nf_val = u'#Н/Д'
     return {'highlight_color': _vlookup_strip_value(raw) or u'', 'fill_duplicates': bools['fill_duplicates'], 'multi_match_one_cell': bools['multi_match_one_cell'], 'trim_keys': bools.get('trim_keys', False), 'column_suffix': bools.get('column_suffix', True), 'not_found_fill': nf_val}
 
-def _vlookup_build_f_cell_text(color, fill_duplicates, not_found_fill, multi_match_one_cell=False, trim_keys=False, column_suffix=True):
+def _vlookup_build_f_cell_text(color, fill_duplicates, not_found_fill, multi_match_one_cell=False, trim_keys=False, column_suffix=True, match_count=False, extract_mode=u'new'):
     """Каноническая сборка строки для ячейки F."""
     color_val = _vlookup_wizard_color_to_highlight(color)
     nf = _vlookup_coerce_not_found_fill(not_found_fill)
@@ -22582,13 +22604,19 @@ def _vlookup_build_f_cell_text(color, fill_duplicates, not_found_fill, multi_mat
     multi = _vlookup_parse_fill_duplicates(multi_match_one_cell, default=False)
     trim = _vlookup_parse_fill_duplicates(trim_keys, default=False)
     suffix = _vlookup_parse_fill_duplicates(column_suffix, default=True)
+    mc = _vlookup_parse_fill_duplicates(match_count, default=False)
+    em = _vlookup_normalize_extract_mode(extract_mode, default=u'new')
     cw = _try_import_collect()
     if cw is not None and hasattr(cw, 'format_vlookup_options_cell'):
-        return unicode(cw.format_vlookup_options_cell(color_val, fill_dup, nf, multi, trim, suffix))
-    fill_lbl = u'Да' if fill_dup else u'Нет'
-    multi_lbl = u'Да' if multi else u'Нет'
-    color_lbl = unicode(cw.VLOOKUP_HIGHLIGHT_COLOR_NONE) if cw is not None and hasattr(cw, 'VLOOKUP_HIGHLIGHT_COLOR_NONE') and (color_val is None) else color_val if color_val is not None else u'Нет'
-    return u'Цвет_добавленных_данных: %s; Заполнять_дубли: %s; Мульти_совпадение_в_одну_ячейку: %s; Сж_пробелы: %s; Суффикс_столбцов: %s; Заполнитель_для_не_найдено: %s' % (color_lbl, fill_lbl, multi_lbl, u'Да' if trim else u'Нет', u'Да' if suffix else u'Нет', nf)
+        text = unicode(cw.format_vlookup_options_cell(color_val, fill_dup, nf, multi, trim, suffix))
+    else:
+        fill_lbl = u'Да' if fill_dup else u'Нет'
+        multi_lbl = u'Да' if multi else u'Нет'
+        color_lbl = unicode(cw.VLOOKUP_HIGHLIGHT_COLOR_NONE) if cw is not None and hasattr(cw, 'VLOOKUP_HIGHLIGHT_COLOR_NONE') and (color_val is None) else color_val if color_val is not None else u'Нет'
+        text = u'Цвет_добавленных_данных: %s; Заполнять_дубли: %s; Мульти_совпадение_в_одну_ячейку: %s; Сж_пробелы: %s; Суффикс_столбцов: %s; Заполнитель_для_не_найдено: %s' % (color_lbl, fill_lbl, multi_lbl, u'Да' if trim else u'Нет', u'Да' if suffix else u'Нет', nf)
+    text = text + u'; Режим_колонок: %s' % _vlookup_extract_mode_label(em)
+    text = text + u'; Кол_во_совпадений: %s' % (u'Да' if mc else u'Нет')
+    return text
 
 def _vlookup_dialog_collect_f_controls(dlg, result):
     """Считать контролы секции F (цвет, заполнитель, дубли)."""
@@ -22610,7 +22638,17 @@ def _vlookup_dialog_collect_f_controls(dlg, result):
             mm = result.get('multi_match', u'all')
     else:
         mm = result.get('multi_match', u'all')
-    return (color, result.get('fill_duplicates', True), nf, result.get('multi_match_one_cell', False), result.get('trim_keys', False), result.get('column_suffix', True), mm)
+    return (
+        color,
+        result.get('fill_duplicates', True),
+        nf,
+        result.get('multi_match_one_cell', False),
+        result.get('trim_keys', False),
+        result.get('column_suffix', True),
+        mm,
+        result.get('match_count', False),
+        result.get('extract_mode', u'new'),
+    )
 
 def _vlookup_dialog_set_f_preview(dlg, text):
     ctl = dlg.getControl('Ed_f_preview')
@@ -22624,8 +22662,8 @@ def _vlookup_dialog_rebuild_f_from_controls(dlg, result):
     """Пересобрать disabled-поле F из контролов."""
     if result.get('_f_block_rebuild'):
         return
-    color, fill_dup, nf, multi, trim, suffix, mm = _vlookup_dialog_collect_f_controls(dlg, result)
-    preview = _vlookup_build_f_cell_text(color, fill_dup, nf, multi, trim, suffix)
+    color, fill_dup, nf, multi, trim, suffix, mm, match_count, extract_mode = _vlookup_dialog_collect_f_controls(dlg, result)
+    preview = _vlookup_build_f_cell_text(color, fill_dup, nf, multi, trim, suffix, match_count=match_count, extract_mode=extract_mode)
     mm_lbl = _vlookup_multi_match_label(mm)
     if preview:
         preview = preview + u'; Множ_совпадения: %s' % mm_lbl
@@ -22716,6 +22754,7 @@ def _vlookup_dialog_apply_f_to_controls(dlg, result, f_raw):
         multi_on, multi_off = _vlookup_dialog_flag_labels(u'Мульти')
         trim_on, trim_off = _vlookup_dialog_flag_labels(u'СЖ_ПРОБЕЛЫ')
         suffix_on, suffix_off = _vlookup_dialog_flag_labels(u'Суффикс _R')
+        match_count_on, match_count_off = _vlookup_dialog_flag_labels(u'Кол-во Совпадений')
         btn = dlg.getControl('ChkFillDup')
         if btn is not None:
             _vlookup_dialog_set_bool_btn(dlg, 'ChkFillDup', result['fill_duplicates'], fill_on, fill_off)
@@ -22728,6 +22767,9 @@ def _vlookup_dialog_apply_f_to_controls(dlg, result, f_raw):
         btn_suffix = dlg.getControl('ChkColumnSuffix')
         if btn_suffix is not None:
             _vlookup_dialog_set_bool_btn(dlg, 'ChkColumnSuffix', result.get('column_suffix', True), suffix_on, suffix_off)
+        btn_mc = dlg.getControl('ChkMatchCount')
+        if btn_mc is not None:
+            _vlookup_dialog_set_bool_btn(dlg, 'ChkMatchCount', result.get('match_count', False), match_count_on, match_count_off)
     finally:
         result['_f_block_rebuild'] = False
 
@@ -24318,6 +24360,12 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
             pass
         edits['keys_right'] = unicode(init.get('keys_right') or u'')
         y = y + row_h
+        # Режим записи колонок (над «Колонки в Лев. из Прав.»).
+        extract_mode_init = _vlookup_normalize_extract_mode(init.get('extract_mode'), default=u'new')
+        _wizard_dlg_add_fixed(dm, 'Lbl_extract_mode', u'Режим колонок:', m, y, lw, 14)
+        _wizard_dlg_add_combo(dm, 'Ed_extract_mode', m + lw + 4, y - 2, ew, 16)
+        edits['extract_mode'] = _vlookup_extract_mode_label(extract_mode_init)
+        y = y + row_h
         # Колонки в левую из правой; при full — зеркальный ряд.
         _vlookup_dialog_add_token_row(dm, u'Колонки в Лев. из Прав. (←):', 'Lbl_extract_e', 'Ed_extract_e', 'Cb_extract_e', 'BtnDel_extract_e', 'BtnClear_extract_e', m, y, lw, ew)
         try:
@@ -24339,10 +24387,12 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
         save_json_init = True
         trim_keys_init = bool(init.get('trim_keys', False))
         column_suffix_init = _vlookup_parse_bool_option(init.get('column_suffix'), default=True)
+        match_count_init = _vlookup_parse_bool_option(init.get('match_count'), default=False)
         fill_on, fill_off = _vlookup_dialog_flag_labels(u'Дубли')
         multi_on, multi_off = _vlookup_dialog_flag_labels(u'Мульти')
         trim_on, trim_off = _vlookup_dialog_flag_labels(u'СЖ_ПРОБЕЛЫ')
         suffix_on, suffix_off = _vlookup_dialog_flag_labels(u'Суффикс _R')
+        match_count_on, match_count_off = _vlookup_dialog_flag_labels(u'Кол-во Совпадений')
         _wizard_dlg_add_fixed(dm, 'HdrF', u'— Итоговые параметры —', m, y, dw - m * 2, 14)
         y = y + hdr_step
         color_combo_w = max(80, ew // 2)
@@ -24363,6 +24413,16 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
         _wizard_dlg_add_fixed(dm, 'Lbl_multi_match_mode', u'Обработка множ.совпадений:', m, mm_lbl_y, lw, 14)
         _wizard_dlg_add_combo(dm, 'Ed_multi_match_mode', m + lw + 4, y_mm - 2, nf_w, 16)
         _wizard_dlg_add_button(dm, 'ChkColumnSuffix', suffix_on if column_suffix_init else suffix_off, dup_x, y_mm - 1, 88, 18)
+        mc_btn_w = 130
+        _wizard_dlg_add_button(
+            dm,
+            'ChkMatchCount',
+            match_count_on if match_count_init else match_count_off,
+            dup_x + 88 + 6,
+            y_mm - 1,
+            mc_btn_w,
+            18,
+        )
         edits['multi_match_mode'] = _vlookup_multi_match_label(
             _vlookup_normalize_multi_match(init.get('multi_match'), default=u'all')
         )
@@ -24413,6 +24473,12 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
             result['column_suffix'] = checked
             on_l, off_l = _vlookup_dialog_flag_labels(u'Суффикс _R')
             _vlookup_dialog_set_bool_btn(dlg, 'ChkColumnSuffix', checked, on_l, off_l)
+            _vlookup_dialog_rebuild_f_from_controls(dlg, result)
+
+        def _sync_match_count(checked):
+            result['match_count'] = checked
+            on_l, off_l = _vlookup_dialog_flag_labels(u'Кол-во Совпадений')
+            _vlookup_dialog_set_bool_btn(dlg, 'ChkMatchCount', checked, on_l, off_l)
             _vlookup_dialog_rebuild_f_from_controls(dlg, result)
 
         def _sync_trim_keys(checked):
@@ -24513,12 +24579,24 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                 )
             except Exception:
                 pass
+        em_ctl = dlg.getControl('Ed_extract_mode')
+        if em_ctl is not None:
+            try:
+                ei = 0
+                while ei < len(_pw_cfg._VLOOKUP_EXTRACT_MODE_CHOICES):
+                    em_ctl.addItem(_pw_cfg._VLOOKUP_EXTRACT_MODE_CHOICES[ei][1], ei)
+                    ei = ei + 1
+                em_ctl.setText(_vlookup_extract_mode_label(extract_mode_init))
+            except Exception:
+                pass
         result = {
             'cancel': True,
             'keys_same': keys_same_init,
             'save_as_json': True,
             'trim_keys': trim_keys_init,
             'column_suffix': column_suffix_init,
+            'match_count': match_count_init,
+            'extract_mode': extract_mode_init,
             'join_type': join_type_init,
             'multi_match': _vlookup_normalize_multi_match(init.get('multi_match'), default=u'all'),
             'side_cache': {
@@ -24542,6 +24620,8 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
             result['multi_match_one_cell'] = _vlookup_parse_bool_option(init.get('multi_match_one_cell'), default=False)
             result['trim_keys'] = _vlookup_parse_bool_option(init.get('trim_keys'), default=False)
             result['column_suffix'] = _vlookup_parse_bool_option(init.get('column_suffix'), default=True)
+            result['match_count'] = _vlookup_parse_bool_option(init.get('match_count'), default=False)
+            result['extract_mode'] = _vlookup_normalize_extract_mode(init.get('extract_mode'), default=u'new')
 
         class _VHandler(unohelper.Base, XActionListener, XTextListener, XItemListener):
 
@@ -24557,6 +24637,11 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                 if name == 'Ed_join_type':
                     try:
                         _sync_join_extract_right(src.getText())
+                    except Exception:
+                        pass
+                if name == 'Ed_extract_mode':
+                    try:
+                        result['extract_mode'] = _vlookup_normalize_extract_mode(src.getText(), default=u'new')
                     except Exception:
                         pass
                 _vlookup_dialog_rebuild_f_from_controls(dlg, result)
@@ -24587,6 +24672,13 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                 if name == 'Ed_multi_match_mode':
                     try:
                         result['multi_match'] = _vlookup_normalize_multi_match(src.getText(), default=u'all')
+                    except Exception:
+                        pass
+                    _vlookup_dialog_rebuild_f_from_controls(dlg, result)
+                    return
+                if name == 'Ed_extract_mode':
+                    try:
+                        result['extract_mode'] = _vlookup_normalize_extract_mode(src.getText(), default=u'new')
                     except Exception:
                         pass
                     _vlookup_dialog_rebuild_f_from_controls(dlg, result)
@@ -24689,6 +24781,10 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                     result['column_suffix'] = not result.get('column_suffix', True)
                     _sync_column_suffix(result['column_suffix'])
                     return
+                if name == 'ChkMatchCount':
+                    result['match_count'] = not result.get('match_count', False)
+                    _sync_match_count(result['match_count'])
+                    return
                 if name == 'VCancelBtn':
                     dlg.endExecute()
                     return
@@ -24742,6 +24838,10 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                     packed['multi_match_one_cell'] = result.get('multi_match_one_cell', False)
                     packed['trim_keys'] = result.get('trim_keys', False)
                     packed['column_suffix'] = result.get('column_suffix', True)
+                    packed['match_count'] = result.get('match_count', False)
+                    packed['extract_mode'] = _vlookup_normalize_extract_mode(
+                        packed.get('extract_mode') or result.get('extract_mode'), default=u'new'
+                    )
                     packed['highlight_color'] = _vlookup_wizard_color_to_highlight(preset_ctl_ok.getText().strip() if preset_ctl_ok is not None else u'')
                     packed['not_found_fill'] = _vlookup_coerce_not_found_fill(_vlookup_nf_ctl_get_text(nf_ctl_ok, dlg))
                     result['cancel'] = False
@@ -24763,6 +24863,10 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
         dlg.getControl('ChkMultiMatch').addActionListener(handler)
         dlg.getControl('ChkTrimKeys').addActionListener(handler)
         dlg.getControl('ChkColumnSuffix').addActionListener(handler)
+        try:
+            dlg.getControl('ChkMatchCount').addActionListener(handler)
+        except Exception:
+            pass
         for btn_name in (
             'BtnDel_keys_left',
             'BtnClear_keys_left',
@@ -24798,7 +24902,7 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                     _set_combo_items(dlg.getControl('Ed_' + sheet_key), doc_sheet_names, select_text=edits.get(sheet_key) or u'')
                 except Exception:
                     pass
-        for listen_key in ('left_sheet', 'right_sheet', 'left_range', 'right_range', 'join_type', 'multi_match_mode'):
+        for listen_key in ('left_sheet', 'right_sheet', 'left_range', 'right_range', 'join_type', 'multi_match_mode', 'extract_mode'):
             try:
                 dlg.getControl('Ed_' + listen_key).addTextListener(handler)
             except Exception:
@@ -24809,6 +24913,10 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
             pass
         try:
             dlg.getControl('Ed_multi_match_mode').addItemListener(handler)
+        except Exception:
+            pass
+        try:
+            dlg.getControl('Ed_extract_mode').addItemListener(handler)
         except Exception:
             pass
         if preset_ctl is not None:
@@ -24843,6 +24951,7 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
         _sync_join_extract_right(join_type_init)
         _vlookup_dialog_refresh_token_combos(dlg, doc, keys_same_init, result.get('side_cache'))
         _vlookup_dialog_set_bool_btn(dlg, 'ChkColumnSuffix', column_suffix_init, suffix_on, suffix_off)
+        _vlookup_dialog_set_bool_btn(dlg, 'ChkMatchCount', match_count_init, match_count_on, match_count_off)
         _vlookup_dialog_set_bool_btn(dlg, 'ChkTrimKeys', trim_keys_init, trim_on, trim_off)
         _vlookup_dialog_set_bool_btn(dlg, 'ChkFillDup', result.get('fill_duplicates', True), fill_on, fill_off)
         _vlookup_dialog_set_bool_btn(dlg, 'ChkMultiMatch', result.get('multi_match_one_cell', False), multi_on, multi_off)
@@ -24857,7 +24966,16 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                 pass
         f_init = init.get('f_cell_raw')
         if f_init in (None, u''):
-            f_init = _vlookup_build_f_cell_text(init.get('vlookup_color') or u'', init.get('fill_duplicates', True), _vlookup_init_not_found_fill(init), init.get('multi_match_one_cell', False), init.get('trim_keys', False), init.get('column_suffix', True))
+            f_init = _vlookup_build_f_cell_text(
+                init.get('vlookup_color') or u'',
+                init.get('fill_duplicates', True),
+                _vlookup_init_not_found_fill(init),
+                init.get('multi_match_one_cell', False),
+                init.get('trim_keys', False),
+                init.get('column_suffix', True),
+                match_count=init.get('match_count', False),
+                extract_mode=init.get('extract_mode', u'new'),
+            )
         _vlookup_dialog_apply_f_to_controls(dlg, result, f_init)
         nf_ctl = dlg.getControl('Ed_not_found_fill')
         if nf_ctl is not None:
