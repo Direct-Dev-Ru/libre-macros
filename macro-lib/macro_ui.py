@@ -3,7 +3,7 @@
 Общие константы и построители AWT-диалогов для Python-макросов LibreOffice Calc.
 """
 
-MACRO_VERSION = "3.10.715"
+MACRO_VERSION = "3.10.716"
 DLG_MARGIN = 10
 DLG_GAP = 8
 DLG_BTN_W = 96

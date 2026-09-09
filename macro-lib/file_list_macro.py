@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.715"
+MACRO_VERSION = "3.10.716"
 import json
 import os
 import sys
@@ -15,7 +15,7 @@ from com.sun.star.awt.MessageBoxResults import CANCEL, NO, YES
 from com.sun.star.awt.MessageBoxType import MESSAGEBOX, QUERYBOX
 
 # Константы в pythonpath: AlterOffice 2026 вырезает модульные присваивания в .py-скрипте.
-from libre_macros_file_list_cfg import DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEPTH_INDENT as _DEPTH_INDENT, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
+from libre_macros_file_list_cfg import DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEPTH_INDENT as _DEPTH_INDENT, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
 import libre_macros_file_list_cfg as _fl_state
 
 
@@ -244,7 +244,17 @@ def _default_dialog_settings():
         "max_depth": _DEFAULT_MAX_DEPTH,
         "masks": "",
         "size_unit": _DEFAULT_SIZE_UNIT,
+        "count_pages": _DEFAULT_COUNT_PAGES,
     }
+
+
+def normalize_count_pages(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(int(value))
+    text = str(value or "").strip().lower()
+    return text in ("1", "true", "yes", "y", "да", "on")
 
 
 def normalize_size_unit(value):
@@ -283,9 +293,12 @@ def size_unit_from_label(label):
     return normalize_size_unit(text)
 
 
-def build_result_headers(size_unit):
+def build_result_headers(size_unit, count_pages=False):
     headers = list(_RESULT_HEADER_BASE)
     headers[5] = "Размер (%s)" % size_unit_label(size_unit)
+    if count_pages:
+        # После размера: Тип…Глубина, Размер, Страниц, Дата, Расширение, Полный путь
+        headers = headers[:6] + [_RESULT_HEADER_PAGES] + headers[6:]
     return headers
 
 
@@ -319,6 +332,7 @@ def load_dialog_settings():
     if settings["max_depth"] < 1:
         settings["max_depth"] = _DEFAULT_MAX_DEPTH
     settings["size_unit"] = normalize_size_unit(settings.get("size_unit"))
+    settings["count_pages"] = normalize_count_pages(settings.get("count_pages"))
     return settings
 
 
@@ -333,6 +347,7 @@ def save_dialog_settings(settings):
                     payload[key] = settings[key]
         payload["max_depth"] = int(payload.get("max_depth") or _DEFAULT_MAX_DEPTH)
         payload["size_unit"] = normalize_size_unit(payload.get("size_unit"))
+        payload["count_pages"] = normalize_count_pages(payload.get("count_pages"))
         with open(_settings_file_path(), "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
     except Exception as err:
@@ -542,6 +557,194 @@ def format_depth_indent(text, depth):
     """Визуальный отступ в ячейке: глубина 1 — без отступа, далее +1 уровень."""
     level = max(0, int(depth) - 1)
     return (_DEPTH_INDENT * level) + str(text)
+
+
+def _make_load_prop(name, value):
+    from com.sun.star.beans import PropertyValue
+
+    prop = PropertyValue()
+    prop.Name = str(name)
+    prop.Value = value
+    return prop
+
+
+def _close_doc_discard(doc):
+    if doc is None:
+        return
+    try:
+        doc.close(True)
+    except Exception:
+        try:
+            doc.dispose()
+        except Exception:
+            pass
+
+
+def _silent_interaction_handler():
+    try:
+        ctx = XSCRIPTCONTEXT.getComponentContext()
+        return ctx.getServiceManager().createInstanceWithContext(
+            "com.sun.star.comp.framework.SilentInteractionHandler", ctx
+        )
+    except Exception:
+        return None
+
+
+def _ext_supports_page_count(ext):
+    text = str(ext or "").strip().lower()
+    if text and not text.startswith("."):
+        text = "." + text
+    return text in _PAGE_COUNT_EXTS
+
+
+def _pages_from_draw(doc):
+    try:
+        pages = doc.getDrawPages()
+        if pages is None:
+            return None
+        return int(pages.getCount())
+    except Exception:
+        return None
+
+
+def _pages_from_controller(doc):
+    try:
+        ctrl = doc.getCurrentController()
+        if ctrl is None:
+            return None
+        try:
+            value = ctrl.getPropertyValue("PageCount")
+            if value is not None:
+                n = int(value)
+                if n > 0:
+                    return n
+        except Exception:
+            pass
+        try:
+            cursor = ctrl.getViewCursor()
+            if cursor is not None and hasattr(cursor, "jumpToLastPage"):
+                cursor.jumpToLastPage()
+                if hasattr(cursor, "getPage"):
+                    n = int(cursor.getPage())
+                    if n > 0:
+                        return n
+        except Exception:
+            pass
+    except Exception:
+        return None
+    return None
+
+
+def _pages_from_document_statistics(doc):
+    try:
+        props = doc.getDocumentProperties()
+        stats = props.DocumentStatistics
+        if stats is None:
+            return None
+        for item in stats:
+            try:
+                if str(item.Name) == "PageCount":
+                    n = int(item.Value)
+                    if n > 0:
+                        return n
+            except Exception:
+                pass
+    except Exception:
+        return None
+    return None
+
+
+def uno_count_document_pages(path):
+    """
+    Число страниц/слайдов через UNO (Hidden+ReadOnly).
+    PDF/Draw/Impress — DrawPages; Writer — PageCount / statistics.
+    При ошибке или неподдерживаемом типе — None.
+    """
+    full = normalize_path(path)
+    if full == "" or not os.path.isfile(full):
+        return None
+    ext = os.path.splitext(full)[1]
+    if not _ext_supports_page_count(ext):
+        return None
+
+    doc = None
+    try:
+        url = uno.systemPathToFileUrl(os.path.abspath(full))
+        props = [
+            _make_load_prop("Hidden", True),
+            _make_load_prop("ReadOnly", True),
+        ]
+        handler = _silent_interaction_handler()
+        if handler is not None:
+            props.append(_make_load_prop("InteractionHandler", handler))
+        desktop = XSCRIPTCONTEXT.getDesktop()
+        doc = desktop.loadComponentFromURL(url, "_blank", 0, tuple(props))
+        if doc is None:
+            return None
+
+        # PDF и презентации/рисунки — страницы Draw.
+        pages = _pages_from_draw(doc)
+        if pages is not None and pages > 0:
+            # Writer тоже может иметь DrawPages (текст+оформление); для Writer
+            # надёжнее PageCount. Если есть TextDocument — предпочитаем controller.
+            is_writer = False
+            try:
+                is_writer = doc.supportsService("com.sun.star.text.TextDocument")
+            except Exception:
+                is_writer = False
+            if not is_writer:
+                return pages
+
+        writer_pages = _pages_from_controller(doc)
+        if writer_pages is not None:
+            return writer_pages
+        stats_pages = _pages_from_document_statistics(doc)
+        if stats_pages is not None:
+            return stats_pages
+        if pages is not None and pages > 0:
+            return pages
+        return None
+    except Exception as err:
+        print("Страницы UNO (%s): %s" % (full, err))
+        return None
+    finally:
+        _close_doc_discard(doc)
+        file_list_ui_yield(force=True)
+
+
+def enrich_entries_with_page_counts(entries, show_progress=False):
+    """Заполнить item['pages'] для файлов PDF/Writer/Impress/Draw."""
+    if not entries:
+        return entries
+    targets = []
+    for item in entries:
+        if item.get("kind") != "файл":
+            item["pages"] = None
+            continue
+        if _ext_supports_page_count(item.get("ext")):
+            targets.append(item)
+        else:
+            item["pages"] = None
+
+    total = len(targets)
+    if show_progress and total > 0:
+        file_list_ui_status_start(u"Подсчёт страниц (UNO)", total)
+
+    done = 0
+    try:
+        for item in targets:
+            done += 1
+            if show_progress:
+                file_list_ui_status_set(
+                    done,
+                    u"Страницы %d / %d: %s"
+                    % (done, total, _truncate_status_text(item.get("name", ""))),
+                )
+            item["pages"] = uno_count_document_pages(item.get("full_path", ""))
+    finally:
+        if show_progress:
+            file_list_ui_status_finish()
+    return entries
 
 
 def sort_entries_hierarchical(entries):
@@ -855,41 +1058,56 @@ def resolve_target_sheet(doc, sheet_name):
     return sheet, "overwrite"
 
 
-def _build_sheet_data_rows(entries, size_unit):
+def _build_sheet_data_rows(entries, size_unit, count_pages=False):
     """Строки данных для setDataArray (без заголовка)."""
     unit = normalize_size_unit(size_unit)
     rows = []
     for item in entries:
         depth = int(item["depth"])
-        rows.append(
+        row = [
+            _uno_to_str(item["kind"]),
+            format_depth_indent(item["name"], depth),
+            format_depth_indent(item["rel_path"], depth),
+            _uno_to_str(item["parent"]),
+            float(depth),
+            float(convert_size_for_display(item["size"], unit)),
+        ]
+        if count_pages:
+            pages = item.get("pages")
+            if pages is None:
+                row.append("")
+            else:
+                try:
+                    row.append(float(pages))
+                except (TypeError, ValueError):
+                    row.append("")
+        row.extend(
             [
-                _uno_to_str(item["kind"]),
-                format_depth_indent(item["name"], depth),
-                format_depth_indent(item["rel_path"], depth),
-                _uno_to_str(item["parent"]),
-                float(depth),
-                float(convert_size_for_display(item["size"], unit)),
                 _uno_to_str(item["mtime"]),
                 _uno_to_str(item["ext"]),
                 _uno_to_str(item.get("full_path", "")),
             ]
         )
+        rows.append(row)
     return rows
 
 
-def _sheet_write_rows_fallback(sheet, start_row, rows):
+def _sheet_write_rows_fallback(sheet, start_row, rows, number_cols=None):
     """Поштучная запись, если setDataArray недоступен (моки, старый LO)."""
+    if number_cols is None:
+        number_cols = (4, 5)
+    number_set = set(int(c) for c in number_cols)
     for ri, row in enumerate(rows):
         r = start_row + ri
         for col, value in enumerate(row):
             cell = sheet.getCellByPosition(col, r)
-            if col in (4, 5) and isinstance(value, (int, float)):
+            if col in number_set and isinstance(value, (int, float)):
                 _set_cell_number(cell, value)
             else:
                 cell.String = _uno_to_str(value)
 
 
-def _sheet_set_data_array(sheet, start_row, rows):
+def _sheet_set_data_array(sheet, start_row, rows, number_cols=None):
     """
     Записать блок строк одним setDataArray (как getDataArray в collect_workbooks).
     Возвращает True при успехе.
@@ -906,7 +1124,7 @@ def _sheet_set_data_array(sheet, start_row, rows):
         return True
     except Exception as err:
         print("setDataArray: %s — поштучная запись" % err)
-        _sheet_write_rows_fallback(sheet, start_row, rows)
+        _sheet_write_rows_fallback(sheet, start_row, rows, number_cols=number_cols)
         return False
 
 
@@ -923,16 +1141,19 @@ def _format_header_row(sheet, ncols):
             col += 1
 
 
-def write_entries_to_sheet(results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT, clear_first=True, show_progress=False):
+def write_entries_to_sheet( results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT, clear_first=True, show_progress=False, count_pages=False):
     if clear_first:
         clear_sheet_contents(results_sheet)
-    headers = build_result_headers(size_unit)
+    headers = build_result_headers(size_unit, count_pages=count_pages)
     ncols = len(headers)
+    number_cols = [4, 5]
+    if count_pages:
+        number_cols.append(6)
 
-    _sheet_set_data_array(results_sheet, 0, [list(headers)])
+    _sheet_set_data_array(results_sheet, 0, [list(headers)], number_cols=number_cols)
     _format_header_row(results_sheet, ncols)
 
-    data_rows = _build_sheet_data_rows(entries, size_unit)
+    data_rows = _build_sheet_data_rows(entries, size_unit, count_pages=count_pages)
     total = len(data_rows)
     chunk_count = max(1, (total + FILE_LIST_WRITE_CHUNK - 1) // FILE_LIST_WRITE_CHUNK)
 
@@ -946,7 +1167,9 @@ def write_entries_to_sheet(results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT,
         i = 0
         while i < total:
             chunk = data_rows[i : i + FILE_LIST_WRITE_CHUNK]
-            _sheet_set_data_array(results_sheet, row_offset, chunk)
+            _sheet_set_data_array(
+                results_sheet, row_offset, chunk, number_cols=number_cols
+            )
             row_offset += len(chunk)
             written += len(chunk)
             i += len(chunk)
@@ -984,13 +1207,14 @@ def freeze_sheet_first_row(doc, sheet):
         print("Не удалось закрепить первую строку: %s" % err)
 
 
-def analyze_files(path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT):
+def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES):
     """
     Собирает данные о файлах и папках и выводит на лист.
 
     max_depth — глубина обхода (1 = первый уровень внутри path).
     masks — строка или список масок (*.xlsx;*.pdf).
     size_unit — b | kb | mb | gb (б, Кб, Мб, Гб).
+    count_pages — считать страницы PDF/Writer/Impress/Draw через UNO.
     """
     try:
         root = path_from_user_input(path)
@@ -1006,6 +1230,8 @@ def analyze_files(path, sheet_name=None, max_depth=None, masks=None, size_unit=_
             mask_list = list(masks)
         else:
             mask_list = []
+
+        do_pages = normalize_count_pages(count_pages)
 
         entries, root = collect_path_entries(
             root, max_depth=max_depth, masks=mask_list, show_progress=True
@@ -1023,6 +1249,9 @@ def analyze_files(path, sheet_name=None, max_depth=None, masks=None, size_unit=_
                 )
             return False
 
+        if do_pages:
+            enrich_entries_with_page_counts(entries, show_progress=True)
+
         doc = XSCRIPTCONTEXT.getDocument()
         results_sheet, mode = resolve_target_sheet(doc, sheet_name)
         if results_sheet is None:
@@ -1035,12 +1264,13 @@ def analyze_files(path, sheet_name=None, max_depth=None, masks=None, size_unit=_
             size_unit=normalize_size_unit(size_unit),
             clear_first=(mode != "created"),
             show_progress=True,
+            count_pages=do_pages,
         )
         freeze_sheet_first_row(doc, results_sheet)
         _focus_sheet_top_left(doc, results_sheet)
         print(
-            "Записано %s элементов на лист «%s» (режим: %s)"
-            % (written, results_sheet.Name, mode)
+            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s)"
+            % (written, results_sheet.Name, mode, do_pages)
         )
         return True
 
@@ -1102,6 +1332,49 @@ def _add_combo(dialog_model, name, x, y, w, h):
     return model
 
 
+def _add_checkbox(dialog_model, name, label, x, y, w, h, checked=False):
+    model = dialog_model.createInstance("com.sun.star.awt.UnoControlCheckBoxModel")
+    model.PositionX = x
+    model.PositionY = y
+    model.Width = w
+    model.Height = h
+    model.Name = name
+    model.Label = label
+    try:
+        model.State = 1 if checked else 0
+    except Exception:
+        pass
+    dialog_model.insertByName(name, model)
+    return model
+
+
+def _checkbox_get_state(control):
+    if control is None:
+        return False
+    try:
+        return int(control.getState()) == 1
+    except Exception:
+        try:
+            return int(control.Model.State) == 1
+        except Exception:
+            return False
+
+
+def _checkbox_set_state(control, checked):
+    if control is None:
+        return
+    val = 1 if checked else 0
+    try:
+        control.setState(val)
+        return
+    except Exception:
+        pass
+    try:
+        control.Model.State = val
+    except Exception:
+        pass
+
+
 def create_file_analyzer_dialog():
     try:
         saved = load_dialog_settings()
@@ -1111,7 +1384,7 @@ def create_file_analyzer_dialog():
         )
 
         dlg_w = 520
-        dlg_h = 350
+        dlg_h = 390
         m = 10
         field_w = dlg_w - m * 2 - 100 - 8
         dialog_model.PositionX = 100
@@ -1207,6 +1480,18 @@ def create_file_analyzer_dialog():
             str(saved.get("masks", "")),
         )
 
+        y += 34
+        _add_checkbox(
+            dialog_model,
+            "CountPagesCheck",
+            "Считать страницы (PDF, Writer, Impress/Draw через UNO; медленнее)",
+            m,
+            y,
+            dlg_w - m * 2,
+            18,
+            normalize_count_pages(saved.get("count_pages", _DEFAULT_COUNT_PAGES)),
+        )
+
         btn_y = dlg_h - 42
         _add_button(dialog_model, "RunButton", "Запуск", m, btn_y, 100, 28)
         _add_button(dialog_model, "ClearButton", "Очистить", m + 110, btn_y, 100, 28)
@@ -1227,6 +1512,7 @@ def create_file_analyzer_dialog():
                 self.depth_field = None
                 self.mask_field = None
                 self.size_unit_combo = None
+                self.count_pages_check = None
 
             def actionPerformed(self, event):
                 button_name = event.Source.Model.Name
@@ -1248,6 +1534,7 @@ def create_file_analyzer_dialog():
                             [label for _code, label in _SIZE_UNIT_OPTIONS],
                             _SIZE_UNIT_OPTIONS[0][1],
                         )
+                    _checkbox_set_state(self.count_pages_check, _DEFAULT_COUNT_PAGES)
 
                 elif button_name == "RunButton":
                     try:
@@ -1260,6 +1547,7 @@ def create_file_analyzer_dialog():
                             if self.size_unit_combo
                             else size_unit_label(_DEFAULT_SIZE_UNIT)
                         )
+                        count_pages = _checkbox_get_state(self.count_pages_check)
 
                         path = path_from_user_input(path)
                         sheet_name = sheet_name.strip() if sheet_name else ""
@@ -1287,6 +1575,7 @@ def create_file_analyzer_dialog():
                                 "max_depth": max_depth,
                                 "masks": mask_text,
                                 "size_unit": size_unit,
+                                "count_pages": count_pages,
                             }
                         )
                         self.result = (
@@ -1296,13 +1585,14 @@ def create_file_analyzer_dialog():
                             max_depth,
                             mask_text,
                             size_unit,
+                            count_pages,
                         )
                         self.dialog.endExecute()
                     except Exception as e:
                         show_message("Ошибка чтения полей диалога: %s" % e)
 
                 elif button_name == "CancelButton":
-                    self.result = ("cancel", None, None, None, None, None)
+                    self.result = ("cancel", None, None, None, None, None, None)
                     self.dialog.endExecute()
 
         handler = DialogHandler(dialog)
@@ -1311,6 +1601,7 @@ def create_file_analyzer_dialog():
         handler.depth_field = dialog.getControl("DepthField")
         handler.mask_field = dialog.getControl("MaskField")
         handler.size_unit_combo = dialog.getControl("SizeUnitCombo")
+        handler.count_pages_check = dialog.getControl("CountPagesCheck")
         _set_combo_items(
             handler.size_unit_combo,
             [label for _code, label in _SIZE_UNIT_OPTIONS],
@@ -1335,11 +1626,11 @@ def analyze_files_dialog(*args):
         result = create_file_analyzer_dialog()
 
         if result and result[0] == "run":
-            _, path, sheet_name, max_depth, mask_text, size_unit = result
+            _, path, sheet_name, max_depth, mask_text, size_unit, count_pages = result
             sheet_arg = sheet_name if sheet_name else None
             print(
-                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s"
-                % (path, sheet_arg, max_depth, mask_text, size_unit)
+                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s"
+                % (path, sheet_arg, max_depth, mask_text, size_unit, count_pages)
             )
             success = analyze_files(
                 path,
@@ -1347,18 +1638,21 @@ def analyze_files_dialog(*args):
                 max_depth=max_depth,
                 masks=mask_text,
                 size_unit=size_unit,
+                count_pages=count_pages,
             )
             if success:
                 mask_note = ""
                 if mask_text:
                     mask_note = "\nМаски: %s" % mask_text
+                pages_note = "\nСтраницы: да (UNO)" if count_pages else ""
                 show_message(
-                    "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s%s"
+                    "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s%s%s"
                     % (
                         normalize_path(path),
                         max_depth,
                         size_unit_label(size_unit),
                         mask_note,
+                        pages_note,
                     )
                 )
             else:

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние file_list_macro (AlterOffice 2026: модульный код .py-скрипта вырезается)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.715"
+MACRO_VERSION = "3.10.716"
 DEFAULT_MAX_DEPTH = 1
 DEFAULT_SIZE_UNIT = "b"
+DEFAULT_COUNT_PAGES = False
 DEPTH_INDENT = "    "
 SETTINGS_APP_NAME = "libre-macros"
 SETTINGS_MODULE_NAME = "file_list_macro"
@@ -19,6 +20,31 @@ SIZE_UNIT_DIVISOR = {
     "mb": 1024 ** 2,
     "gb": 1024 ** 3,
 }
+# PDF + Writer + Impress/Draw (Calc не считаем — «страницы печати» ≠ листы).
+PAGE_COUNT_EXTS = frozenset(
+    (
+        ".pdf",
+        ".odt",
+        ".ott",
+        ".fodt",
+        ".doc",
+        ".docx",
+        ".dot",
+        ".dotx",
+        ".rtf",
+        ".odp",
+        ".otp",
+        ".fodp",
+        ".ppt",
+        ".pptx",
+        ".pot",
+        ".potx",
+        ".odg",
+        ".otg",
+        ".fodg",
+    )
+)
+RESULT_HEADER_PAGES = "Страниц"
 RESULT_HEADER_BASE = [
     "Тип",
     "Имя",
