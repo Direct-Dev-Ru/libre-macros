@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы pick_source_file: AO 2026 вырезает модульные присваивания в Scripts/*.py."""
 
-MACRO_VERSION = "3.10.719"
+MACRO_VERSION = "3.10.720"
 PARAM_NAME = u"Файлы-Источники"
 HEADER_ROW = 0
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.719"
+MACRO_VERSION = "3.10.720"
 import json
 import os
 import sys
@@ -15,7 +15,7 @@ from com.sun.star.awt.MessageBoxResults import CANCEL, NO, YES
 from com.sun.star.awt.MessageBoxType import MESSAGEBOX, QUERYBOX
 
 # Константы в pythonpath: AlterOffice 2026 вырезает модульные присваивания в .py-скрипте.
-from libre_macros_file_list_cfg import DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
+from libre_macros_file_list_cfg import COLUMN_WIDTH_AUTOFILTER_PAD as _COLUMN_WIDTH_AUTOFILTER_PAD, DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
 import libre_macros_file_list_cfg as _fl_state
 
 
@@ -1604,8 +1604,28 @@ def write_entries_to_sheet( results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT
             file_list_ui_status_finish()
 
     try:
+        columns = results_sheet.getColumns()
         for col in range(ncols):
-            results_sheet.getColumns().getByIndex(col).OptimalWidth = True
+            columns.getByIndex(col).OptimalWidth = True
+        # Запас под иконку автофильтра, чтобы не перекрывала текст заголовка.
+        pad = float(_COLUMN_WIDTH_AUTOFILTER_PAD)
+        if pad > 0:
+            for col in range(ncols):
+                column = columns.getByIndex(col)
+                try:
+                    width = int(column.Width)
+                except Exception:
+                    continue
+                if width <= 0:
+                    continue
+                try:
+                    column.OptimalWidth = False
+                except Exception:
+                    pass
+                try:
+                    column.Width = int(round(width * (1.0 + pad)))
+                except Exception:
+                    pass
     except Exception:
         pass
 
