@@ -15,7 +15,7 @@ AlterOffice 2026 (pythonscript / getModuleByUrl) ломает исходник S
   python3 aoffice_flatten_defs.py --tree macro-lib
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.717"
+MACRO_VERSION = "3.10.718"
 import argparse
 import io
 import os

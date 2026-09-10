@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.717"
+MACRO_VERSION = "3.10.718"
 import json
 import os
 import sys
@@ -370,6 +370,47 @@ def _set_combo_items(control, items, select_text=None):
         pass
 
 
+def _apply_file_list_theme(dm, title_text=None):
+    try:
+        from libre_macros_ui_theme import apply_soft_gray_green_theme
+        caption = title_text
+        if caption is None:
+            try:
+                caption = getattr(dm, "Title", None)
+            except Exception:
+                caption = None
+        apply_soft_gray_green_theme(dm, title_text=caption)
+    except Exception:
+        pass
+
+
+def _paint_file_list_titlebar(dialog):
+    try:
+        from libre_macros_ui_theme import GREEN_TITLE_BG, GREEN_TITLE_FG, try_paint_titlebar
+        try_paint_titlebar(dialog, title_bg=GREEN_TITLE_BG, title_fg=GREEN_TITLE_FG)
+    except Exception:
+        pass
+
+
+def _message_text_height(text, min_h=72, max_h=220, line_h=14):
+    total = 0
+    for line in str(text or "").split("\n"):
+        total += max(1, (len(line) + 59) // 60)
+    return max(int(min_h), min(int(max_h), int(total) * int(line_h) + 16))
+
+
+def _show_message_fallback(message, title="Сообщение"):
+    try:
+        toolkit = _dialog_toolkit()
+        msgbox = toolkit.createMessageBox(
+            _parent_window(), MESSAGEBOX, MSG_BUTTONS.BUTTONS_OK, title, message
+        )
+        msgbox.execute()
+    except Exception as e:
+        print("Ошибка при создании диалогового окна: %s" % e)
+        print("%s: %s" % (title, message))
+
+
 def create_custom_dialog():
     try:
         toolkit = _dialog_toolkit()
@@ -411,6 +452,8 @@ def create_custom_dialog():
         dialog_model.insertByName("NoButton", button_no_model)
         dialog_model.insertByName("CancelButton", button_cancel_model)
 
+        _apply_file_list_theme(dialog_model, title_text=dialog_model.Title)
+
         dialog = XSCRIPTCONTEXT.getComponentContext().getServiceManager().createInstanceWithContext(
             "com.sun.star.awt.UnoControlDialog", XSCRIPTCONTEXT.getComponentContext()
         )
@@ -420,6 +463,9 @@ def create_custom_dialog():
             def __init__(self):
                 unohelper.Base.__init__(self)
                 self.result = None
+
+            def disposing(self, event):
+                pass
 
             def actionPerformed(self, event):
                 self.result = event.Source.Model.Name
@@ -431,7 +477,12 @@ def create_custom_dialog():
         dialog.getControl("CancelButton").addActionListener(handler)
 
         dialog.createPeer(toolkit, _parent_window())
+        _paint_file_list_titlebar(dialog)
         dialog.execute()
+        try:
+            dialog.dispose()
+        except Exception:
+            pass
         return handler.result
 
     except Exception as e:
@@ -440,14 +491,97 @@ def create_custom_dialog():
 
 
 def show_message(message, title="Сообщение"):
+    """Сообщение в soft-gray стиле с зелёным титлом (как основной диалог file_list)."""
+    text = _uno_to_str(message)
+    caption = _uno_to_str(title) or u"Сообщение"
     try:
         toolkit = _dialog_toolkit()
-        msgbox = toolkit.createMessageBox(
-            _parent_window(), MESSAGEBOX, MSG_BUTTONS.BUTTONS_OK, title, message
-        )
-        msgbox.execute()
+        if toolkit is None:
+            _show_message_fallback(text, caption)
+            return
+        ctx = XSCRIPTCONTEXT.getComponentContext()
+        sm = ctx.getServiceManager()
+        dm = sm.createInstanceWithContext("com.sun.star.awt.UnoControlDialogModel", ctx)
+        m = 10
+        g = 8
+        btn_h = 22
+        btn_w = 96
+        dw = 420
+        text_h = _message_text_height(text)
+        dm.Title = caption
+        dm.Width = dw
+        dm.PositionX = 100
+        dm.PositionY = 80
+        content_w = dw - 2 * m
+        y = m
+        summary = dm.createInstance("com.sun.star.awt.UnoControlEditModel")
+        summary.Name = "SummaryEdit"
+        summary.PositionX = m
+        summary.PositionY = y
+        summary.Width = content_w
+        summary.Height = text_h
+        summary.MultiLine = True
+        summary.ReadOnly = True
+        try:
+            summary.VScroll = True
+        except Exception:
+            pass
+        dm.insertByName("SummaryEdit", summary)
+        y = y + text_h + g
+        ok_btn = dm.createInstance("com.sun.star.awt.UnoControlButtonModel")
+        ok_btn.Name = "OkButton"
+        ok_btn.Label = u"OK"
+        ok_btn.PositionX = m
+        ok_btn.PositionY = y
+        ok_btn.Width = btn_w
+        ok_btn.Height = btn_h
+        try:
+            ok_btn.DefaultButton = True
+        except Exception:
+            pass
+        dm.insertByName("OkButton", ok_btn)
+        dm.Height = y + btn_h + m
+        _apply_file_list_theme(dm, title_text=caption)
+
+        dialog = sm.createInstanceWithContext("com.sun.star.awt.UnoControlDialog", ctx)
+        dialog.setModel(dm)
+        dialog.createPeer(toolkit, _parent_window())
+        _paint_file_list_titlebar(dialog)
+        try:
+            dialog.getControl("SummaryEdit").setText(text)
+        except Exception:
+            try:
+                dm.getByName("SummaryEdit").Text = text
+            except Exception:
+                pass
+
+        class _OkHandler(unohelper.Base, XActionListener):
+            def disposing(self, event):
+                pass
+
+            def actionPerformed(self, event):
+                try:
+                    dialog.endExecute()
+                except Exception:
+                    pass
+
+        handler = _OkHandler()
+        try:
+            dialog.getControl("OkButton").addActionListener(handler)
+        except Exception:
+            pass
+        try:
+            dialog.setVisible(True)
+        except Exception:
+            pass
+        dialog.execute()
+        try:
+            dialog.dispose()
+        except Exception:
+            pass
     except Exception as e:
-        print("Ошибка при создании диалогового окна: %s" % e)
+        print("Ошибка themed message: %s" % e)
+        _show_message_fallback(text, caption)
 
 
 def show_message_2(message):
@@ -474,10 +608,7 @@ def show_folder_picker(initial_dir=None):
         return None
 
 
-def show_sheet_exists_dialog(sheet_name):
-    """
-    Лист уже есть: YES — перезаписать, NO — удалить и создать заново, CANCEL — отмена.
-    """
+def _show_sheet_exists_fallback(sheet_name):
     try:
         toolkit = _dialog_toolkit()
         text = (
@@ -502,6 +633,123 @@ def show_sheet_exists_dialog(sheet_name):
     except Exception as e:
         print("Ошибка диалога листа: %s" % e)
         return "cancel"
+
+
+def show_sheet_exists_dialog(sheet_name):
+    """
+    Лист уже есть: YES — перезаписать, NO — удалить и создать заново, CANCEL — отмена.
+    Soft-gray + зелёный титл; MessageBox — только fallback.
+    """
+    name = _uno_to_str(sheet_name)
+    text = (
+        "Лист «%s» уже существует.\n\n"
+        "«Да» — перезаписать содержимое\n"
+        "«Нет» — удалить лист и создать заново\n"
+        "«Отмена» — прервать операцию"
+    ) % name
+    try:
+        toolkit = _dialog_toolkit()
+        if toolkit is None:
+            return _show_sheet_exists_fallback(name)
+        ctx = XSCRIPTCONTEXT.getComponentContext()
+        sm = ctx.getServiceManager()
+        dm = sm.createInstanceWithContext("com.sun.star.awt.UnoControlDialogModel", ctx)
+        m = 10
+        g = 8
+        btn_h = 22
+        btn_w = 96
+        dw = 440
+        text_h = _message_text_height(text, min_h=90, max_h=200)
+        dm.Title = u"Лист существует"
+        dm.Width = dw
+        dm.PositionX = 100
+        dm.PositionY = 80
+        content_w = dw - 2 * m
+        y = m
+        summary = dm.createInstance("com.sun.star.awt.UnoControlEditModel")
+        summary.Name = "SummaryEdit"
+        summary.PositionX = m
+        summary.PositionY = y
+        summary.Width = content_w
+        summary.Height = text_h
+        summary.MultiLine = True
+        summary.ReadOnly = True
+        try:
+            summary.VScroll = True
+        except Exception:
+            pass
+        dm.insertByName("SummaryEdit", summary)
+        y = y + text_h + g
+        specs = (
+            ("YesButton", u"Да", m),
+            ("NoButton", u"Нет", m + btn_w + g),
+            ("CancelButton", u"Отмена", dw - m - btn_w),
+        )
+        for btn_name, label, x in specs:
+            bm = dm.createInstance("com.sun.star.awt.UnoControlButtonModel")
+            bm.Name = btn_name
+            bm.Label = label
+            bm.PositionX = x
+            bm.PositionY = y
+            bm.Width = btn_w
+            bm.Height = btn_h
+            dm.insertByName(btn_name, bm)
+        dm.Height = y + btn_h + m
+        _apply_file_list_theme(dm, title_text=dm.Title)
+
+        dialog = sm.createInstanceWithContext("com.sun.star.awt.UnoControlDialog", ctx)
+        dialog.setModel(dm)
+        dialog.createPeer(toolkit, _parent_window())
+        _paint_file_list_titlebar(dialog)
+        try:
+            dialog.getControl("SummaryEdit").setText(text)
+        except Exception:
+            try:
+                dm.getByName("SummaryEdit").Text = text
+            except Exception:
+                pass
+
+        state = {"action": "cancel"}
+
+        class _SheetHandler(unohelper.Base, XActionListener):
+            def disposing(self, event):
+                pass
+
+            def actionPerformed(self, event):
+                try:
+                    btn = str(event.Source.getModel().Name)
+                except Exception:
+                    return
+                if btn == "YesButton":
+                    state["action"] = "overwrite"
+                elif btn == "NoButton":
+                    state["action"] = "recreate"
+                else:
+                    state["action"] = "cancel"
+                try:
+                    dialog.endExecute()
+                except Exception:
+                    pass
+
+        handler = _SheetHandler()
+        for btn_name in ("YesButton", "NoButton", "CancelButton"):
+            try:
+                dialog.getControl(btn_name).addActionListener(handler)
+            except Exception:
+                pass
+        try:
+            dialog.setVisible(True)
+        except Exception:
+            pass
+        dialog.execute()
+        try:
+            dialog.dispose()
+        except Exception:
+            pass
+        return state["action"]
+    except Exception as e:
+        print("Ошибка themed sheet dialog: %s" % e)
+        return _show_sheet_exists_fallback(name)
 
 
 def normalize_path(path):
@@ -1498,8 +1746,7 @@ def create_file_analyzer_dialog():
         _add_button(dialog_model, "CancelButton", "Отмена", m + 220, btn_y, 100, 28)
 
         try:
-            from libre_macros_ui_theme import apply_soft_gray_green_theme
-            apply_soft_gray_green_theme(dialog_model, title_text=dialog_model.Title)
+            _apply_file_list_theme(dialog_model, title_text=dialog_model.Title)
         except Exception:
             pass
 
@@ -1618,11 +1865,7 @@ def create_file_analyzer_dialog():
             dialog.getControl(btn).addActionListener(handler)
 
         dialog.createPeer(toolkit, _parent_window())
-        try:
-            from libre_macros_ui_theme import GREEN_TITLE_BG, GREEN_TITLE_FG, try_paint_titlebar
-            try_paint_titlebar(dialog, title_bg=GREEN_TITLE_BG, title_fg=GREEN_TITLE_FG)
-        except Exception:
-            pass
+        _paint_file_list_titlebar(dialog)
         dialog.execute()
         return handler.result
 

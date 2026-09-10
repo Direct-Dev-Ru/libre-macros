@@ -5,7 +5,7 @@ from __future__ import print_function
 
 Подключается из libre_macros_lib.py; публичный API — lm_final_*.
 """
-MACRO_VERSION = "3.10.717"
+MACRO_VERSION = "3.10.718"
 import re
 
 import libre_macros_lib as lm
