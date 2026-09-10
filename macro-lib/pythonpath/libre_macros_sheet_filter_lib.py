@@ -6,7 +6,7 @@
 и «удаление_листов» / «скрытие_листов».
 """
 from __future__ import print_function
-MACRO_VERSION = "3.10.718"
+MACRO_VERSION = "3.10.719"
 import datetime
 import re
 

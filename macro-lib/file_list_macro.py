@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.718"
+MACRO_VERSION = "3.10.719"
 import json
 import os
 import sys
@@ -15,7 +15,7 @@ from com.sun.star.awt.MessageBoxResults import CANCEL, NO, YES
 from com.sun.star.awt.MessageBoxType import MESSAGEBOX, QUERYBOX
 
 # Константы в pythonpath: AlterOffice 2026 вырезает модульные присваивания в .py-скрипте.
-from libre_macros_file_list_cfg import DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEPTH_INDENT as _DEPTH_INDENT, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
+from libre_macros_file_list_cfg import DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
 import libre_macros_file_list_cfg as _fl_state
 
 
@@ -245,6 +245,7 @@ def _default_dialog_settings():
         "masks": "",
         "size_unit": _DEFAULT_SIZE_UNIT,
         "count_pages": _DEFAULT_COUNT_PAGES,
+        "sort_mode": _DEFAULT_SORT_MODE,
     }
 
 
@@ -255,6 +256,34 @@ def normalize_count_pages(value):
         return bool(int(value))
     text = str(value or "").strip().lower()
     return text in ("1", "true", "yes", "y", "да", "on")
+
+
+def normalize_sort_mode(value):
+    text = str(value or _DEFAULT_SORT_MODE).strip()
+    codes = set(code for code, _label in _SORT_PRESETS)
+    if text in codes:
+        return text
+    low = text.casefold()
+    for code, label in _SORT_PRESETS:
+        if low == str(code).casefold() or low == str(label).casefold():
+            return code
+    return _DEFAULT_SORT_MODE
+
+
+def sort_mode_label(sort_mode):
+    key = normalize_sort_mode(sort_mode)
+    for code, label in _SORT_PRESETS:
+        if code == key:
+            return label
+    return _SORT_PRESETS[0][1]
+
+
+def sort_mode_from_label(label):
+    text = str(label or "").strip()
+    for code, item_label in _SORT_PRESETS:
+        if text == item_label or text.casefold() == str(code).casefold():
+            return code
+    return normalize_sort_mode(text)
 
 
 def normalize_size_unit(value):
@@ -333,6 +362,7 @@ def load_dialog_settings():
         settings["max_depth"] = _DEFAULT_MAX_DEPTH
     settings["size_unit"] = normalize_size_unit(settings.get("size_unit"))
     settings["count_pages"] = normalize_count_pages(settings.get("count_pages"))
+    settings["sort_mode"] = normalize_sort_mode(settings.get("sort_mode"))
     return settings
 
 
@@ -348,6 +378,7 @@ def save_dialog_settings(settings):
         payload["max_depth"] = int(payload.get("max_depth") or _DEFAULT_MAX_DEPTH)
         payload["size_unit"] = normalize_size_unit(payload.get("size_unit"))
         payload["count_pages"] = normalize_count_pages(payload.get("count_pages"))
+        payload["sort_mode"] = normalize_sort_mode(payload.get("sort_mode"))
         with open(_settings_file_path(), "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
     except Exception as err:
@@ -1011,6 +1042,88 @@ def sort_entries_hierarchical(entries):
     return sorted_entries
 
 
+def _entry_cf(value):
+    return str(value or "").casefold()
+
+
+def _entry_kind_rank(item):
+    return 0 if item.get("kind") == "папка" else 1
+
+
+def _entry_depth(item):
+    try:
+        return int(item.get("depth") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _entry_size(item):
+    try:
+        return float(item.get("size") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def sort_entries(entries, sort_mode=None):
+    """Сортировка по пресету из SORT_PRESETS."""
+    mode = normalize_sort_mode(sort_mode)
+    if mode == "tree":
+        return sort_entries_hierarchical(entries)
+
+    rows = list(entries)
+    if mode == "depth_kind_name":
+        rows.sort(
+            key=lambda it: (
+                _entry_depth(it),
+                _entry_kind_rank(it),
+                _entry_cf(it.get("name")),
+            )
+        )
+    elif mode == "full_depth_name":
+        rows.sort(
+            key=lambda it: (
+                _entry_cf(it.get("full_path")),
+                _entry_depth(it),
+                _entry_cf(it.get("name")),
+            )
+        )
+    elif mode == "rel_depth_name":
+        rows.sort(
+            key=lambda it: (
+                _entry_cf(str(it.get("rel_path", "")).replace("\\", "/")),
+                _entry_depth(it),
+                _entry_cf(it.get("name")),
+            )
+        )
+    elif mode == "kind_name":
+        rows.sort(
+            key=lambda it: (_entry_kind_rank(it), _entry_cf(it.get("name")))
+        )
+    elif mode == "name":
+        rows.sort(key=lambda it: _entry_cf(it.get("name")))
+    elif mode == "ext_name":
+        rows.sort(
+            key=lambda it: (_entry_cf(it.get("ext")), _entry_cf(it.get("name")))
+        )
+    elif mode == "parent_name":
+        rows.sort(
+            key=lambda it: (
+                _entry_cf(it.get("parent")),
+                _entry_cf(it.get("name")),
+            )
+        )
+    elif mode == "mtime_desc":
+        rows.sort(key=lambda it: _entry_cf(it.get("name")))
+        rows.sort(key=lambda it: _entry_cf(it.get("mtime")), reverse=True)
+    elif mode == "size_desc":
+        rows.sort(
+            key=lambda it: (-_entry_size(it), _entry_cf(it.get("name")))
+        )
+    else:
+        return sort_entries_hierarchical(entries)
+    return rows
+
+
 def _set_cell_number(cell, value):
     """Calc ожидает double для Value; Python int может передаться как hyper."""
     try:
@@ -1160,7 +1273,7 @@ def collect_path_entries(root_path, max_depth=None, masks=None, show_progress=Tr
         if show_progress:
             file_list_ui_status_finish()
 
-    return sort_entries_hierarchical(entries), root
+    return entries, root
 
 
 def get_sheet_by_name(doc, sheet_name):
@@ -1377,8 +1490,31 @@ def _sheet_set_data_array(sheet, start_row, rows, number_cols=None):
 
 
 def _format_header_row(sheet, ncols):
+    """Заголовок в стиле проекта: excel_header / белый, жирный."""
+    if sheet is None or ncols < 1:
+        return
+    ec = int(ncols) - 1
     try:
-        sheet.getCellRangeByPosition(0, 0, ncols - 1, 0).CharWeight = 150
+        from libre_macros_lib import (
+            _lm_apply_header_row_alignment,
+            _lm_pp_zebra_apply_header_row_style,
+            _lm_pp_zebra_parse_stripe_spec,
+        )
+
+        hdr = sheet.getCellRangeByPosition(0, 0, ec, 0)
+        style = _lm_pp_zebra_parse_stripe_spec(_RESULT_HEADER_STYLE)
+        _lm_pp_zebra_apply_header_row_style(
+            sheet, hdr, style, header_row=0, end_col=ec
+        )
+        try:
+            _lm_apply_header_row_alignment(sheet, ec, 0)
+        except Exception:
+            pass
+        return
+    except Exception as err:
+        print("Оформление заголовка: %s" % err)
+    try:
+        sheet.getCellRangeByPosition(0, 0, ec, 0).CharWeight = 150
     except Exception:
         col = 0
         while col < ncols:
@@ -1387,6 +1523,41 @@ def _format_header_row(sheet, ncols):
             except Exception:
                 pass
             col += 1
+
+
+def _apply_result_menu_autofilter(doc, sheet, ncols, data_rows):
+    """
+    Меню-автофильтр без именованных DatabaseRanges (UnnamedDatabaseRanges).
+    """
+    if doc is None or sheet is None or ncols < 1:
+        return False
+    try:
+        er = max(0, int(data_rows))
+    except (TypeError, ValueError):
+        er = 0
+    ec = int(ncols) - 1
+    try:
+        from libre_macros_lib import (
+            _lm_pp_disable_sheet_menu_autofilter,
+            _lm_pp_ensure_sheet_menu_autofilter,
+            _lm_pp_remove_sheet_autofilters,
+        )
+
+        try:
+            _lm_pp_remove_sheet_autofilters(doc, sheet)
+        except Exception:
+            pass
+        try:
+            # Снять старый меню-фильтр, чтобы setByTable обновил диапазон.
+            _lm_pp_disable_sheet_menu_autofilter(doc, sheet)
+        except Exception:
+            pass
+        return bool(
+            _lm_pp_ensure_sheet_menu_autofilter(doc, sheet, 0, 0, ec, er)
+        )
+    except Exception as err:
+        print("Автофильтр (меню): %s" % err)
+        return False
 
 
 def write_entries_to_sheet( results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT, clear_first=True, show_progress=False, count_pages=False):
@@ -1438,7 +1609,7 @@ def write_entries_to_sheet( results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT
     except Exception:
         pass
 
-    return written
+    return written, ncols
 
 
 def freeze_sheet_first_row(doc, sheet):
@@ -1455,7 +1626,7 @@ def freeze_sheet_first_row(doc, sheet):
         print("Не удалось закрепить первую строку: %s" % err)
 
 
-def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES):
+def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE):
     """
     Собирает данные о файлах и папках и выводит на лист.
 
@@ -1463,6 +1634,7 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
     masks — строка или список масок (*.xlsx;*.pdf).
     size_unit — b | kb | mb | gb (б, Кб, Мб, Гб).
     count_pages — считать страницы PDF/Writer/Impress/Draw через UNO.
+    sort_mode — пресет сортировки (SORT_PRESETS).
     """
     try:
         root = path_from_user_input(path)
@@ -1480,6 +1652,7 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
             mask_list = []
 
         do_pages = normalize_count_pages(count_pages)
+        mode_sort = normalize_sort_mode(sort_mode)
 
         entries, root = collect_path_entries(
             root, max_depth=max_depth, masks=mask_list, show_progress=True
@@ -1500,13 +1673,15 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
         if do_pages:
             enrich_entries_with_page_counts(entries, show_progress=True)
 
+        entries = sort_entries(entries, mode_sort)
+
         doc = XSCRIPTCONTEXT.getDocument()
         results_sheet, mode = resolve_target_sheet(doc, sheet_name)
         if results_sheet is None:
             return False
 
         _ensure_active_sheet(doc, results_sheet)
-        written = write_entries_to_sheet(
+        written, ncols = write_entries_to_sheet(
             results_sheet,
             entries,
             size_unit=normalize_size_unit(size_unit),
@@ -1515,10 +1690,11 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
             count_pages=do_pages,
         )
         freeze_sheet_first_row(doc, results_sheet)
+        _apply_result_menu_autofilter(doc, results_sheet, ncols, written)
         _focus_sheet_top_left(doc, results_sheet)
         print(
-            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s)"
-            % (written, results_sheet.Name, mode, do_pages)
+            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s, сортировка=%s)"
+            % (written, results_sheet.Name, mode, do_pages, mode_sort)
         )
         return True
 
@@ -1632,7 +1808,7 @@ def create_file_analyzer_dialog():
         )
 
         dlg_w = 520
-        dlg_h = 390
+        dlg_h = 450
         m = 10
         field_w = dlg_w - m * 2 - 100 - 8
         dialog_model.PositionX = 100
@@ -1729,6 +1905,19 @@ def create_file_analyzer_dialog():
         )
 
         y += 34
+        _add_label(
+            dialog_model,
+            "LabelSort",
+            "Сортировка результата:",
+            m,
+            y,
+            dlg_w - m * 2,
+            14,
+        )
+        y += 18
+        _add_combo(dialog_model, "SortCombo", m, y, dlg_w - m * 2, 22)
+
+        y += 34
         _add_checkbox(
             dialog_model,
             "CountPagesCheck",
@@ -1765,6 +1954,7 @@ def create_file_analyzer_dialog():
                 self.depth_field = None
                 self.mask_field = None
                 self.size_unit_combo = None
+                self.sort_combo = None
                 self.count_pages_check = None
 
             def actionPerformed(self, event):
@@ -1787,6 +1977,12 @@ def create_file_analyzer_dialog():
                             [label for _code, label in _SIZE_UNIT_OPTIONS],
                             _SIZE_UNIT_OPTIONS[0][1],
                         )
+                    if self.sort_combo:
+                        _set_combo_items(
+                            self.sort_combo,
+                            [label for _code, label in _SORT_PRESETS],
+                            sort_mode_label(_DEFAULT_SORT_MODE),
+                        )
                     _checkbox_set_state(self.count_pages_check, _DEFAULT_COUNT_PAGES)
 
                 elif button_name == "RunButton":
@@ -1800,6 +1996,11 @@ def create_file_analyzer_dialog():
                             if self.size_unit_combo
                             else size_unit_label(_DEFAULT_SIZE_UNIT)
                         )
+                        sort_text = (
+                            _control_get_text(self.sort_combo)
+                            if self.sort_combo
+                            else sort_mode_label(_DEFAULT_SORT_MODE)
+                        )
                         count_pages = _checkbox_get_state(self.count_pages_check)
 
                         path = path_from_user_input(path)
@@ -1807,6 +2008,7 @@ def create_file_analyzer_dialog():
                         depth_text = depth_text.strip() if depth_text else str(_DEFAULT_MAX_DEPTH)
                         mask_text = mask_text.strip() if mask_text else ""
                         size_unit = size_unit_from_label(size_unit_text)
+                        sort_mode = sort_mode_from_label(sort_text)
 
                         if not path:
                             show_message("Укажите путь к папке.")
@@ -1829,6 +2031,7 @@ def create_file_analyzer_dialog():
                                 "masks": mask_text,
                                 "size_unit": size_unit,
                                 "count_pages": count_pages,
+                                "sort_mode": sort_mode,
                             }
                         )
                         self.result = (
@@ -1839,13 +2042,14 @@ def create_file_analyzer_dialog():
                             mask_text,
                             size_unit,
                             count_pages,
+                            sort_mode,
                         )
                         self.dialog.endExecute()
                     except Exception as e:
                         show_message("Ошибка чтения полей диалога: %s" % e)
 
                 elif button_name == "CancelButton":
-                    self.result = ("cancel", None, None, None, None, None, None)
+                    self.result = ("cancel", None, None, None, None, None, None, None)
                     self.dialog.endExecute()
 
         handler = DialogHandler(dialog)
@@ -1854,11 +2058,17 @@ def create_file_analyzer_dialog():
         handler.depth_field = dialog.getControl("DepthField")
         handler.mask_field = dialog.getControl("MaskField")
         handler.size_unit_combo = dialog.getControl("SizeUnitCombo")
+        handler.sort_combo = dialog.getControl("SortCombo")
         handler.count_pages_check = dialog.getControl("CountPagesCheck")
         _set_combo_items(
             handler.size_unit_combo,
             [label for _code, label in _SIZE_UNIT_OPTIONS],
             size_unit_label(saved.get("size_unit", _DEFAULT_SIZE_UNIT)),
+        )
+        _set_combo_items(
+            handler.sort_combo,
+            [label for _code, label in _SORT_PRESETS],
+            sort_mode_label(saved.get("sort_mode", _DEFAULT_SORT_MODE)),
         )
 
         for btn in ("BrowseButton", "ClearButton", "RunButton", "CancelButton"):
@@ -1880,11 +2090,11 @@ def analyze_files_dialog(*args):
         result = create_file_analyzer_dialog()
 
         if result and result[0] == "run":
-            _, path, sheet_name, max_depth, mask_text, size_unit, count_pages = result
+            _, path, sheet_name, max_depth, mask_text, size_unit, count_pages, sort_mode = result
             sheet_arg = sheet_name if sheet_name else None
             print(
-                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s"
-                % (path, sheet_arg, max_depth, mask_text, size_unit, count_pages)
+                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s, сортировка=%s"
+                % (path, sheet_arg, max_depth, mask_text, size_unit, count_pages, sort_mode)
             )
             success = analyze_files(
                 path,
@@ -1893,6 +2103,7 @@ def analyze_files_dialog(*args):
                 masks=mask_text,
                 size_unit=size_unit,
                 count_pages=count_pages,
+                sort_mode=sort_mode,
             )
             if success:
                 mask_note = ""
@@ -1900,11 +2111,12 @@ def analyze_files_dialog(*args):
                     mask_note = "\nМаски: %s" % mask_text
                 pages_note = "\nСтраницы: да (UNO)" if count_pages else ""
                 show_message(
-                    "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s%s%s"
+                    "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s\nСортировка: %s%s%s"
                     % (
                         normalize_path(path),
                         max_depth,
                         size_unit_label(size_unit),
+                        sort_mode_label(sort_mode),
                         mask_note,
                         pages_note,
                     )
