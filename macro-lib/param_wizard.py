@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.726"
+MACRO_VERSION = "3.10.727"
 import ast
 import glob
 import json
@@ -1367,6 +1367,51 @@ def _param_sheet_header_value_max_col(sheet, max_scan=40, fallback=1):
     if last <= 0:
         return int(fallback)
     return last
+
+def _param_ensure_value_headers_through(sheet, through_col):
+    """
+    Дописать «Значение N» только для недостающих столбцов 1..through_col.
+    Не трогает уже заполненные заголовки и не пересчитывает весь лист.
+    Возвращает True, если хотя бы один заголовок добавили/исправили.
+    """
+    if sheet is None:
+        return False
+    try:
+        through = int(through_col)
+    except (TypeError, ValueError):
+        return False
+    if through < 1:
+        return False
+    changed = False
+    # A = Параметр (если пусто)
+    try:
+        cell_a = sheet.getCellByPosition(0, 0)
+        if not _param_match(_cell_string(cell_a), u'Параметр'):
+            if unicode(_cell_string(cell_a) or u'').strip() == u'':
+                cell_a.String = u'Параметр'
+                _param_style_header_cell(cell_a)
+                changed = True
+    except Exception:
+        pass
+    col = 1
+    while col <= through:
+        try:
+            cell = sheet.getCellByPosition(col, 0)
+            hdr = _cell_string(cell)
+            want = u'Значение %d' % col
+            if hdr == u'' or not _param_is_value_column_header(hdr):
+                cell.String = want
+                _param_style_header_cell(cell)
+                changed = True
+            elif unicode(hdr).strip() != want:
+                # «Значение» без номера / чужой номер — выровнять только этот столбец
+                cell.String = want
+                _param_style_header_cell(cell)
+                changed = True
+        except Exception:
+            pass
+        col = col + 1
+    return changed
 
 def _vlookup_row_is_json_only(sheet, row):
     """True, если ВПР записан JSON в C (B/D–F пусты) — не раздувать шапку до 5 колонок."""
@@ -15376,7 +15421,12 @@ def _wizard_dlg_add_combo_if_any(dm, name, x, y, w, h):
 
 
 def _apply_step_condition_to_row(sheet, row, condition_text, catalog=None, doc=None):
-    """Записать JSON условия в D (codec) или E (plugin); расширить шапку."""
+    """
+    Записать JSON условия в D (codec) или E (plugin).
+
+    Только точечно: ячейка строки + недостающие «Значение N» в шапке.
+    Без полного _refresh_param_sheet_value_merges (границы/autofit всего листа).
+    """
     if sheet is None or row is None or int(row) < 0:
         return
     row = int(row)
@@ -15386,25 +15436,37 @@ def _apply_step_condition_to_row(sheet, row, condition_text, catalog=None, doc=N
     text = unicode(condition_text or u'').strip()
     _param_sheet_begin_write(sheet)
     try:
-        sheet.getCellByPosition(col, row).String = text
-        need_header = col
+        # Шапка: только если ещё нет «Значение 3/4» (и промежуточных).
         try:
-            hdr_max = _param_sheet_header_value_max_col(sheet)
-            if hdr_max < need_header:
-                _restore_param_sheet_header_row(sheet, max(need_header, hdr_max, 2))
-        except Exception:
-            try:
-                _restore_param_sheet_header_row(sheet, need_header)
-            except Exception:
-                pass
-        try:
-            _param_apply_row_disabled_style(
-                sheet, row, _param_sheet_name_is_disabled(_cell_string(sheet.getCellByPosition(0, row))), catalog=catalog
-            )
+            _param_ensure_value_headers_through(sheet, col)
         except Exception:
             pass
+        cell = sheet.getCellByPosition(col, row)
+        cell.String = text
+        # Оформление только этой ячейки (и заливка, если строка отключена).
         try:
-            _refresh_param_sheet_value_merges(doc, sheet, catalog)
+            disabled = _param_sheet_name_is_disabled(
+                _cell_string(sheet.getCellByPosition(0, row))
+            )
+        except Exception:
+            disabled = False
+        try:
+            if disabled:
+                _param_set_cell_disabled_fill(cell)
+            else:
+                _param_style_value_cell(cell, wrap_top=True)
+                _param_clear_cell_background(cell)
+                _param_reset_cell_text_color(cell)
+        except Exception:
+            pass
+        # Высота только этой строки — без OptimalHeight по всему листу.
+        try:
+            rows = sheet.getRows()
+            row_obj = rows.getByIndex(row)
+            try:
+                row_obj.OptimalHeight = True
+            except Exception:
+                pass
         except Exception:
             pass
     finally:

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Копирование строк листа параметров сбора."""
-MACRO_VERSION = "3.10.726"
+MACRO_VERSION = "3.10.727"
 from libre_macros_copy_param_rows_lib import copy_param_rows_entry as _entry
 
 

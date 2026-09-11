@@ -2,7 +2,7 @@
 """Настройки группы макросов todo_task (JSON в ~/.config/libre-macros/todo_task/)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.726"
+MACRO_VERSION = "3.10.727"
 import json
 import os
 import sys
