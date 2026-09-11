@@ -10,7 +10,7 @@
 """
 
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 import calendar
 import os
 import re
@@ -13540,6 +13540,9 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
         multi_match_mode = _direct_vlookup_normalize_multi_match(
             spec.get("multi_match"), default=u"all"
         )
+        value_delimiter = spec.get("value_delimiter")
+        if value_delimiter is None or unicode(value_delimiter).strip() == u"":
+            value_delimiter = spec.get("join_delimiter")
         is_inner = _direct_vlookup_normalize_join_type(spec.get("join_type"), default=u"left") == u"inner"
         hl_fill = None
         if highlight_hex is not None:
@@ -13607,15 +13610,20 @@ def _direct_vlookup_run_for_xlsx(path, spec, run_suffix=u""):
                 output_specs.append((row_vals, matches[0], None, len(matches)))
 
         def _join_ml(existing, parts):
-            chunks = []
-            ex = unicode(existing if existing is not None else u"")
-            if ex.strip() != u"":
-                chunks.append(ex)
-            for p in parts:
-                ps = unicode(p if p is not None else u"")
-                if ps != u"":
-                    chunks.append(ps)
-            return u"\n".join(chunks)
+            try:
+                from libre_macros_value_join_lib import join_cell_value_parts
+
+                return join_cell_value_parts(existing, parts, delimiter=value_delimiter)
+            except Exception:
+                chunks = []
+                ex = unicode(existing if existing is not None else u"")
+                if ex.strip() != u"":
+                    chunks.append(ex)
+                for p in parts:
+                    ps = unicode(p if p is not None else u"")
+                    if ps != u"":
+                        chunks.append(ps)
+                return u"\n".join(chunks)
 
         def _write_vlookup_out_cells(rr, row_vals, single, multi, n_count):
             if single is None and multi is None:
@@ -13918,6 +13926,9 @@ def _direct_vlookup_run_for_ods(path, spec, run_suffix=u""):
         multi_match_mode = _direct_vlookup_normalize_multi_match(
             spec.get("multi_match"), default=u"all"
         )
+        value_delimiter = spec.get("value_delimiter")
+        if value_delimiter is None or unicode(value_delimiter).strip() == u"":
+            value_delimiter = spec.get("join_delimiter")
         is_inner = _direct_vlookup_normalize_join_type(spec.get("join_type"), default=u"left") == u"inner"
 
         # keymap for right
@@ -14076,15 +14087,20 @@ def _direct_vlookup_run_for_ods(path, spec, run_suffix=u""):
         base_max_col0 = max_col0
 
         def _join_ml(existing, parts):
-            chunks = []
-            ex = unicode(existing if existing is not None else u"")
-            if ex.strip() != u"":
-                chunks.append(ex)
-            for p in parts:
-                ps = unicode(p if p is not None else u"")
-                if ps != u"":
-                    chunks.append(ps)
-            return u"\n".join(chunks)
+            try:
+                from libre_macros_value_join_lib import join_cell_value_parts
+
+                return join_cell_value_parts(existing, parts, delimiter=value_delimiter)
+            except Exception:
+                chunks = []
+                ex = unicode(existing if existing is not None else u"")
+                if ex.strip() != u"":
+                    chunks.append(ex)
+                for p in parts:
+                    ps = unicode(p if p is not None else u"")
+                    if ps != u"":
+                        chunks.append(ps)
+                return u"\n".join(chunks)
 
         def _vlookup_out_values(by_col, single, multi, n_count):
             out = {}

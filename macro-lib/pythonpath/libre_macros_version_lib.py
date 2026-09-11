@@ -2,7 +2,7 @@
 """Краткий About текущей версии пакета libre-macros."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 try:
     unicode
 except NameError:

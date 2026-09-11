@@ -5,7 +5,7 @@ from __future__ import print_function, unicode_literals
 
 Ключ: копирование_диапазонов (FINAL + опционально RANGE).
 """
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 import re
 
 try:
@@ -346,6 +346,39 @@ def _normalize_insert_axis(block, height, width, source_only_rows, source_only_c
     return u"rows"
 
 
+def _normalize_overlap_mode(block):
+    raw = unicode(
+        block.get("overlap_mode")
+        or block.get("on_overlap")
+        or block.get("paste_overlap")
+        or u"replace"
+    ).strip()
+    if raw == u"":
+        return u"replace"
+    low = raw.casefold()
+    try:
+        from libre_macros_param_wizard_cfg import COPY_RANGES_OVERLAP_MODE_CODE
+
+        code = COPY_RANGES_OVERLAP_MODE_CODE.get(low, low)
+    except Exception:
+        code = low
+    if code in (u"fill_empty", u"merge"):
+        return code
+    return u"replace"
+
+
+def _normalize_value_delimiter(block):
+    raw = block.get("value_delimiter")
+    if raw is None or unicode(raw).strip() == u"":
+        raw = block.get("join_delimiter")
+    try:
+        from libre_macros_value_join_lib import normalize_value_join_delimiter_for_store
+
+        return normalize_value_join_delimiter_for_store(raw)
+    except Exception:
+        return unicode(raw if raw is not None else u"").strip()
+
+
 def read_block(doc, sheet, rect, content):
     """
     Snapshot источника.
@@ -440,18 +473,110 @@ def clear_rect(sheet, rect):
             r = r + 1
 
 
-def _write_values(sheet, sc0, sr0, payload):
+def _write_values(sheet, sc0, sr0, payload, overlap_mode=u"replace", value_delimiter=None):
     data = payload.get("data")
     if data is None:
         return False, u"нет data"
     h = int(payload["height"])
     w = int(payload["width"])
+    mode = unicode(overlap_mode or u"replace").strip().casefold()
+    if mode not in (u"fill_empty", u"merge"):
+        try:
+            dest = sheet.getCellRangeByPosition(sc0, sr0, sc0 + w - 1, sr0 + h - 1)
+            dest.setDataArray(data)
+            return True, u"values"
+        except Exception as err:
+            return False, u"setDataArray: %s" % err
     try:
-        dest = sheet.getCellRangeByPosition(sc0, sr0, sc0 + w - 1, sr0 + h - 1)
-        dest.setDataArray(data)
-        return True, u"values"
-    except Exception as err:
-        return False, u"setDataArray: %s" % err
+        from libre_macros_value_join_lib import (
+            cell_is_empty_for_fill,
+            join_cell_value_parts,
+        )
+    except Exception:
+        cell_is_empty_for_fill = None
+        join_cell_value_parts = None
+    r = 0
+    while r < h:
+        c = 0
+        while c < w:
+            try:
+                cell = sheet.getCellByPosition(sc0 + c, sr0 + r)
+            except Exception:
+                c = c + 1
+                continue
+            try:
+                new_val = data[r][c]
+            except Exception:
+                new_val = u""
+            if mode == u"fill_empty":
+                empty = True
+                if cell_is_empty_for_fill is not None:
+                    try:
+                        empty = bool(cell_is_empty_for_fill(cell))
+                    except Exception:
+                        empty = True
+                else:
+                    try:
+                        empty = unicode(cell.String or u"").strip() == u""
+                    except Exception:
+                        empty = True
+                if not empty:
+                    c = c + 1
+                    continue
+                _set_cell_payload_value(cell, new_val)
+            else:
+                # merge
+                existing = u""
+                empty = True
+                try:
+                    existing = unicode(cell.String or u"")
+                except Exception:
+                    existing = u""
+                if cell_is_empty_for_fill is not None:
+                    try:
+                        empty = bool(cell_is_empty_for_fill(cell))
+                    except Exception:
+                        empty = existing.strip() == u""
+                else:
+                    empty = existing.strip() == u""
+                if empty:
+                    _set_cell_payload_value(cell, new_val)
+                else:
+                    if join_cell_value_parts is not None:
+                        text = join_cell_value_parts(
+                            existing, [new_val], delimiter=value_delimiter
+                        )
+                    else:
+                        nv = unicode(new_val if new_val is not None else u"")
+                        text = existing if nv == u"" else (existing + u"\n" + nv)
+                    try:
+                        cell.setString(unicode(text if text is not None else u""))
+                    except Exception:
+                        pass
+                    if u"\n" in unicode(text or u""):
+                        try:
+                            cell.setPropertyValue("IsTextWrapped", True)
+                        except Exception:
+                            pass
+            c = c + 1
+        r = r + 1
+    return True, u"values/%s" % mode
+
+
+def _set_cell_payload_value(cell, val):
+    try:
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            cell.Value = float(val)
+            return
+    except Exception:
+        pass
+    try:
+        cell.setString(unicode(val if val is not None else u""))
+    except Exception:
+        try:
+            cell.String = unicode(val if val is not None else u"")
+        except Exception:
+            pass
 
 
 def _write_formulas_matrix(doc, sheet, sc0, sr0, payload):
@@ -553,9 +678,21 @@ def _clipboard_paste(doc, src_sheet, src_rect, dst_sheet, sc0, sr0, content, wit
     return False, u"clipboard values paste failed"
 
 
-def write_block( doc, src_sheet, src_rect, dst_sheet, sc0, sr0, payload, content, with_formatting=False, allow_clipboard=True):
+def write_block( doc, src_sheet, src_rect, dst_sheet, sc0, sr0, payload, content, with_formatting=False, allow_clipboard=True, overlap_mode=u"replace", value_delimiter=None):
     """→ (ok, note)."""
     notes = []
+    ov = unicode(overlap_mode or u"replace").strip().casefold()
+    if ov not in (u"fill_empty", u"merge"):
+        ov = u"replace"
+    # fill/merge — только поэлементно из snapshot (clipboard затирает всё).
+    if ov != u"replace":
+        allow_clipboard = False
+        if with_formatting:
+            notes.append(u"format skipped (overlap_mode)")
+        with_formatting = False
+        if content == u"formulas":
+            notes.append(u"formulas→values (overlap_mode)")
+            content = u"values"
     # Форматирование / формулы с автосдвигом — через clipboard, если источник жив.
     if allow_clipboard and (with_formatting or content == u"formulas"):
         ok_c, note_c = _clipboard_paste(
@@ -579,7 +716,14 @@ def write_block( doc, src_sheet, src_rect, dst_sheet, sc0, sr0, payload, content
             return False, u"; ".join(notes + [note_f])
         # formatting failed → values without format
         notes.append(u"format skipped")
-    ok_v, note_v = _write_values(dst_sheet, sc0, sr0, payload)
+    ok_v, note_v = _write_values(
+        dst_sheet,
+        sc0,
+        sr0,
+        payload,
+        overlap_mode=ov,
+        value_delimiter=value_delimiter,
+    )
     if ok_v:
         notes.append(note_v)
         return True, u"; ".join(notes) if notes else note_v
@@ -665,6 +809,11 @@ def execute_copy_ranges_block(doc, block):
 
     mode = _normalize_mode(block)
     content = _normalize_content(block)
+    overlap_mode = _normalize_overlap_mode(block)
+    value_delimiter = _normalize_value_delimiter(block)
+    # При insert ячейки приёмника новые — overlap не меняет поведение.
+    if mode == u"insert":
+        overlap_mode = u"replace"
     with_formatting = _bool_param(block, "with_formatting", False)
     clear_source = _bool_param(block, "clear_source", False)
     create_missing = _bool_param(block, "create_missing_dest", False)
@@ -747,6 +896,8 @@ def execute_copy_ranges_block(doc, block):
         # При overlap всегда из памяти; при formulas+overlap — matrix без сдвига.
         if overlap:
             allow_clip = False
+        if overlap_mode != u"replace":
+            allow_clip = False
         ok_w, note_w = write_block(
             doc,
             src_sheet,
@@ -758,11 +909,20 @@ def execute_copy_ranges_block(doc, block):
             content,
             with_formatting=with_formatting and allow_clip,
             allow_clipboard=allow_clip,
+            overlap_mode=overlap_mode,
+            value_delimiter=value_delimiter,
         )
-        if not ok_w and content == u"formulas" and not allow_clip:
+        if not ok_w and content == u"formulas" and not allow_clip and overlap_mode == u"replace":
             ok_w, note_w = _write_formulas_matrix(doc, dsh, dsc0, dsr0, payload)
         if not ok_w and content == u"values":
-            ok_w, note_w = _write_values(dsh, dsc0, dsr0, payload)
+            ok_w, note_w = _write_values(
+                dsh,
+                dsc0,
+                dsr0,
+                payload,
+                overlap_mode=overlap_mode,
+                value_delimiter=value_delimiter,
+            )
         if ok_w:
             any_ok = True
             ok_dests.append(u"%s!%s" % (actual, dest_cell))
@@ -811,12 +971,13 @@ def execute_copy_ranges_block(doc, block):
         involve_lbl = u"; involve=skip"
 
     summary = (
-        u"%s → %s; mode=%s%s; %s; %d×%d%s"
+        u"%s → %s; mode=%s%s; overlap=%s; %s; %d×%d%s"
         % (
             src_lbl,
             dest_lbl,
             mode,
             axis_note,
+            overlap_mode,
             content_note,
             h,
             w,

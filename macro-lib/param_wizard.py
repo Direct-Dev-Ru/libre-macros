@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 import ast
 import glob
 import json
@@ -9862,6 +9862,30 @@ def _block_field_to_text(block, field_id, fn_key=None):
         return _pw_cfg.COPY_RANGES_CONTENT_LABEL.get(
             raw, unicode(block.get('content') or u'values')
         )
+    if field_id == 'overlap_mode' and unicode(fn_key or u'').casefold() in (
+        u'копирование_диапазонов'.casefold(),
+        u'копировать_диапазон'.casefold(),
+        u'copy_ranges'.casefold(),
+        u'copy_range'.casefold(),
+        u'вставить_диапазон'.casefold(),
+    ):
+        raw = unicode(block.get('overlap_mode') or u'replace').strip().casefold()
+        return _pw_cfg.COPY_RANGES_OVERLAP_MODE_LABEL.get(
+            raw, unicode(block.get('overlap_mode') or u'replace')
+        )
+    if field_id == 'value_delimiter':
+        raw = unicode(
+            block.get('value_delimiter') or block.get('join_delimiter') or u''
+        ).strip()
+        if raw == u'':
+            return u''
+        try:
+            from libre_macros_value_join_lib import normalize_value_join_delimiter_for_store
+
+            code = normalize_value_join_delimiter_for_store(raw) or raw
+        except Exception:
+            code = raw
+        return _pw_cfg.VALUE_JOIN_DELIMITER_LABEL.get(code, code)
     if field_id == 'name_mode' and unicode(fn_key or u'').casefold() in (
         u'создать_лист'.casefold(),
         u'create_sheet'.casefold(),
@@ -10355,6 +10379,25 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
         if code in (u'values', u'formulas'):
             return code
         return unicode(text or u'').strip() or u'values'
+    if field_id == 'overlap_mode':
+        t = unicode(text or u'').strip().casefold()
+        code = _pw_cfg.COPY_RANGES_OVERLAP_MODE_CODE.get(t, t)
+        if code in (u'replace', u'fill_empty', u'merge'):
+            return code
+        return u'replace'
+    if field_id == 'value_delimiter':
+        t = unicode(text or u'').strip()
+        if t == u'':
+            return u''
+        code = _pw_cfg.VALUE_JOIN_DELIMITER_CODE.get(t.casefold())
+        if code is None:
+            code = t
+        try:
+            from libre_macros_value_join_lib import normalize_value_join_delimiter_for_store
+
+            return normalize_value_join_delimiter_for_store(code)
+        except Exception:
+            return code
     if field_id == 'name_mode':
         t = unicode(text or u'').strip().casefold()
         code = _pw_cfg.CREATE_SHEET_NAME_MODE_CODE.get(t, t)
@@ -22203,6 +22246,26 @@ def _vlookup_multi_match_label(code):
     c = _vlookup_normalize_multi_match(code, default=u'all')
     return _pw_cfg._VLOOKUP_MULTI_MATCH_LABEL.get(c, u'Все')
 
+def _vlookup_normalize_value_delimiter(raw):
+    s = unicode(raw if raw is not None else u'').strip()
+    if s == u'':
+        return u''
+    code = _pw_cfg.VALUE_JOIN_DELIMITER_CODE.get(s.casefold())
+    if code is None:
+        code = s
+    try:
+        from libre_macros_value_join_lib import normalize_value_join_delimiter_for_store
+
+        return normalize_value_join_delimiter_for_store(code)
+    except Exception:
+        return code
+
+def _vlookup_value_delimiter_label(raw):
+    code = _vlookup_normalize_value_delimiter(raw)
+    if code == u'':
+        code = _pw_cfg.VALUE_JOIN_DELIMITER_DEFAULT
+    return _pw_cfg.VALUE_JOIN_DELIMITER_LABEL.get(code, code)
+
 def _vlookup_normalize_extract_mode(raw, default=u'new'):
     s = unicode(raw or u'').strip()
     if s == u'':
@@ -22360,6 +22423,9 @@ def _vlookup_json_block_to_dialog_fields_local(block, json_c_raw=None):
         'fill_duplicates': _vlookup_parse_bool_option(block.get('fill_duplicates'), default=True),
         'multi_match_one_cell': _vlookup_parse_bool_option(block.get('multi_match_one_cell'), default=False),
         'multi_match': _vlookup_normalize_multi_match(block.get('multi_match'), default=u'all'),
+        'value_delimiter': _vlookup_normalize_value_delimiter(
+            block.get('value_delimiter') or block.get('join_delimiter')
+        ),
         'not_found_fill': nf,
         'trim_keys': _vlookup_parse_bool_option(block.get('trim_keys'), default=False),
         'column_suffix': _vlookup_parse_bool_option(block.get('column_suffix'), default=True),
@@ -22435,6 +22501,11 @@ def _vlookup_pack_json_values(packed):
         'multi_match': _vlookup_normalize_multi_match(packed.get('multi_match'), default=u'all'),
         'trim_keys': _vlookup_parse_fill_duplicates(packed.get('trim_keys'), default=False),
     }
+    vd = _vlookup_normalize_value_delimiter(
+        packed.get('value_delimiter') or packed.get('join_delimiter')
+    )
+    if vd:
+        block['value_delimiter'] = vd
     if join_type == u'full':
         block['extract_columns_right'] = _vlookup_json_extract_columns_store(
             packed.get('extract_e_right') or packed.get('extract_columns_right')
@@ -24614,6 +24685,11 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
             _vlookup_normalize_multi_match(init.get('multi_match'), default=u'all')
         )
         y = y_mm + row_h
+        vd_lbl_y = y - 2 + max(0, (16 - 14) // 2)
+        _wizard_dlg_add_fixed(dm, 'Lbl_value_delimiter', u'Разделитель склейки:', m, vd_lbl_y, lw, 14)
+        _wizard_dlg_add_combo(dm, 'Ed_value_delimiter', m + lw + 4, y - 2, nf_w, 16)
+        edits['value_delimiter'] = _vlookup_value_delimiter_label(init.get('value_delimiter'))
+        y = y + row_h
         _wizard_dlg_add_fixed(dm, 'Lbl_f_preview', u'Итог (сводка):', m, y, lw, 14)
         _wizard_dlg_add_edit(dm, 'Ed_f_preview', m + lw + 4, y - 2, ew, 36, multiline=True, readonly=True)
         y = y + 40
@@ -24766,6 +24842,16 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                 )
             except Exception:
                 pass
+        vd_ctl = dlg.getControl('Ed_value_delimiter')
+        if vd_ctl is not None:
+            try:
+                vi = 0
+                while vi < len(_pw_cfg.VALUE_JOIN_DELIMITER_CHOICES):
+                    vd_ctl.addItem(_pw_cfg.VALUE_JOIN_DELIMITER_CHOICES[vi][1], vi)
+                    vi = vi + 1
+                vd_ctl.setText(_vlookup_value_delimiter_label(init.get('value_delimiter')))
+            except Exception:
+                pass
         em_ctl = dlg.getControl('Ed_extract_mode')
         if em_ctl is not None:
             try:
@@ -24859,6 +24945,13 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                 if name == 'Ed_multi_match_mode':
                     try:
                         result['multi_match'] = _vlookup_normalize_multi_match(src.getText(), default=u'all')
+                    except Exception:
+                        pass
+                    _vlookup_dialog_rebuild_f_from_controls(dlg, result)
+                    return
+                if name == 'Ed_value_delimiter':
+                    try:
+                        result['value_delimiter'] = _vlookup_normalize_value_delimiter(src.getText())
                     except Exception:
                         pass
                     _vlookup_dialog_rebuild_f_from_controls(dlg, result)
@@ -24999,6 +25092,9 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                         packed.get('multi_match_mode') or packed.get('multi_match') or result.get('multi_match'),
                         default=u'all',
                     )
+                    packed['value_delimiter'] = _vlookup_normalize_value_delimiter(
+                        packed.get('value_delimiter') or result.get('value_delimiter')
+                    )
                     f_ctl = dlg.getControl('Ed_f_preview')
                     packed['f_cell'] = f_ctl.getText().strip() if f_ctl is not None else u''
                     if packed.get('left_sheet', u'') == u'':
@@ -25089,7 +25185,7 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
                     _set_combo_items(dlg.getControl('Ed_' + sheet_key), doc_sheet_names, select_text=edits.get(sheet_key) or u'')
                 except Exception:
                     pass
-        for listen_key in ('left_sheet', 'right_sheet', 'left_range', 'right_range', 'join_type', 'multi_match_mode', 'extract_mode'):
+        for listen_key in ('left_sheet', 'right_sheet', 'left_range', 'right_range', 'join_type', 'multi_match_mode', 'value_delimiter', 'extract_mode'):
             try:
                 dlg.getControl('Ed_' + listen_key).addTextListener(handler)
             except Exception:
@@ -25100,6 +25196,10 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
             pass
         try:
             dlg.getControl('Ed_multi_match_mode').addItemListener(handler)
+        except Exception:
+            pass
+        try:
+            dlg.getControl('Ed_value_delimiter').addItemListener(handler)
         except Exception:
             pass
         try:

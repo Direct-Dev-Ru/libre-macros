@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -23870,19 +23870,24 @@ def _lm_vlookup_set_cell_multiline_value(cell, text):
         pass
 
 
-def _lm_vlookup_join_multiline(existing, parts):
-    """Склеить existing + parts через \\n; пустые parts пропускаются."""
-    chunks = []
-    ex = str(existing if existing is not None else "")
-    if ex.strip() != "":
-        chunks.append(ex)
-    i = 0
-    while i < len(parts):
-        p = _lm_vlookup_multiline_part(parts[i])
-        if p != "":
-            chunks.append(p)
-        i = i + 1
-    return "\n".join(chunks)
+def _lm_vlookup_join_multiline(existing, parts, delimiter=None):
+    """Склеить existing + parts через разделитель (пусто/None → \\n)."""
+    try:
+        from libre_macros_value_join_lib import join_cell_value_parts
+
+        return join_cell_value_parts(existing, parts, delimiter=delimiter)
+    except Exception:
+        chunks = []
+        ex = str(existing if existing is not None else "")
+        if ex.strip() != "":
+            chunks.append(ex)
+        i = 0
+        while i < len(parts):
+            p = _lm_vlookup_multiline_part(parts[i])
+            if p != "":
+                chunks.append(p)
+            i = i + 1
+        return "\n".join(chunks)
 
 
 def _lm_vlookup_fill_match_count_cell(sheet, row, key_col_map, match_count_title, count, highlight_style):
@@ -23902,8 +23907,8 @@ def _lm_vlookup_fill_match_count_cell(sheet, row, key_col_map, match_count_title
     _lm_vlookup_apply_cell_highlight(cell, highlight_style)
 
 
-def _lm_vlookup_fill_multi_match_row( sheet, row, key_col_map, out_specs, matches, highlight_style ):
-    """Несколько совпадений справа → одна ячейка на столбец, значения через \\n."""
+def _lm_vlookup_fill_multi_match_row( sheet, row, key_col_map, out_specs, matches, highlight_style, value_delimiter=None):
+    """Несколько совпадений справа → одна ячейка на столбец, значения через разделитель."""
     ei = 0
     while ei < len(out_specs):
         map_key, base_title, write_mode = out_specs[ei]
@@ -23919,15 +23924,15 @@ def _lm_vlookup_fill_multi_match_row( sheet, row, key_col_map, out_specs, matche
         cell = sheet.getCellByPosition(out_col, row)
         if write_mode == "merge":
             existing = cell_text(cell)
-            text = _lm_vlookup_join_multiline(existing, parts)
+            text = _lm_vlookup_join_multiline(existing, parts, delimiter=value_delimiter)
         else:
-            text = _lm_vlookup_join_multiline("", parts)
+            text = _lm_vlookup_join_multiline("", parts, delimiter=value_delimiter)
         _lm_vlookup_set_cell_multiline_value(cell, text)
         _lm_vlookup_apply_cell_highlight(cell, highlight_style)
         ei = ei + 1
 
 
-def _lm_vlookup_fill_extract_row( sheet, row, key_col_map, out_specs, match_record, highlight_style ):
+def _lm_vlookup_fill_extract_row( sheet, row, key_col_map, out_specs, match_record, highlight_style, value_delimiter=None):
     ei = 0
     while ei < len(out_specs):
         map_key, base_title, write_mode = out_specs[ei]
@@ -23939,8 +23944,8 @@ def _lm_vlookup_fill_extract_row( sheet, row, key_col_map, out_specs, match_reco
         val = match_record.get(base_title)
         if write_mode == "merge":
             existing = cell_text(cell)
-            text = _lm_vlookup_join_multiline(existing, [val])
-            if "\n" in text:
+            text = _lm_vlookup_join_multiline(existing, [val], delimiter=value_delimiter)
+            if "\n" in str(text):
                 _lm_vlookup_set_cell_multiline_value(cell, text)
             else:
                 _lm_vlookup_set_cell_value(cell, val if existing.strip() == "" else text)
@@ -24371,6 +24376,13 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
         except Exception:
             multi_match_one_cell = False
     multi_match_mode = _lm_vlookup_normalize_multi_match(spec.get("multi_match"), default="all")
+    value_delimiter = spec.get("value_delimiter")
+    if value_delimiter is None or str(value_delimiter).strip() == "":
+        value_delimiter = spec.get("join_delimiter")
+    if value_delimiter is not None:
+        value_delimiter = str(value_delimiter).strip()
+    else:
+        value_delimiter = ""
     is_inner = _lm_vlookup_normalize_join_type(spec.get("join_type"), default="left") == "inner"
     not_found_fill = spec.get("not_found_fill")
     if not_found_fill is None or str(not_found_fill).strip() == "":
@@ -24403,7 +24415,7 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
         "впр",
         "%s → %s" % (left_name, right_name),
         "старт",
-        "ключи L=[%s] R=[%s]; extract=[%s]; suffix=«%s»; mode=%s; match_count=%s; trim=%s; fill_dup=%s; multi=%s; multi_match=%s; join=%s; nf=«%s»; L(hdr=%d data=%d..%d col=%d..%d) R(hdr=%d data=%d..%d col=%d..%d)"
+        "ключи L=[%s] R=[%s]; extract=[%s]; suffix=«%s»; mode=%s; match_count=%s; trim=%s; fill_dup=%s; multi=%s; multi_match=%s; delim=%s; join=%s; nf=«%s»; L(hdr=%d data=%d..%d col=%d..%d) R(hdr=%d data=%d..%d col=%d..%d)"
         % (
             ",".join([str(t) for t in left_key_tokens]),
             ",".join([str(t) for t in right_key_tokens]),
@@ -24415,6 +24427,7 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
             u"да" if fill_duplicates else u"нет",
             u"да" if multi_match_one_cell else u"нет",
             multi_match_mode,
+            value_delimiter or u"\\n",
             u"inner" if is_inner else u"left",
             not_found_fill,
             left_bounds["header_row"] + 1,
@@ -24518,6 +24531,7 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
                     out_specs,
                     matches,
                     highlight_style,
+                    value_delimiter=value_delimiter,
                 )
                 _lm_vlookup_fill_match_count_cell(
                     left_sheet, row, key_col_map, match_count_title, n_match, highlight_style
@@ -24549,6 +24563,7 @@ def _lm_vlookup_join_sheets_left(doc, left_sheet, spec):
                         out_specs,
                         matches[mi],
                         highlight_style,
+                        value_delimiter=value_delimiter,
                     )
                     _lm_vlookup_fill_match_count_cell(
                         left_sheet,

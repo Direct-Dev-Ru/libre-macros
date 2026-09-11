@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 import re
 
 try:
@@ -811,8 +811,9 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
     ),
     "копирование_диапазонов": (
         "JSON: source_sheet + source_range (A1 / B:B / 2:5) или source_rows/source_columns; "
-        "dest_sheet(s) + dest_cell; mode=replace|insert; content=values|formulas; "
-        "involve_dest (по умолч. true)",
+        "dest_sheet(s) + dest_cell; mode=replace|insert; "
+        "overlap_mode=replace|fill_empty|merge (+ value_delimiter); "
+        "content=values|formulas; involve_dest (по умолч. true)",
         '[{"v":1,"fn":"копирование_диапазонов","source_sheet":"Сводная",'
         '"source_range":"A1:D20","dest_sheet":"Отчет","dest_cell":"B3","mode":"replace"}]',
     ),

@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 import json
 import re
 
@@ -4020,6 +4020,47 @@ def _normalize_copy_ranges_block(block):
         out["content"] = u"formulas"
     else:
         out["content"] = u"values"
+
+    # Наложение на существующие значения (mode=replace).
+    ov_raw = unicode(
+        out.get("overlap_mode")
+        or out.get("on_overlap")
+        or out.get("paste_overlap")
+        or u"replace"
+    ).strip()
+    out.pop("on_overlap", None)
+    out.pop("paste_overlap", None)
+    ov_low = ov_raw.casefold()
+    try:
+        from libre_macros_param_wizard_cfg import COPY_RANGES_OVERLAP_MODE_CODE
+
+        ov_code = COPY_RANGES_OVERLAP_MODE_CODE.get(ov_low, ov_low)
+    except Exception:
+        ov_code = ov_low
+    if ov_code in (u"fill_empty", u"merge"):
+        out["overlap_mode"] = ov_code
+    else:
+        out["overlap_mode"] = u"replace"
+
+    vd_raw = out.get("value_delimiter")
+    if vd_raw is None or unicode(vd_raw).strip() == u"":
+        vd_raw = out.get("join_delimiter")
+    out.pop("join_delimiter", None)
+    try:
+        from libre_macros_value_join_lib import normalize_value_join_delimiter_for_store
+        from libre_macros_param_wizard_cfg import VALUE_JOIN_DELIMITER_CODE
+
+        vd_s = unicode(vd_raw if vd_raw is not None else u"").strip()
+        mapped = VALUE_JOIN_DELIMITER_CODE.get(vd_s.casefold())
+        if mapped is not None:
+            vd_s = mapped
+        vd = normalize_value_join_delimiter_for_store(vd_s)
+    except Exception:
+        vd = unicode(vd_raw if vd_raw is not None else u"").strip()
+    if vd:
+        out["value_delimiter"] = vd
+    else:
+        out.pop("value_delimiter", None)
 
     for key, default in (
         ("with_formatting", False),

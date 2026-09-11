@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -3812,6 +3812,26 @@ def _vlookup_normalize_extract_mode(raw, default='new'):
     }
     return aliases.get(low, default if low not in ('new', 'replace', 'merge') else low)
 
+def _vlookup_normalize_value_delimiter(raw):
+    """Экранированный разделитель склейки для JSON; пусто → '' (runtime = \\n)."""
+    s = unicode(raw if raw is not None else u'').strip()
+    if s == u'':
+        return u''
+    try:
+        from libre_macros_param_wizard_cfg import VALUE_JOIN_DELIMITER_CODE
+
+        code = VALUE_JOIN_DELIMITER_CODE.get(s.casefold())
+        if code is not None:
+            s = code
+    except Exception:
+        pass
+    try:
+        from libre_macros_value_join_lib import normalize_value_join_delimiter_for_store
+
+        return normalize_value_join_delimiter_for_store(s)
+    except Exception:
+        return s
+
 def _vlookup_derive_fields_from_range_a1(text):
     """A1 → derived 1-based поля стороны (без листа)."""
     import re
@@ -3982,6 +4002,9 @@ def vlookup_json_block_to_spec(block):
         'fill_duplicates': vlookup_parse_bool_option(block.get('fill_duplicates'), default=True),
         'multi_match_one_cell': vlookup_parse_bool_option(block.get('multi_match_one_cell'), default=False),
         'multi_match': _vlookup_normalize_multi_match(block.get('multi_match'), default='all'),
+        'value_delimiter': _vlookup_normalize_value_delimiter(
+            block.get('value_delimiter') or block.get('join_delimiter')
+        ),
         'not_found_fill': not_found_fill,
         'trim_keys': vlookup_parse_bool_option(block.get('trim_keys'), default=False),
         'column_suffix': vlookup_parse_bool_option(block.get('column_suffix'), default=True),
@@ -4047,6 +4070,11 @@ def vlookup_fields_to_json_block(fields):
         'multi_match': _vlookup_normalize_multi_match(fields.get('multi_match'), default='all'),
         'trim_keys': vlookup_parse_bool_option(fields.get('trim_keys'), default=False),
     }
+    vd = _vlookup_normalize_value_delimiter(
+        fields.get('value_delimiter') or fields.get('join_delimiter')
+    )
+    if vd:
+        block['value_delimiter'] = vd
     if join_type == 'full':
         block['extract_columns_right'] = _vlookup_json_extract_columns_store(
             fields.get('extract_e_right') or fields.get('extract_columns_right')
@@ -4121,6 +4149,7 @@ def vlookup_json_block_to_dialog_fields(block):
         'fill_duplicates': spec.get('fill_duplicates', True),
         'multi_match_one_cell': spec.get('multi_match_one_cell', False),
         'multi_match': spec.get('multi_match') or 'all',
+        'value_delimiter': spec.get('value_delimiter') or u'',
         'not_found_fill': nf,
         'trim_keys': spec.get('trim_keys', False),
         'column_suffix': spec.get('column_suffix', True),

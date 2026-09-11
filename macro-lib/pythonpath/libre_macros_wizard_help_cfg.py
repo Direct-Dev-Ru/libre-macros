@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -598,10 +598,13 @@ _FN_HELP_TEXTS = {
         u"• source_sheet + source_range (A1:D10 / B:B / 2:5) либо source_rows / source_columns\n"
         u"• dest_sheet или dest_sheets[] + dest_cell (якорь)\n"
         u"• mode: replace (поверх) | insert (вставка строк/столбцов; insert_axis)\n"
+        u"• overlap_mode (при replace): replace | fill_empty | merge\n"
+        u"• value_delimiter — разделитель склейки для merge (пусто → \\n;\n"
+        u"  пресеты: \\n, \\n---------\\n, ; , …)\n"
         u"• content: values | formulas; with_formatting; clear_source; involve_dest\n"
         u"\n"
         u"Пример:\n"
-        u"[{\"v\":1,\"fn\":\"копирование_диапазонов\",\"source_sheet\":\"Сводная\",\"source_range\":\"A1:D20\",\"dest_sheet\":\"Отчет\",\"dest_cell\":\"B3\"}]\n"
+        u"[{\"v\":1,\"fn\":\"копирование_диапазонов\",\"source_sheet\":\"Сводная\",\"source_range\":\"A1:D20\",\"dest_sheet\":\"Отчет\",\"dest_cell\":\"B3\",\"overlap_mode\":\"merge\",\"value_delimiter\":\"\\n---------\\n\"}]\n"
         u"\n"
         u"Подробнее: docs/05_POSTPROCESS.md, docs/13_JSON_PARAMS.md\n"
         u"\n"

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.721"
+MACRO_VERSION = "3.10.722"
 import re
 
 try:
@@ -334,8 +334,9 @@ _FALLBACK_FINAL_REST_HINTS = {
     ),
     u"копирование_диапазонов": (
         u"JSON: source_sheet + source_range (A1:D10 / B:B / 2:5) или rows/columns; "
-        u"dest_sheet(s)+dest_cell; mode=replace|insert; content=values|formulas; "
-        u"после копирования приёмник вовлекается в скоп следующих шагов",
+        u"dest_sheet(s)+dest_cell; mode=replace|insert; "
+        u"overlap_mode=replace|fill_empty|merge (+ value_delimiter); "
+        u"content=values|formulas; после копирования приёмник вовлекается в скоп следующих шагов",
         u'[{"v":1,"fn":"копирование_диапазонов","source_sheet":"Сводная",'
         u'"source_range":"A1:D20","dest_sheet":"Отчет","dest_cell":"B3"}]',
     ),
@@ -643,7 +644,8 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
     ),
     u"копирование_диапазонов": (
         u"JSON: source_sheet + source_range / rows / columns → dest_sheet(s) + dest_cell; "
-        u"mode=replace|insert; content=values|formulas",
+        u"mode=replace|insert; overlap_mode=replace|fill_empty|merge (+ value_delimiter); "
+        u"content=values|formulas",
         u'[{"v":1,"fn":"копирование_диапазонов","source_sheet":"Сводная",'
         u'"source_range":"A1:D20","dest_sheet":"Отчет","dest_cell":"B3"}]',
     ),
@@ -1708,6 +1710,57 @@ COPY_RANGES_MODE_CODE[u"добавление"] = u"insert"
 COPY_RANGES_MODE_CODE[u"append"] = u"insert"
 COPY_RANGES_MODE_CODE[u"вставка со сдвигом"] = u"insert"
 COPY_RANGES_MODE_CODE[u"вставка"] = u"insert"
+
+# Поверх существующих ячеек (при mode=replace / без сдвига).
+COPY_RANGES_OVERLAP_MODE_CHOICES = (
+    (u"replace", u"Полная замена"),
+    (u"fill_empty", u"Заполнение если пусто"),
+    (u"merge", u"Объединение значений"),
+)
+COPY_RANGES_OVERLAP_MODE_LABEL = {
+    code: label for code, label in COPY_RANGES_OVERLAP_MODE_CHOICES
+}
+COPY_RANGES_OVERLAP_MODE_CODE = {
+    label.casefold(): code for code, label in COPY_RANGES_OVERLAP_MODE_CHOICES
+}
+for _com_code, _com_label in COPY_RANGES_OVERLAP_MODE_CHOICES:
+    COPY_RANGES_OVERLAP_MODE_CODE[_com_code.casefold()] = _com_code
+COPY_RANGES_OVERLAP_MODE_CODE[u"overwrite"] = u"replace"
+COPY_RANGES_OVERLAP_MODE_CODE[u"замена"] = u"replace"
+COPY_RANGES_OVERLAP_MODE_CODE[u"полная замена"] = u"replace"
+COPY_RANGES_OVERLAP_MODE_CODE[u"if_empty"] = u"fill_empty"
+COPY_RANGES_OVERLAP_MODE_CODE[u"пусто"] = u"fill_empty"
+COPY_RANGES_OVERLAP_MODE_CODE[u"заполнение"] = u"fill_empty"
+COPY_RANGES_OVERLAP_MODE_CODE[u"только_пустые"] = u"fill_empty"
+COPY_RANGES_OVERLAP_MODE_CODE[u"join"] = u"merge"
+COPY_RANGES_OVERLAP_MODE_CODE[u"объединение"] = u"merge"
+COPY_RANGES_OVERLAP_MODE_CODE[u"склеить"] = u"merge"
+
+# Пресеты разделителя склейки (ВПР multi/merge + копирование_диапазонов overlap=merge).
+# В JSON хранится экранированная форма (\\n); пусто = \\n по умолчанию в runtime.
+VALUE_JOIN_DELIMITER_CHOICES = (
+    (u"\\n", u"Новая строка (\\n)"),
+    (u"\\n---------\\n", u"Строка + линия"),
+    (u"\\n—\\n", u"Строка + тире"),
+    (u"; ", u"Точка с запятой (; )"),
+    (u", ", u"Запятая (, )"),
+    (u" | ", u"Вертикальная черта ( | )"),
+    (u" / ", u"Слэш ( / )"),
+    (u" ", u"Пробел"),
+)
+VALUE_JOIN_DELIMITER_LABEL = {
+    code: label for code, label in VALUE_JOIN_DELIMITER_CHOICES
+}
+VALUE_JOIN_DELIMITER_CODE = {
+    label.casefold(): code for code, label in VALUE_JOIN_DELIMITER_CHOICES
+}
+for _vjd_code, _vjd_label in VALUE_JOIN_DELIMITER_CHOICES:
+    VALUE_JOIN_DELIMITER_CODE[_vjd_code.casefold()] = _vjd_code
+VALUE_JOIN_DELIMITER_CODE[u"\\\\n"] = u"\\n"
+VALUE_JOIN_DELIMITER_CODE[u"newline"] = u"\\n"
+VALUE_JOIN_DELIMITER_CODE[u"перевод строки"] = u"\\n"
+VALUE_JOIN_DELIMITER_CODE[u"новая строка"] = u"\\n"
+VALUE_JOIN_DELIMITER_DEFAULT = u"\\n"
 
 COPY_RANGES_AXIS_CHOICES = (
     (u"auto", u"Авто"),
@@ -3836,7 +3889,8 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
         "title": u"Копирование диапазонов",
         "hint": (
             u"Источник → приёмник(и): Замена поверх якоря или Вставка со сдвигом.\n"
-            u"По умолчанию — значения; «Формулы» — с автосдвигом ссылок Calc. "
+            u"При Замене: наложение — полная замена / только пустые / объединение "
+            u"(разделитель склейки). По умолчанию — значения; «Формулы» — с автосдвигом. "
             u"Приёмник вовлекается в следующие шаги (галочку можно снять)."
         ),
         "hint_lines": 2,
@@ -3910,6 +3964,26 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "choices": tuple(label for _c, label in COPY_RANGES_CONTENT_CHOICES),
                 "default": u"Значения",
                 "row_group": u"axis_content",
+                "row_group_slot": 1,
+            },
+            {
+                "id": "overlap_mode",
+                "label": u"При наложении",
+                "type": "combo",
+                "choices": tuple(label for _c, label in COPY_RANGES_OVERLAP_MODE_CHOICES),
+                "default": u"Полная замена",
+                "hint": u"Для режима «Замена»: затереть / только пустые / склеить",
+                "row_group": u"overlap_join",
+                "row_group_slot": 0,
+            },
+            {
+                "id": "value_delimiter",
+                "label": u"Разделитель склейки",
+                "type": "combo",
+                "choices": tuple(label for _c, label in VALUE_JOIN_DELIMITER_CHOICES),
+                "default": u"Новая строка (\\n)",
+                "hint": u"Для «Объединение»; пусто → \\n",
+                "row_group": u"overlap_join",
                 "row_group_slot": 1,
             },
             {
@@ -4378,7 +4452,8 @@ _VLOOKUP_HELP_TEXT = (
     u"      слева (суффикс _R не применяется); первый матч очищает ячейку,\n"
     u"      дальше — склейка через перевод строки; нет колонки → как new;\n"
     u"    Объединить значения (merge) — как replace, но первый матч\n"
-    u"      не стирает текущее значение слева, а дописывает через \\n.\n"
+    u"      не стирает текущее значение слева, а дописывает через\n"
+    u"      value_delimiter (по умолч. \\n).\n"
     u"• «Колонки в Прав. из Лев. (→)» (extract_columns_right) — только\n"
     u"  при join_type=full: зеркальный перенос на правый лист.\n"
     u"• Переименование на приёмнике:\n"
@@ -4411,7 +4486,10 @@ _VLOOKUP_HELP_TEXT = (
     u"  совпадениях: Да — заполнять каждую «дублирующую» строку;\n"
     u"  Нет — только первую (остальные — заполнитель/пусто по правилам).\n"
     u"• Мульти (multi_match_one_cell) — все совпадения в ОДНУ ячейку\n"
-    u"  через перевод строки (вместо нескольких строк результата).\n"
+    u"  через разделитель склейки (вместо нескольких строк результата).\n"
+    u"• Разделитель склейки (value_delimiter) — для Мульти и режима\n"
+    u"  «Объединить значения»; пусто → \\n. Пресеты: \\n, \\n---------\\n,\n"
+    u"  ; , | и др. (можно ввести свой).\n"
     u"• СЖ_ПРОБЕЛЫ (trim_keys) — обрезать пробелы у значений ключа\n"
     u"  перед сравнением (слева и справа).\n"
     u"• Суффикс _R (column_suffix) — к именам новых колонок с правой\n"
@@ -4442,6 +4520,7 @@ _VLOOKUP_HELP_TEXT = (
     u'  "not_found_fill": "#Н/Д",\n'
     u'  "multi_match": "all",\n'
     u'  "multi_match_one_cell": false,\n'
+    u'  "value_delimiter": "\\n",\n'
     u'  "trim_keys": false,\n'
     u'  "column_suffix": true\n'
     u'}]\n'
