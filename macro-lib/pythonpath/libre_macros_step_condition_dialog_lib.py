@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Субвизард условия выполнения шага (колонка D / E)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.723"
+MACRO_VERSION = "3.10.724"
 try:
     unicode
 except NameError:
@@ -46,6 +46,18 @@ def _get_text(ctl):
             return u""
 
 
+def _set_visible(ctl, vis):
+    if ctl is None:
+        return
+    try:
+        ctl.setVisible(bool(vis))
+    except Exception:
+        try:
+            ctl.Model.EnableVisible = bool(vis)
+        except Exception:
+            pass
+
+
 def _combo_select_by_data(ctl, code, pairs):
     if ctl is None:
         return
@@ -60,7 +72,10 @@ def _combo_select_by_data(ctl, code, pairs):
     try:
         ctl.selectItemPos(idx, True)
     except Exception:
-        pass
+        try:
+            ctl.setText(pairs[idx][1])
+        except Exception:
+            pass
 
 
 def _combo_selected_code(ctl, pairs, default=u""):
@@ -70,19 +85,29 @@ def _combo_selected_code(ctl, pairs, default=u""):
         pos = int(ctl.getSelectedItemPos())
     except Exception:
         pos = -1
-    if pos < 0 or pos >= len(pairs):
-        return default
-    return pairs[pos][0]
+    if 0 <= pos < len(pairs):
+        return pairs[pos][0]
+    # ComboBox: текст подписи
+    txt = _get_text(ctl).strip().casefold()
+    i = 0
+    while i < len(pairs):
+        if unicode(pairs[i][1]).casefold() == txt or unicode(pairs[i][0]).casefold() == txt:
+            return pairs[i][0]
+        i += 1
+    return default
 
 
-def _fill_combo(ctl, pairs):
+def _fill_combo(ctl, pairs, blank_first=False):
     if ctl is None:
         return
+    labels = []
+    if blank_first:
+        labels.append(u"—")
+    labels.extend([p[1] for p in pairs])
     try:
         ctl.removeItems(0, ctl.getItemCount())
     except Exception:
         pass
-    labels = [p[1] for p in pairs]
     try:
         ctl.addItems(tuple(labels), 0)
     except Exception:
@@ -95,7 +120,17 @@ def _fill_combo(ctl, pairs):
             i += 1
 
 
-def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, is_plugin=False, toolkit=None, create_peer_fn=None, add_fixed=None, add_edit=None, add_button=None, add_combo=None, add_footer=None, wire_help=None, set_sizeable=None, inner_height=None):
+def _example_label_to_expr(label):
+    lab = unicode(label or u"").strip().casefold()
+    if lab in (u"", u"—", u"-"):
+        return u""
+    for name, expr in _cfg.LAMBDA_EXAMPLE_CHOICES:
+        if unicode(name).casefold() == lab:
+            return unicode(expr)
+    return u""
+
+
+def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, is_plugin=False, toolkit=None, create_peer_fn=None, add_fixed=None, add_edit=None, add_button=None, add_combo=None, wire_help=None, set_sizeable=None, open_lambda_builder_fn=None, load_saved_lambdas_fn=None, save_lambda_fn=None, refresh_saved_labels_fn=None):
     """
     Диалог условия. Возвращает:
       None — Отмена
@@ -107,16 +142,24 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     if toolkit is None:
         toolkit = sm.createInstanceWithContext("com.sun.star.awt.Toolkit", ctx)
     dm = sm.createInstanceWithContext("com.sun.star.awt.UnoControlDialogModel", ctx)
-    dw = 520
-    dh = 340
-    if inner_height is not None:
-        try:
-            dh = int(inner_height(340))
-        except Exception:
-            pass
-    m = 10
+
+    dw = int(getattr(_cfg, "DIALOG_W", 580) or 580)
+    dh = int(getattr(_cfg, "DIALOG_H", 420) or 420)
+    m = int(getattr(_cfg, "DIALOG_MARGIN", 12) or 12)
+    row_h = int(getattr(_cfg, "DIALOG_ROW_H", 28) or 28)
+    ctl_h = int(getattr(_cfg, "DIALOG_CTL_H", 22) or 22)
+    lbl_h = int(getattr(_cfg, "DIALOG_LBL_H", 16) or 16)
+    lbl_w = int(getattr(_cfg, "DIALOG_LBL_W", 150) or 150)
+    btn_h = int(getattr(_cfg, "DIALOG_BTN_H", 24) or 24)
+    btn_w = int(getattr(_cfg, "DIALOG_BTN_W", 100) or 100)
+    btn_gap = int(getattr(_cfg, "DIALOG_BTN_GAP", 10) or 10)
+    footer_h = int(getattr(_cfg, "DIALOG_FOOTER_H", 36) or 36)
+    lambda_edit_h = int(getattr(_cfg, "DIALOG_LAMBDA_EDIT_H", 110) or 110)
+    os_users_h = int(getattr(_cfg, "DIALOG_OS_USERS_EDIT_H", 72) or 72)
+    hint_h = int(getattr(_cfg, "DIALOG_HINT_H", 36) or 36)
+
     dm.PositionX = 120
-    dm.PositionY = 80
+    dm.PositionY = 60
     dm.Width = dw
     dm.Height = dh
     dm.Title = _cfg.DIALOG_TITLE
@@ -151,6 +194,11 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         model.Width = w
         model.Height = h
         model.MultiLine = bool(multiline)
+        if multiline:
+            try:
+                model.VScroll = True
+            except Exception:
+                pass
         dm.insertByName(name, model)
 
     def _button(name, label, x, y, w, h):
@@ -170,56 +218,113 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         if add_combo is not None:
             add_combo(dm, name, x, y, w, h)
             return
-        model = dm.createInstance("com.sun.star.awt.UnoControlListBoxModel")
+        model = dm.createInstance("com.sun.star.awt.UnoControlComboBoxModel")
         model.Name = name
         model.PositionX = x
         model.PositionY = y
         model.Width = w
         model.Height = h
         model.Dropdown = True
+        try:
+            model.LineCount = 12
+        except Exception:
+            pass
         dm.insertByName(name, model)
+
+    content_w = dw - m * 2
+    field_x = m + lbl_w + 8
+    field_w = max(180, dw - field_x - m)
 
     hint = _cfg.DIALOG_HINT_PLUGIN if is_plugin else _cfg.DIALOG_HINT_CODEC
     y = m
-    _fixed("HintLbl", hint, m, y, dw - m * 2, 28, multiline=True)
-    y += 32
-    _fixed("KindLbl", u"Тип условия:", m, y, 120, 12)
-    _combo("KindCb", m + 120, y - 2, 240, 16)
-    y += 22
-    # lambda
-    _fixed("LambdaLbl", u"expr (lambda: …):", m, y, dw - m * 2, 12)
-    _edit("LambdaEd", m, y + 14, dw - m * 2, 70, multiline=True)
-    # variable
-    _fixed("VarNameLbl", u"Имя переменной:", m, y, 140, 12)
-    _edit("VarNameEd", m + 140, y - 2, 200, 16)
-    _fixed("VarOpLbl", u"Оператор:", m, y + 22, 140, 12)
-    _combo("VarOpCb", m + 140, y + 20, 200, 16)
-    _fixed("VarValLbl", u"Значение / список:", m, y + 44, 140, 12)
-    _edit("VarValEd", m + 140, y + 42, 280, 16)
-    _fixed("VarMissLbl", u"Если нет в карте:", m, y + 66, 140, 12)
-    _combo("VarMissCb", m + 140, y + 64, 200, 16)
-    # env
-    _fixed("EnvNameLbl", u"Переменная среды:", m, y, 140, 12)
-    _edit("EnvNameEd", m + 140, y - 2, 200, 16)
-    _fixed("EnvOpLbl", u"Оператор:", m, y + 22, 140, 12)
-    _combo("EnvOpCb", m + 140, y + 20, 200, 16)
-    _fixed("EnvRhsLbl", u"Сравнить с:", m, y + 44, 140, 12)
-    _combo("EnvRhsCb", m + 140, y + 42, 200, 16)
-    _fixed("EnvValLbl", u"Значение / имя:", m, y + 66, 140, 12)
-    _edit("EnvValEd", m + 140, y + 64, 280, 16)
-    # os_user
-    _fixed("OsOpLbl", u"Оператор:", m, y, 140, 12)
-    _combo("OsOpCb", m + 140, y - 2, 200, 16)
-    _fixed("OsUsersLbl", u"Пользователи (user1,user2,…):", m, y + 22, dw - m * 2, 12)
-    _edit("OsUsersEd", m, y + 38, dw - m * 2, 40, multiline=True)
+    _fixed("HintLbl", hint, m, y, content_w, hint_h, multiline=True)
+    y += hint_h + 6
 
-    footer_y = dh - m - 40
-    _button("ClearBtn", u"Очистить условие", m, footer_y, 130, 18)
-    if add_footer is not None:
-        add_footer(dm, m, dh, help_btn=True, dw=dw)
-    else:
-        _button("OkBtn", u"OK", dw - m - 150, footer_y, 70, 18)
-        _button("CancelBtn", u"Отмена", dw - m - 70, footer_y, 70, 18)
+    _fixed("KindLbl", u"Тип условия:", m, y + 2, lbl_w, lbl_h)
+    _combo("KindCb", field_x, y, field_w, ctl_h)
+    y += row_h + 4
+    panel_top = y
+
+    # --- lambda ---
+    _fixed("LambdaLbl", u"expr (lambda: …):", m, panel_top, content_w, lbl_h)
+    pick_w = 150
+    ex_w = 150
+    build_w = 110
+    save_w = 90
+    gap = 6
+    tools_y = panel_top + lbl_h + 4
+    _combo("LambdaPickCb", m, tools_y, pick_w, ctl_h)
+    _button("LambdaBuildBtn", u"Конструктор…", m + pick_w + gap, tools_y, build_w, ctl_h)
+    _button("LambdaSaveBtn", u"Сохранить", m + pick_w + gap + build_w + gap, tools_y, save_w, ctl_h)
+    _combo("LambdaExampleCb", m + pick_w + gap + build_w + gap + save_w + gap, tools_y, ex_w, ctl_h)
+    edit_y = tools_y + ctl_h + 6
+    _edit("LambdaEd", m, edit_y, content_w, lambda_edit_h, multiline=True)
+    _fixed(
+        "LambdaHintLbl",
+        u"Сохранённые ← | Конструктор | Сохранить | Примеры →. Helpers: var/env/os_user/glob_var.",
+        m,
+        edit_y + lambda_edit_h + 4,
+        content_w,
+        lbl_h,
+    )
+
+    # --- variable ---
+    _fixed("VarNameLbl", u"Имя переменной:", m, panel_top + 2, lbl_w, lbl_h)
+    _edit("VarNameEd", field_x, panel_top, field_w, ctl_h)
+    _fixed("VarOpLbl", u"Оператор:", m, panel_top + row_h + 2, lbl_w, lbl_h)
+    _combo("VarOpCb", field_x, panel_top + row_h, field_w, ctl_h)
+    _fixed("VarValLbl", u"Значение / список:", m, panel_top + row_h * 2 + 2, lbl_w, lbl_h)
+    _edit("VarValEd", field_x, panel_top + row_h * 2, field_w, ctl_h)
+    _fixed("VarMissLbl", u"Если нет в карте:", m, panel_top + row_h * 3 + 2, lbl_w, lbl_h)
+    _combo("VarMissCb", field_x, panel_top + row_h * 3, field_w, ctl_h)
+
+    # --- env ---
+    _fixed("EnvNameLbl", u"Переменная среды:", m, panel_top + 2, lbl_w, lbl_h)
+    _edit("EnvNameEd", field_x, panel_top, field_w, ctl_h)
+    _fixed("EnvOpLbl", u"Оператор:", m, panel_top + row_h + 2, lbl_w, lbl_h)
+    _combo("EnvOpCb", field_x, panel_top + row_h, field_w, ctl_h)
+    _fixed("EnvRhsLbl", u"Сравнить с:", m, panel_top + row_h * 2 + 2, lbl_w, lbl_h)
+    _combo("EnvRhsCb", field_x, panel_top + row_h * 2, field_w, ctl_h)
+    _fixed("EnvValLbl", u"Значение / имя:", m, panel_top + row_h * 3 + 2, lbl_w, lbl_h)
+    _edit("EnvValEd", field_x, panel_top + row_h * 3, field_w, ctl_h)
+
+    # --- os_user ---
+    _fixed("OsOpLbl", u"Оператор:", m, panel_top + 2, lbl_w, lbl_h)
+    _combo("OsOpCb", field_x, panel_top, field_w, ctl_h)
+    _fixed("OsUsersLbl", u"Пользователи (user1,user2,…):", m, panel_top + row_h + 2, content_w, lbl_h)
+    _edit("OsUsersEd", m, panel_top + row_h + lbl_h + 6, content_w, os_users_h, multiline=True)
+
+    # --- footer: Clear | OK | Cancel .......... Help (без JsonChk)
+    footer_y = dh - m - footer_h
+    clear_w = 140
+    _button("ClearBtn", u"Очистить условие", m, footer_y, clear_w, btn_h)
+    _button("OkBtn", u"OK", m + clear_w + btn_gap, footer_y, btn_w, btn_h)
+    _button("CancelBtn", u"Отмена", m + clear_w + btn_gap + btn_w + btn_gap, footer_y, btn_w, btn_h)
+    help_w = 90
+    _button("HelpButton", u"Справка", dw - m - help_w, footer_y, help_w, btn_h)
+    try:
+        ok_m = dm.getByName("OkBtn")
+        ok_m.DefaultButton = True
+        ok_m.PushButtonType = 1
+    except Exception:
+        pass
+    try:
+        dm.getByName("CancelBtn").PushButtonType = 2
+    except Exception:
+        pass
+    try:
+        dm.getByName("HelpButton").PushButtonType = 0
+    except Exception:
+        pass
+    try:
+        dm.getByName("ClearBtn").PushButtonType = 0
+    except Exception:
+        pass
+    try:
+        dm.getByName("LambdaBuildBtn").PushButtonType = 0
+        dm.getByName("LambdaSaveBtn").PushButtonType = 0
+    except Exception:
+        pass
 
     dlg = sm.createInstanceWithContext("com.sun.star.awt.UnoControlDialog", ctx)
     dlg.setModel(dm)
@@ -229,12 +334,17 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         dlg.createPeer(toolkit, None)
     if wire_help is not None:
         try:
-            wire_help(dlg, doc=doc)
+            wire_help(dlg, doc=doc, help_key=u"условие_выполнения")
         except Exception:
-            pass
+            try:
+                wire_help(dlg, doc=doc)
+            except Exception:
+                pass
 
     kind_cb = _dlg_ctl(dlg, "KindCb")
     lambda_ed = _dlg_ctl(dlg, "LambdaEd")
+    lambda_pick = _dlg_ctl(dlg, "LambdaPickCb")
+    lambda_example = _dlg_ctl(dlg, "LambdaExampleCb")
     var_name = _dlg_ctl(dlg, "VarNameEd")
     var_op = _dlg_ctl(dlg, "VarOpCb")
     var_val = _dlg_ctl(dlg, "VarValEd")
@@ -252,6 +362,45 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     _fill_combo(env_op, _cfg.COMPARE_OPS)
     _fill_combo(env_rhs, _cfg.RHS_KIND_CHOICES)
     _fill_combo(os_op, _cfg.OS_USER_OPS)
+    _fill_combo(lambda_example, _cfg.LAMBDA_EXAMPLE_CHOICES, blank_first=True)
+
+    saved_state = [()]
+    if load_saved_lambdas_fn is not None:
+        try:
+            saved_state[0] = list(load_saved_lambdas_fn() or [])
+        except Exception:
+            saved_state[0] = []
+
+    def _refresh_saved_pick(expr_text=u""):
+        labels = (u"—",)
+        if refresh_saved_labels_fn is not None:
+            try:
+                labels = tuple(refresh_saved_labels_fn(saved_state[0]) or (u"—",))
+            except Exception:
+                labels = (u"—",)
+        else:
+            names = []
+            for item in saved_state[0] or ():
+                nm = unicode(item.get(u"name") or u"").strip()
+                if nm:
+                    names.append(nm)
+            labels = (u"—",) + tuple(names)
+        try:
+            lambda_pick.removeItems(0, lambda_pick.getItemCount())
+        except Exception:
+            pass
+        try:
+            lambda_pick.addItems(tuple(labels), 0)
+        except Exception:
+            pass
+        pick_name = u"—"
+        ex = unicode(expr_text or u"").strip()
+        if ex:
+            for item in saved_state[0] or ():
+                if unicode(item.get(u"expr") or u"").strip() == ex:
+                    pick_name = unicode(item.get(u"name") or u"—")
+                    break
+        _set_text(lambda_pick, pick_name)
 
     initial = unicode(initial_text or u"").strip()
     cond = None
@@ -290,10 +439,17 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
             _combo_select_by_data(os_op, cond.get(u"op") or u"in", _cfg.OS_USER_OPS)
             _set_text(os_users, u",".join(cond.get(u"users") or []))
 
+    _refresh_saved_pick(_get_text(lambda_ed))
+
     panel_names = {
         _cfg.KIND_LAMBDA: (
             "LambdaLbl",
             "LambdaEd",
+            "LambdaPickCb",
+            "LambdaBuildBtn",
+            "LambdaSaveBtn",
+            "LambdaExampleCb",
+            "LambdaHintLbl",
         ),
         _cfg.KIND_VARIABLE: (
             "VarNameLbl",
@@ -327,20 +483,56 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         for k, names in panel_names.items():
             vis = k == kind
             for nm in names:
-                ctl = _dlg_ctl(dlg, nm)
-                if ctl is None:
-                    continue
-                try:
-                    ctl.setVisible(vis)
-                except Exception:
-                    try:
-                        ctl.Model.EnableVisible = vis
-                    except Exception:
-                        pass
+                _set_visible(_dlg_ctl(dlg, nm), vis)
 
     _show_kind(kind0)
 
     result = {u"action": None, u"text": None}
+
+    def _apply_saved_by_name(name):
+        nm = unicode(name or u"").strip()
+        if nm in (u"", u"—", u"-"):
+            return
+        for item in saved_state[0] or ():
+            if unicode(item.get(u"name") or u"").strip() == nm:
+                _set_text(lambda_ed, item.get(u"expr") or u"")
+                return
+
+    def _open_builder():
+        if open_lambda_builder_fn is None:
+            return
+        try:
+            ok, expr = open_lambda_builder_fn(
+                dlg,
+                kind=getattr(_cfg, "LAMBDA_BUILDER_KIND", u"gate"),
+                initial_expr=_get_text(lambda_ed),
+                doc=doc,
+                saved_lambdas=saved_state[0],
+            )
+        except Exception:
+            return
+        if ok:
+            _set_text(lambda_ed, expr or u"")
+            try:
+                if load_saved_lambdas_fn is not None:
+                    saved_state[0] = list(load_saved_lambdas_fn() or [])
+            except Exception:
+                pass
+            _refresh_saved_pick(_get_text(lambda_ed))
+
+    def _save_current_lambda():
+        if save_lambda_fn is None:
+            return
+        expr = _get_text(lambda_ed).strip()
+        if expr == u"":
+            return
+        try:
+            updated = save_lambda_fn(dlg, expr, saved_state[0], doc=doc)
+            if updated is not None:
+                saved_state[0] = list(updated or [])
+        except Exception:
+            pass
+        _refresh_saved_pick(expr)
 
     class _H(unohelper.Base, XActionListener, XItemListener):
         def disposing(self, ev):
@@ -348,10 +540,31 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
 
         def itemStateChanged(self, ev):
             try:
-                kind = _combo_selected_code(kind_cb, _cfg.KIND_CHOICES, _cfg.KIND_OS_USER)
-                _show_kind(kind)
+                src = ev.Source
+                name = unicode(src.getModel().Name)
             except Exception:
-                pass
+                name = u""
+            if name == u"KindCb":
+                try:
+                    kind = _combo_selected_code(kind_cb, _cfg.KIND_CHOICES, _cfg.KIND_OS_USER)
+                    _show_kind(kind)
+                except Exception:
+                    pass
+                return
+            if name == u"LambdaPickCb":
+                try:
+                    _apply_saved_by_name(_get_text(lambda_pick))
+                except Exception:
+                    pass
+                return
+            if name == u"LambdaExampleCb":
+                try:
+                    expr = _example_label_to_expr(_get_text(lambda_example))
+                    if expr:
+                        _set_text(lambda_ed, expr)
+                        _refresh_saved_pick(expr)
+                except Exception:
+                    pass
 
         def actionPerformed(self, ev):
             try:
@@ -363,6 +576,12 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
                 name = unicode(src.getModel().Name)
             except Exception:
                 name = cmd
+            if name in (u"LambdaBuildBtn",) or cmd == u"LambdaBuildBtn":
+                _open_builder()
+                return
+            if name in (u"LambdaSaveBtn",) or cmd == u"LambdaSaveBtn":
+                _save_current_lambda()
+                return
             if name in (u"ClearBtn",) or cmd == u"ClearBtn":
                 result[u"action"] = u"clear"
                 try:
@@ -370,14 +589,17 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
                 except Exception:
                     pass
                 return
-            if name in (u"OkBtn", u"ok", u"OK") or cmd in (u"ok", u"OK", u"OkBtn"):
+            if name in (u"OkBtn", u"OkButton", u"ok", u"OK") or cmd in (u"ok", u"OK", u"OkBtn"):
                 result[u"action"] = u"ok"
                 try:
                     dlg.endExecute()
                 except Exception:
                     pass
                 return
-            if name in (u"CancelBtn", u"cancel") or cmd in (u"cancel", u"CancelBtn"):
+            if name in (u"CancelBtn", u"CancelButton", u"cancel") or cmd in (
+                u"cancel",
+                u"CancelBtn",
+            ):
                 result[u"action"] = u"cancel"
                 try:
                     dlg.endExecute()
@@ -385,11 +607,21 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
                     pass
 
     h = _H()
-    try:
-        kind_cb.addItemListener(h)
-    except Exception:
-        pass
-    for btn_name in (u"ClearBtn", u"OkBtn", u"CancelBtn"):
+    for listen_name in (u"KindCb", u"LambdaPickCb", u"LambdaExampleCb"):
+        ctl = _dlg_ctl(dlg, listen_name)
+        if ctl is None:
+            continue
+        try:
+            ctl.addItemListener(h)
+        except Exception:
+            pass
+    for btn_name in (
+        u"ClearBtn",
+        u"OkBtn",
+        u"CancelBtn",
+        u"LambdaBuildBtn",
+        u"LambdaSaveBtn",
+    ):
         btn = _dlg_ctl(dlg, btn_name)
         if btn is None:
             continue
@@ -405,7 +637,6 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         return u""
     if action == u"cancel" or (action is None and rc != 1):
         return None
-    # OK — собрать JSON
     kind = _combo_selected_code(kind_cb, _cfg.KIND_CHOICES, _cfg.KIND_OS_USER)
     obj = {u"v": 1, u"fn": _cfg.STEP_CONDITION_FN, u"kind": kind}
     try:
@@ -438,8 +669,4 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
             obj[u"case_sensitive"] = False
         return _lib.encode_step_condition(obj)
     except Exception as err:
-        try:
-            from libre_macros_param_wizard_cfg import _show_message  # may fail
-        except Exception:
-            pass
         raise ValueError(u"Условие: %s" % err)

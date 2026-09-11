@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы условия выполнения шага постобработки / финала (колонка D / E)."""
 from __future__ import unicode_literals
-MACRO_VERSION = "3.10.723"
+MACRO_VERSION = "3.10.724"
 try:
     unicode
 except NameError:
@@ -85,3 +85,49 @@ DIALOG_HINT_PLUGIN = (
     u"Пустое условие = шаг всегда выполняется.\n"
     u"Для плагина условие хранится в колонке E (D = extra)."
 )
+
+# Размеры субвизарда (не тянуть высоту главного визарда).
+DIALOG_W = 580
+DIALOG_H = 420
+DIALOG_MARGIN = 12
+DIALOG_HINT_H = 36
+DIALOG_ROW_H = 28
+DIALOG_CTL_H = 22
+DIALOG_LBL_H = 16
+DIALOG_LBL_W = 150
+DIALOG_BTN_H = 24
+DIALOG_BTN_W = 100
+DIALOG_BTN_GAP = 10
+DIALOG_FOOTER_H = 36
+DIALOG_LAMBDA_EDIT_H = 110
+DIALOG_OS_USERS_EDIT_H = 72
+
+# Примеры для kind=lambda (вставка в поле expr).
+LAMBDA_EXAMPLE_CHOICES = (
+    (
+        u"Переменная равна",
+        u'lambda: str(<<Переменные.Филиал>> or "") == "МСУЗ"',
+    ),
+    (
+        u"Переменная в списке",
+        u'lambda: "<<Переменные.Регион>>" in ("Север", "Юг")',
+    ),
+    (
+        u"Переменная непустая",
+        u'lambda: str(<<Переменные.Код>> or "").strip() != ""',
+    ),
+    (
+        u"Пользователь ОС",
+        u'lambda: os_user().casefold() in ("ivanov", "petrov")',
+    ),
+    (
+        u"Переменная среды",
+        u'lambda: env("MERGE_PROFILE").casefold() == "prod"',
+    ),
+    (
+        u"Комбо: код + пользователь",
+        u'lambda: str(<<Переменные.Код>> or "").strip() != "" and os_user().casefold() in ("ivanov", "petrov")',
+    ),
+)
+
+LAMBDA_BUILDER_KIND = u"gate"

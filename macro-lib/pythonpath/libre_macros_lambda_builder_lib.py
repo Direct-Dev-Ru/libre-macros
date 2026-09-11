@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.723"
+MACRO_VERSION = "3.10.724"
 """
 Субвизард «Конструктор лямбда-выражения».
 
@@ -55,6 +55,13 @@ def lambda_builder_kind_meta(kind=None):
             u"signature": u"lambda rows: ",
             u"compile": u"rows",
         }
+    if _u(kind).strip().casefold() in (u"gate", u"step", u"condition", u"bare"):
+        return {
+            u"kind": u"gate",
+            u"label": u"Условие шага",
+            u"signature": u"lambda: ",
+            u"compile": u"gate",
+        }
     return {
         u"kind": u"rows_value",
         u"label": u"Значение ячейки",
@@ -93,6 +100,10 @@ def _normalize_kind(kind):
         u"column_name": u"name",
         u"sheet": u"sheets",
         u"sheet_list": u"sheets",
+        u"step": u"gate",
+        u"step_condition": u"gate",
+        u"condition": u"gate",
+        u"bare": u"gate",
     }
     if k in aliases:
         return aliases[k]
@@ -295,6 +306,28 @@ def validate_lambda_expr(expr, kind):
             packed = compile_lambda_column_name(text)
         elif nk == u"sheets":
             packed = compile_lambda_column_sheet_pick(text)
+        elif nk == u"gate":
+            # 0-arg lambda: для условия шага; sanitize уже выше через ensure+policy в caller path.
+            from libre_macros_sanitize_lib import (
+                LM_SANITIZE_POLICY_STANDARD,
+                lm_sanitize_code_or_raise,
+            )
+
+            code = text
+            stripped = code.lstrip()
+            if not (stripped.startswith(u"lambda") or stripped.startswith(u"def ")):
+                code = u"lambda: " + code
+            lm_sanitize_code_or_raise(code, policy=LM_SANITIZE_POLICY_STANDARD)
+            fn = eval(code, {u"__builtins__": {}}, {})
+            if not callable(fn):
+                return False, u"Нужен callable lambda:"
+            try:
+                n_args = fn.__code__.co_argcount
+            except Exception:
+                n_args = -1
+            if n_args not in (0, -1):
+                return False, u"Для условия шага нужна lambda без аргументов (не rows)"
+            return True, u"OK: gate lambda"
         else:
             packed = compile_rows_lambda(text)
         if packed is None:

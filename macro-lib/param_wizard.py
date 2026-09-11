@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.723"
+MACRO_VERSION = "3.10.724"
 import ast
 import glob
 import json
@@ -15314,6 +15314,23 @@ def show_manual_variable_input_param_dialog(parent_dialog=None, initial_text=u''
 def show_step_condition_param_dialog(parent_dialog=None, initial_text=u'', doc=None, is_plugin=False):
     """Визард условия выполнения шага (колонка D / E)."""
     from libre_macros_step_condition_dialog_lib import show_step_condition_dialog
+    from libre_macros_wizard_profile_lib import load_saved_lambdas
+
+    def _open_builder(parent, kind=u'gate', initial_expr=u'', doc=None, saved_lambdas=None):
+        return _show_lambda_builder_dialog(
+            parent,
+            kind=kind or u'gate',
+            initial_expr=initial_expr,
+            doc=doc,
+            saved_lambdas=saved_lambdas,
+            title=u'Конструктор условия (lambda: …)',
+            lock_kind=True,
+        )
+
+    def _save_lambda(parent, expr, saved_lambdas, doc=None):
+        updated, _expr_out = _show_saved_lambda_manager_dialog(parent, expr, saved_lambdas)
+        return updated
+
     return show_step_condition_dialog(
         parent_dialog=parent_dialog,
         initial_text=initial_text,
@@ -15323,16 +15340,23 @@ def show_step_condition_param_dialog(parent_dialog=None, initial_text=u'', doc=N
         add_fixed=_wizard_dlg_add_fixed,
         add_edit=_wizard_dlg_add_edit,
         add_button=_wizard_dlg_add_button,
-        add_combo=getattr(_pw_cfg, '_wizard_dlg_add_listbox', None) or _wizard_dlg_add_combo_if_any,
-        add_footer=_inner_dialog_add_footer,
+        add_combo=_wizard_dlg_add_combo,
         wire_help=_wizard_wire_help_button,
         set_sizeable=_inner_dialog_set_sizeable,
-        inner_height=_inner_dialog_height,
+        open_lambda_builder_fn=_open_builder,
+        load_saved_lambdas_fn=load_saved_lambdas,
+        save_lambda_fn=_save_lambda,
+        refresh_saved_labels_fn=_wp_saved_lambda_pick_labels,
     )
 
 
 def _wizard_dlg_add_combo_if_any(dm, name, x, y, w, h):
-    """Fallback listbox/combo для субвизарда условия."""
+    """Fallback listbox/combo для субвизарда условия (legacy)."""
+    try:
+        _wizard_dlg_add_combo(dm, name, x, y, w, h)
+        return
+    except Exception:
+        pass
     try:
         _wizard_dlg_add_listbox(dm, name, x, y, w, h, multiselect=False)
         return

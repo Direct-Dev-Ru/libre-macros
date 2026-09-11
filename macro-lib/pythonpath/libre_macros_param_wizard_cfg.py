@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.723"
+MACRO_VERSION = "3.10.724"
 import re
 
 try:
@@ -4646,6 +4646,7 @@ LAMBDA_BUILDER_KIND_CHOICES = (
     (u"rows_value", u"Значение ячейки"),
     (u"name", u"Имя столбца"),
     (u"sheets", u"Список листов"),
+    (u"gate", u"Условие шага"),
 )
 LAMBDA_BUILDER_KIND_META = {
     u"rows_predicate": {
@@ -4671,6 +4672,12 @@ LAMBDA_BUILDER_KIND_META = {
         u"label": u"Список листов",
         u"signature": u"lambda sheets: ",
         u"compile": u"sheets",
+    },
+    u"gate": {
+        u"kind": u"gate",
+        u"label": u"Условие шага",
+        u"signature": u"lambda: ",
+        u"compile": u"gate",
     },
 }
 LAMBDA_BUILDER_PRESETS = {
@@ -4708,6 +4715,29 @@ LAMBDA_BUILDER_PRESETS = {
         (u"Все имена", u"lambda sheets: list(sheets)"),
         (u"Первый лист", u"lambda sheets: sheets[0] if sheets else \"\""),
         (u"Пустой / свой", u"lambda sheets: "),
+    ),
+    u"gate": (
+        (
+            u"Переменная равна",
+            u'lambda: str(<<Переменные.Филиал>> or "") == "МСУЗ"',
+        ),
+        (
+            u"Переменная в списке",
+            u'lambda: "<<Переменные.Регион>>" in ("Север", "Юг")',
+        ),
+        (
+            u"Переменная непустая",
+            u'lambda: str(<<Переменные.Код>> or "").strip() != ""',
+        ),
+        (
+            u"Пользователь ОС",
+            u'lambda: os_user().casefold() in ("ivanov", "petrov")',
+        ),
+        (
+            u"Переменная среды",
+            u'lambda: env("MERGE_PROFILE").casefold() == "prod"',
+        ),
+        (u"Пустой / свой", u"lambda: "),
     ),
 }
 LAMBDA_BUILDER_SUGAR_BUTTONS = (
