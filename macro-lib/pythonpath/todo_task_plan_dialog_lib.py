@@ -2,7 +2,7 @@
 """Полноэкранный визард плана выполнения задачи (ListBox + панель полей; Grid опционален)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.724"
+MACRO_VERSION = "3.10.725"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XFocusListener, XItemListener, XMouseListener, XTextListener

@@ -2,7 +2,7 @@
 """Диалог редактирования строки задачи (todo_task_edit)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.724"
+MACRO_VERSION = "3.10.725"
 import re
 import uno
 import unohelper
@@ -2380,10 +2380,10 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         content_w,
         lbl_h,
     )
-    y += lbl_h + 2
+    y += lbl_h + 1
     scope_labels = [lbl for _code, lbl in scope_choices]
     _add_dropdown(dm, "ScopeCombo", m, y, content_w, field_h, scope_labels)
-    y += field_h + 2
+    y += field_h + 1
     _add_label(
         dm,
         "ScopePathLbl",
@@ -2391,9 +2391,9 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         m,
         y,
         content_w,
-        28,
+        18,
     )
-    y += 30
+    y += 20
     tab_w = (content_w - gap) // 2
     _add_button(
         dm,
@@ -2413,17 +2413,47 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         tab_w,
         tab_h,
     )
-    y += tab_h + gap
+    y += tab_h + 3
     body_top = y
 
-    # --- вкладка Общие ---
+    # --- вкладка Общие (компактная: пары полей в ряд) ---
     gy = body_top
-    _add_label(dm, "HintLbl", unicode(getattr(_cfg, "SETTINGS_DIALOG_HINT", u"")), m, gy, content_w, 44)
-    gy += 48
-    _add_label(dm, "PwdLbl", u"Пароль защиты листа:", m, gy, content_w, lbl_h)
-    gy += lbl_h + 2
-    show_w = 72
-    pwd_w = content_w - show_w - gap
+    gen_gap = 3
+    col_gap = 6
+    half_w = (content_w - col_gap) // 2
+    right_x = m + half_w + col_gap
+
+    _add_label(
+        dm,
+        "HintLbl",
+        unicode(getattr(_cfg, "SETTINGS_DIALOG_HINT", u"")),
+        m,
+        gy,
+        content_w,
+        24,
+    )
+    gy += 26
+
+    # пароль | лист задач сотрудников
+    _add_label(dm, "PwdLbl", u"Пароль защиты листа:", m, gy, half_w, lbl_h)
+    _add_label(
+        dm,
+        "MergeSrcLbl",
+        unicode(
+            getattr(
+                _cfg, "SETTINGS_MERGE_SOURCE_LABEL", u"Лист задач сотрудников:"
+            )
+        ),
+        right_x,
+        gy,
+        half_w,
+        lbl_h,
+    )
+    gy += lbl_h + 1
+    show_w = 64
+    pwd_w = half_w - show_w - gen_gap
+    if pwd_w < 80:
+        pwd_w = half_w - show_w - 2
     _add_edit(dm, "PwdEd", m, gy, pwd_w, field_h, password=True)
     _add_edit(dm, "PwdPlainEd", m, gy, pwd_w, field_h, password=False)
     try:
@@ -2434,39 +2464,26 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         dm,
         "ShowPwdBtn",
         unicode(getattr(_cfg, "SETTINGS_SHOW_PWD_LABEL", u"Показать")),
-        m + pwd_w + gap,
+        m + pwd_w + gen_gap,
         gy,
         show_w,
         field_h,
     )
-    gy += field_h + gap
-    _add_label(dm, "FioLbl", u"ФИО владельца:", m, gy, content_w, lbl_h)
-    gy += lbl_h + 2
-    _add_edit(dm, "FioEd", m, gy, content_w, field_h)
-    gy += field_h + gap
+    _add_edit(dm, "MergeSrcEd", right_x, gy, half_w, field_h)
+    gy += field_h + gen_gap
+
+    # ФИО | роль
     role_choices = getattr(_cfg, "OWNER_ROLE_CHOICES", ())
     role_labels = [lbl for _code, lbl in role_choices]
-    _add_label(dm, "RoleLbl", u"Роль владельца:", m, gy, content_w, lbl_h)
-    gy += lbl_h + 2
-    _add_combo(dm, "RoleCombo", m, gy, content_w, field_h, role_labels)
-    gy += field_h + gap
-    _add_label(
-        dm,
-        "MergeSrcLbl",
-        unicode(
-            getattr(
-                _cfg, "SETTINGS_MERGE_SOURCE_LABEL", u"Лист с задачами сотрудников:"
-            )
-        ),
-        m,
-        gy,
-        content_w,
-        lbl_h,
-    )
-    gy += lbl_h + 2
-    _add_edit(dm, "MergeSrcEd", m, gy, content_w, field_h)
-    gy += field_h + gap
-    merge_chk_h = 16
+    _add_label(dm, "FioLbl", u"ФИО владельца:", m, gy, half_w, lbl_h)
+    _add_label(dm, "RoleLbl", u"Роль владельца:", right_x, gy, half_w, lbl_h)
+    gy += lbl_h + 1
+    _add_edit(dm, "FioEd", m, gy, half_w, field_h)
+    _add_combo(dm, "RoleCombo", right_x, gy, half_w, field_h, role_labels)
+    gy += field_h + gen_gap
+
+    merge_chk_h = 14
+    chk_half = (content_w - col_gap) // 2
     _add_checkbox(
         dm,
         "MergeExistChk",
@@ -2479,10 +2496,9 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         ),
         m,
         gy,
-        content_w,
+        chk_half,
         merge_chk_h,
     )
-    gy += merge_chk_h + 2
     _add_checkbox(
         dm,
         "MergeDateChk",
@@ -2493,9 +2509,9 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
                 u"Слияние: контролировать дату-время редактирования",
             )
         ),
-        m,
+        right_x,
         gy,
-        content_w,
+        chk_half,
         merge_chk_h,
     )
     gy += merge_chk_h + 2
@@ -2514,7 +2530,8 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         content_w,
         merge_chk_h,
     )
-    gy += merge_chk_h + gap
+    gy += merge_chk_h + gen_gap
+
     _add_label(
         dm,
         "MergePreserveLbl",
@@ -2522,7 +2539,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
             getattr(
                 _cfg,
                 "SETTINGS_MERGE_PRESERVE_ON_UPDATE_LABEL",
-                u"Слияние: поля руководителя (не обновлять со свода):",
+                u"Поля руководителя (не обновлять со свода):",
             )
         ),
         m,
@@ -2530,7 +2547,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         content_w,
         lbl_h,
     )
-    gy += lbl_h + 2
+    gy += lbl_h + 1
     _add_label(
         dm,
         "MergePreserveHintLbl",
@@ -2544,9 +2561,9 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         m,
         gy,
         content_w,
-        36,
+        22,
     )
-    gy += 38
+    gy += 23
     preserve_choices = []
     try:
         hi = 0
@@ -2574,15 +2591,15 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
             unicode(getattr(_cfg, "COL_PRIORITY", u"Матрица приоритетов")),
             unicode(getattr(_cfg, "COL_DUE", u"Срок исполнения")),
         ]
-    pop_w = 28
-    clear_w = 32
-    combo_w = content_w - pop_w - clear_w - 2 * gap
+    pop_w = 26
+    clear_w = 30
+    combo_w = content_w - pop_w - clear_w - 2 * gen_gap
     _add_combo(dm, "MergePreserveCombo", m, gy, combo_w, field_h, preserve_choices)
     _add_button(
         dm,
         "MergePreservePopBtn",
         unicode(getattr(_cfg, "SETTINGS_MERGE_PRESERVE_POP_LABEL", u"×")),
-        m + combo_w + gap,
+        m + combo_w + gen_gap,
         gy,
         pop_w,
         field_h,
@@ -2591,20 +2608,24 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         dm,
         "MergePreserveClearBtn",
         unicode(getattr(_cfg, "SETTINGS_MERGE_PRESERVE_CLEAR_LABEL", u"××")),
-        m + combo_w + gap + pop_w + gap,
+        m + combo_w + gen_gap + pop_w + gen_gap,
         gy,
         clear_w,
         field_h,
     )
-    gy += field_h + 2
-    preserve_edit_h = 40
+    gy += field_h + 1
+    preserve_edit_h = 28
     _add_edit(
         dm, "MergePreserveEd", m, gy, content_w, preserve_edit_h, multiline=True
     )
-    gy += preserve_edit_h + gap
+    gy += preserve_edit_h + gen_gap
+
+    # логи | шрифт
     log_lbl = unicode(getattr(_cfg, "SETTINGS_CONSOLE_LOG_LABEL", u"Подробные логи"))
-    _add_checkbox(dm, "ConsoleLogChk", log_lbl, m, gy, content_w, 16)
-    gy += 20 + gap
+    _add_checkbox(dm, "ConsoleLogChk", log_lbl, m, gy, half_w, 16)
+    font_lbl_w = half_w - 56
+    if font_lbl_w < 90:
+        font_lbl_w = half_w - 50
     _add_label(
         dm,
         "FontPtLbl",
@@ -2612,17 +2633,16 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
             getattr(
                 _cfg,
                 "SETTINGS_DIALOG_FONT_LABEL",
-                u"Размер шрифта в диалогах (pt):",
+                u"Шрифт диалогов (pt):",
             )
         ),
-        m,
+        right_x,
         gy,
-        content_w,
-        lbl_h,
+        font_lbl_w,
+        16,
     )
-    gy += lbl_h + 2
-    _add_edit(dm, "FontPtEd", m, gy, 60, field_h)
-    gy += field_h + gap
+    _add_edit(dm, "FontPtEd", right_x + font_lbl_w + 2, gy, 48, field_h)
+    gy += max(field_h, 16) + gen_gap
     general_bottom = gy
 
     general_names = [

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы условия выполнения шага постобработки / финала (колонка D / E)."""
 from __future__ import unicode_literals
-MACRO_VERSION = "3.10.724"
+MACRO_VERSION = "3.10.725"
 try:
     unicode
 except NameError:

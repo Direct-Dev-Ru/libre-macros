@@ -2,7 +2,7 @@
 """Константы макросов управления строками таблицы задач (todo_task_*)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.724"
+MACRO_VERSION = "3.10.725"
 # Имена колонок заголовка (лист задач). Сопоставление — нормализованное.
 COL_NUM = u"№ п/п"
 COL_NAME = u"Наименование"
@@ -155,9 +155,8 @@ COLORIZE_DEFAULT_SHEET_PATTERN = u"Задачи*"
 # Общие настройки серии todo_task (todo_task_settings).
 SETTINGS_DIALOG_TITLE = u"Настройки задач"
 SETTINGS_DIALOG_HINT = (
-    u"Параметры макросов задач для выбранной области.\n"
-    u"Частные — эта книга; если записи ещё нет, подставляются глобальные.\n"
-    u"Пустой пароль — защита листа без пароля. По умолчанию: task."
+    u"Частные — эта книга; иначе подставляются глобальные. "
+    u"Пустой пароль — защита без пароля (по умолчанию: task)."
 )
 SETTINGS_SCOPE_LABEL = u"Область настроек:"
 SETTINGS_SCOPE_PRIVATE = u"private"
@@ -170,9 +169,9 @@ SETTINGS_SCOPE_BOOK_LABEL = u"Книга:"
 SETTINGS_SCOPE_UNSAVED_BOOK = u"Книга не сохранена на диск — частные настройки появятся после сохранения файла."
 SETTINGS_SHOW_PWD_LABEL = u"Показать"
 SETTINGS_SHOW_PWD_SECONDS = 10
-SETTINGS_CONSOLE_LOG_LABEL = u"Подробные логи в консоль (этапы и время)"
+SETTINGS_CONSOLE_LOG_LABEL = u"Подробные логи в консоль"
 DEFAULT_CONSOLE_LOG = True
-SETTINGS_DIALOG_FONT_LABEL = u"Размер шрифта в диалогах (pt):"
+SETTINGS_DIALOG_FONT_LABEL = u"Шрифт диалогов (pt):"
 DEFAULT_DIALOG_FONT_PT = 11
 DIALOG_FONT_PT_MIN = 8
 DIALOG_FONT_PT_MAX = 24
@@ -195,15 +194,15 @@ DEFAULT_TASK_SHEET_PATTERN = u"Задачи*"
 DEFAULT_SUMMARY_SHEET_PATTERN = u"Свод*задач*"
 # Лист свода задач сотрудников в текущей книге (todo_task_merge).
 DEFAULT_MERGE_SOURCE_SHEET = u"задачи_сотрудников"
-SETTINGS_MERGE_SOURCE_LABEL = u"Лист с задачами сотрудников:"
+SETTINGS_MERGE_SOURCE_LABEL = u"Лист задач сотрудников:"
 DEFAULT_MERGE_UPDATE_EXISTING_ONLY = False
 DEFAULT_MERGE_CHECK_MODIFIED = False
 DEFAULT_MERGE_ACCUMULATE_COMMENTS = False
 SETTINGS_MERGE_UPDATE_EXISTING_LABEL = (
-    u"Слияние: обновлять только существующие"
+    u"Слияние: только существующие"
 )
 SETTINGS_MERGE_CHECK_MODIFIED_LABEL = (
-    u"Слияние: контролировать дату-время редактирования"
+    u"Слияние: контроль даты редакции"
 )
 SETTINGS_MERGE_ACCUMULATE_COMMENTS_LABEL = (
     u"Слияние: накапливать комментарии"
@@ -212,12 +211,11 @@ SETTINGS_MERGE_ACCUMULATE_COMMENTS_LABEL = (
 # При первой вставке задачи копируются все столбцы.
 DEFAULT_MERGE_PRESERVE_ON_UPDATE = ()
 SETTINGS_MERGE_PRESERVE_ON_UPDATE_LABEL = (
-    u"Слияние: поля руководителя (не обновлять со свода):"
+    u"Поля руководителя (не обновлять со свода):"
 )
 SETTINGS_MERGE_PRESERVE_ON_UPDATE_HINT = (
-    u"При первом переносе копируются все столбцы. При обновлении существующей "
-    u"задачи перечисленные поля на листе руководителя сохраняются. "
-    u"Выбор из списка накапливается; × — убрать последний, ×× — очистить."
+    u"Первый перенос — все столбцы; при обновлении перечисленные сохраняются "
+    u"(накопление; × / ××)."
 )
 SETTINGS_MERGE_PRESERVE_POP_LABEL = u"×"
 SETTINGS_MERGE_PRESERVE_CLEAR_LABEL = u"××"

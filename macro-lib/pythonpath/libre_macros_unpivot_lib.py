@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.724"
+MACRO_VERSION = "3.10.725"
 """
 развернуть_столбцы (unpivot): широкая таблица → длинная.
 
