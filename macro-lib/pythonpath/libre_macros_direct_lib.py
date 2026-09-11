@@ -10,7 +10,7 @@
 """
 
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.725"
+MACRO_VERSION = "3.10.726"
 import calendar
 import os
 import re

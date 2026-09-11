@@ -8,7 +8,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.725"
+MACRO_VERSION = "3.10.726"
 import fnmatch
 import re
 import time
@@ -4909,8 +4909,28 @@ def _header_col_map_for_merge(sheet):
     return out
 
 
-def _copy_task_row_by_headers( src_sheet, src_row, dest_sheet, dest_row, skip_num=True, skip_keys=None, skip_dest_cols=None, values_only=True ):
-    """Скопировать строку по совпадающим заголовкам (значения или с форматами)."""
+def _cell_is_blank_for_merge(cell):
+    """Пустая ячейка приёмника (можно заполнить из свода даже при soft-skip)."""
+    if cell is None:
+        return True
+    try:
+        t = _cell_content_type(cell)
+        if t == 0:
+            return True
+        # число / текст / формула — считаем заполненной
+        if t in (1, 2, 3):
+            return False
+    except Exception:
+        pass
+    return not bool(_cell_text(cell).strip())
+
+
+def _copy_task_row_by_headers( src_sheet, src_row, dest_sheet, dest_row, skip_num=True, skip_keys=None, skip_dest_cols=None, soft_skip_keys=None, values_only=True ):
+    """Скопировать строку по совпадающим заголовкам (значения или с форматами).
+
+    soft_skip_keys — не перезаписывать, если в приёмнике уже есть значение;
+    если ячейка приёмника пуста — копировать со свода.
+    """
     src_map = _header_col_map_for_merge(src_sheet)
     dest_map = _header_col_map_for_merge(dest_sheet)
     skip_norm = {}
@@ -4923,6 +4943,14 @@ def _copy_task_row_by_headers( src_sheet, src_row, dest_sheet, dest_row, skip_nu
         si = si + 1
         if title:
             skip_norm[_norm_header(title)] = True
+    soft_norm = {}
+    ssk = list(soft_skip_keys or [])
+    ssi = 0
+    while ssi < len(ssk):
+        title = unicode(ssk[ssi] or u"")
+        ssi = ssi + 1
+        if title:
+            soft_norm[_norm_header(title)] = True
     skip_idx = {}
     sc = list(skip_dest_cols or [])
     ci = 0
@@ -4943,6 +4971,8 @@ def _copy_task_row_by_headers( src_sheet, src_row, dest_sheet, dest_row, skip_nu
         try:
             src_cell = src_sheet.getCellByPosition(int(src_col), int(src_row))
             dest_cell = dest_sheet.getCellByPosition(int(dest_col), int(dest_row))
+            if key in soft_norm and not _cell_is_blank_for_merge(dest_cell):
+                continue
             if values_only:
                 _copy_cell_content(src_cell, dest_cell, values_only=True)
             else:
@@ -5407,7 +5437,7 @@ def _insert_task_from_summary( src_sheet, src_row, dest_sheet, dest_cols, doc=No
     return dest_row
 
 
-def _update_task_from_summary( src_sheet, src_row, dest_sheet, dest_cols, dest_row, skip_keys=None, skip_dest_cols=None, values_only=True ):
+def _update_task_from_summary( src_sheet, src_row, dest_sheet, dest_cols, dest_row, skip_keys=None, skip_dest_cols=None, soft_skip_keys=None, values_only=True ):
     """Обновить существующую задачу (кроме «№ п/п»)."""
     _copy_task_row_by_headers(
         src_sheet,
@@ -5417,6 +5447,7 @@ def _update_task_from_summary( src_sheet, src_row, dest_sheet, dest_cols, dest_r
         skip_num=True,
         skip_keys=skip_keys,
         skip_dest_cols=skip_dest_cols,
+        soft_skip_keys=soft_skip_keys,
         values_only=values_only,
     )
     _autofit_task_rows(dest_sheet, [int(dest_row)])
@@ -5852,17 +5883,16 @@ def todo_task_merge(doc=None):
                     )
                     continue
                 if action == act_take:
-                    # Версия сотрудника, но поля из preserve_on_update у руководителя
-                    # не перезаписываются («в любом случае» при обновлении).
-                    take_skip = list(preserve_on_update or [])
+                    # Версия сотрудника; поля preserve — только если у руководителя уже не пусто.
                     _update_task_from_summary(
                         src_sheet,
                         src_row,
                         dest_sheet,
                         dest_cols,
                         dest_row,
-                        skip_keys=take_skip,
+                        skip_keys=[],
                         skip_dest_cols=[],
+                        soft_skip_keys=list(preserve_on_update or []),
                         values_only=values_only,
                     )
                     bucket[u"fit_rows"].append(dest_row)
@@ -5920,14 +5950,11 @@ def todo_task_merge(doc=None):
                 continue
             skip_keys = []
             skip_dest_cols = []
+            soft_skip_keys = list(preserve_on_update or [])
             local_cmt = u""
             incoming_cmt = u""
             inc_stamp = u""
             loc_stamp = u""
-            pi = 0
-            while pi < len(preserve_on_update):
-                skip_keys.append(preserve_on_update[pi])
-                pi = pi + 1
             if accumulate_comments:
                 skip_keys.append(
                     getattr(_cfg, "COL_COMMENT", u"Комментарии")
@@ -5964,6 +5991,7 @@ def todo_task_merge(doc=None):
                 dest_row,
                 skip_keys=skip_keys,
                 skip_dest_cols=skip_dest_cols,
+                soft_skip_keys=soft_skip_keys,
                 values_only=values_only,
             )
             if accumulate_comments and comment_newer:

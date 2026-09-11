@@ -2,7 +2,7 @@
 """Константы макросов управления строками таблицы задач (todo_task_*)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.725"
+MACRO_VERSION = "3.10.726"
 # Имена колонок заголовка (лист задач). Сопоставление — нормализованное.
 COL_NUM = u"№ п/п"
 COL_NAME = u"Наименование"
@@ -214,8 +214,8 @@ SETTINGS_MERGE_PRESERVE_ON_UPDATE_LABEL = (
     u"Поля руководителя (не обновлять со свода):"
 )
 SETTINGS_MERGE_PRESERVE_ON_UPDATE_HINT = (
-    u"Первый перенос — все столбцы; при обновлении перечисленные сохраняются "
-    u"(накопление; × / ××)."
+    u"При обновлении сохраняются, если у руководителя уже не пусто; "
+    u"пустое поле берётся из задачи сотрудника (× / ××)."
 )
 SETTINGS_MERGE_PRESERVE_POP_LABEL = u"×"
 SETTINGS_MERGE_PRESERVE_CLEAR_LABEL = u"××"

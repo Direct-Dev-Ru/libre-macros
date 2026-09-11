@@ -4,7 +4,7 @@
 
 Лист «Генератор_QR» — данные; шаблон «QR_Print» — макет карточки.
 """
-MACRO_VERSION = "3.10.725"
+MACRO_VERSION = "3.10.726"
 from libre_macros_qr_codes_lib import generate_qr_codes as _generate_qr_codes
 
 

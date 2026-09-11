@@ -2,7 +2,7 @@
 """Диалог редактирования строки задачи (todo_task_edit)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.725"
+MACRO_VERSION = "3.10.726"
 import re
 import uno
 import unohelper
@@ -2418,7 +2418,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
 
     # --- вкладка Общие (компактная: пары полей в ряд) ---
     gy = body_top
-    gen_gap = 3
+    gen_gap = 5
     col_gap = 6
     half_w = (content_w - col_gap) // 2
     right_x = m + half_w + col_gap
@@ -2432,7 +2432,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         content_w,
         24,
     )
-    gy += 26
+    gy += 28
 
     # пароль | лист задач сотрудников
     _add_label(dm, "PwdLbl", u"Пароль защиты листа:", m, gy, half_w, lbl_h)
@@ -2449,7 +2449,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         half_w,
         lbl_h,
     )
-    gy += lbl_h + 1
+    gy += lbl_h + 2
     show_w = 64
     pwd_w = half_w - show_w - gen_gap
     if pwd_w < 80:
@@ -2477,7 +2477,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
     role_labels = [lbl for _code, lbl in role_choices]
     _add_label(dm, "FioLbl", u"ФИО владельца:", m, gy, half_w, lbl_h)
     _add_label(dm, "RoleLbl", u"Роль владельца:", right_x, gy, half_w, lbl_h)
-    gy += lbl_h + 1
+    gy += lbl_h + 2
     _add_edit(dm, "FioEd", m, gy, half_w, field_h)
     _add_combo(dm, "RoleCombo", right_x, gy, half_w, field_h, role_labels)
     gy += field_h + gen_gap
@@ -2514,7 +2514,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         chk_half,
         merge_chk_h,
     )
-    gy += merge_chk_h + 2
+    gy += merge_chk_h + 4
     _add_checkbox(
         dm,
         "MergeCmtChk",
@@ -2547,7 +2547,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         content_w,
         lbl_h,
     )
-    gy += lbl_h + 1
+    gy += lbl_h + 2
     _add_label(
         dm,
         "MergePreserveHintLbl",
@@ -2563,7 +2563,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         content_w,
         22,
     )
-    gy += 23
+    gy += 24
     preserve_choices = []
     try:
         hi = 0
@@ -2613,7 +2613,7 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         clear_w,
         field_h,
     )
-    gy += field_h + 1
+    gy += field_h + 2
     preserve_edit_h = 28
     _add_edit(
         dm, "MergePreserveEd", m, gy, content_w, preserve_edit_h, multiline=True
