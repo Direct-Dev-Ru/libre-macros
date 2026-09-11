@@ -8,7 +8,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.722"
+MACRO_VERSION = "3.10.723"
 import fnmatch
 import re
 import time
@@ -5556,6 +5556,7 @@ def todo_task_merge(doc=None):
     update_existing_only = bool(merge_opts.get(u"update_existing_only"))
     check_modified = bool(merge_opts.get(u"check_modified"))
     accumulate_comments = bool(merge_opts.get(u"accumulate_comments"))
+    preserve_on_update = list(merge_opts.get(u"preserve_on_update") or [])
 
     src_sheet = _get_sheet_by_name(doc, merge_sheet_name)
     if src_sheet is None:
@@ -5851,14 +5852,16 @@ def todo_task_merge(doc=None):
                     )
                     continue
                 if action == act_take:
-                    # Полная замена всех колонок из свода; форматы — как в confirm.
+                    # Версия сотрудника, но поля из preserve_on_update у руководителя
+                    # не перезаписываются («в любом случае» при обновлении).
+                    take_skip = list(preserve_on_update or [])
                     _update_task_from_summary(
                         src_sheet,
                         src_row,
                         dest_sheet,
                         dest_cols,
                         dest_row,
-                        skip_keys=[],
+                        skip_keys=take_skip,
                         skip_dest_cols=[],
                         values_only=values_only,
                     )
@@ -5921,6 +5924,10 @@ def todo_task_merge(doc=None):
             incoming_cmt = u""
             inc_stamp = u""
             loc_stamp = u""
+            pi = 0
+            while pi < len(preserve_on_update):
+                skip_keys.append(preserve_on_update[pi])
+                pi = pi + 1
             if accumulate_comments:
                 skip_keys.append(
                     getattr(_cfg, "COL_COMMENT", u"Комментарии")

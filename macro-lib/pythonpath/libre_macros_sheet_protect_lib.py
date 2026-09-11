@@ -2,7 +2,7 @@
 """Снятие / восстановление защиты листов Calc при сборе (режим «Текущие листы»)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.722"
+MACRO_VERSION = "3.10.723"
 try:
     unicode
 except NameError:

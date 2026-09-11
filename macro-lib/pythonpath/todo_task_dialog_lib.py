@@ -2,7 +2,7 @@
 """Диалог редактирования строки задачи (todo_task_edit)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.722"
+MACRO_VERSION = "3.10.723"
 import re
 import uno
 import unohelper
@@ -2264,9 +2264,11 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
     """
     try:
         from todo_task_settings_lib import (
+            join_preserve_on_update_columns,
             normalize_general_settings,
             normalize_layout_settings,
             normalize_merge_settings,
+            normalize_preserve_on_update_columns,
         )
     except Exception:
         def normalize_general_settings(obj):
@@ -2297,7 +2299,17 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
                 u"update_existing_only": False,
                 u"check_modified": False,
                 u"accumulate_comments": False,
+                u"preserve_on_update": [],
             }
+
+        def normalize_preserve_on_update_columns(raw):
+            if isinstance(raw, (list, tuple)):
+                return [unicode(x or u"").strip() for x in raw if unicode(x or u"").strip()]
+            text = unicode(raw or u"").replace(u";", u",")
+            return [p.strip() for p in text.split(u",") if p.strip()]
+
+        def join_preserve_on_update_columns(names):
+            return u", ".join(normalize_preserve_on_update_columns(names))
 
     if initial_general is None:
         initial_general = initial
@@ -2503,6 +2515,93 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         merge_chk_h,
     )
     gy += merge_chk_h + gap
+    _add_label(
+        dm,
+        "MergePreserveLbl",
+        unicode(
+            getattr(
+                _cfg,
+                "SETTINGS_MERGE_PRESERVE_ON_UPDATE_LABEL",
+                u"Слияние: поля руководителя (не обновлять со свода):",
+            )
+        ),
+        m,
+        gy,
+        content_w,
+        lbl_h,
+    )
+    gy += lbl_h + 2
+    _add_label(
+        dm,
+        "MergePreserveHintLbl",
+        unicode(
+            getattr(
+                _cfg,
+                "SETTINGS_MERGE_PRESERVE_ON_UPDATE_HINT",
+                u"",
+            )
+        ),
+        m,
+        gy,
+        content_w,
+        36,
+    )
+    gy += 38
+    preserve_choices = []
+    try:
+        hi = 0
+        names0 = list(header_names or [])
+        while hi < len(names0):
+            nm0 = unicode(names0[hi] or u"").strip()
+            hi = hi + 1
+            if nm0 and nm0 not in preserve_choices:
+                preserve_choices.append(nm0)
+    except Exception:
+        preserve_choices = []
+    if not preserve_choices:
+        try:
+            fn = getattr(_cfg, "merge_preserve_column_choices", None)
+            if callable(fn):
+                preserve_choices = list(fn() or [])
+        except Exception:
+            preserve_choices = []
+    if not preserve_choices:
+        preserve_choices = [
+            unicode(getattr(_cfg, "COL_NAME", u"Наименование")),
+            unicode(getattr(_cfg, "COL_STATUS", u"Статус исполнения задачи")),
+            unicode(getattr(_cfg, "COL_COMMENT", u"Комментарии")),
+            unicode(getattr(_cfg, "COL_ASSIGNEE", u"Исполнитель(и)")),
+            unicode(getattr(_cfg, "COL_PRIORITY", u"Матрица приоритетов")),
+            unicode(getattr(_cfg, "COL_DUE", u"Срок исполнения")),
+        ]
+    pop_w = 28
+    clear_w = 32
+    combo_w = content_w - pop_w - clear_w - 2 * gap
+    _add_combo(dm, "MergePreserveCombo", m, gy, combo_w, field_h, preserve_choices)
+    _add_button(
+        dm,
+        "MergePreservePopBtn",
+        unicode(getattr(_cfg, "SETTINGS_MERGE_PRESERVE_POP_LABEL", u"×")),
+        m + combo_w + gap,
+        gy,
+        pop_w,
+        field_h,
+    )
+    _add_button(
+        dm,
+        "MergePreserveClearBtn",
+        unicode(getattr(_cfg, "SETTINGS_MERGE_PRESERVE_CLEAR_LABEL", u"××")),
+        m + combo_w + gap + pop_w + gap,
+        gy,
+        clear_w,
+        field_h,
+    )
+    gy += field_h + 2
+    preserve_edit_h = 40
+    _add_edit(
+        dm, "MergePreserveEd", m, gy, content_w, preserve_edit_h, multiline=True
+    )
+    gy += preserve_edit_h + gap
     log_lbl = unicode(getattr(_cfg, "SETTINGS_CONSOLE_LOG_LABEL", u"Подробные логи"))
     _add_checkbox(dm, "ConsoleLogChk", log_lbl, m, gy, content_w, 16)
     gy += 20 + gap
@@ -2541,6 +2640,12 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         u"MergeExistChk",
         u"MergeDateChk",
         u"MergeCmtChk",
+        u"MergePreserveLbl",
+        u"MergePreserveHintLbl",
+        u"MergePreserveCombo",
+        u"MergePreservePopBtn",
+        u"MergePreserveClearBtn",
+        u"MergePreserveEd",
         u"ConsoleLogChk",
         u"FontPtLbl",
         u"FontPtEd",
@@ -2927,11 +3032,15 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
             acc_cmt = bool(dialog.getControl("MergeCmtChk").getState())
         except Exception:
             acc_cmt = False
+        preserve_raw = _get_control_text(dialog, dm, "MergePreserveEd")
         return normalize_merge_settings(
             {
                 u"update_existing_only": exist_only,
                 u"check_modified": check_mod,
                 u"accumulate_comments": acc_cmt,
+                u"preserve_on_update": normalize_preserve_on_update_columns(
+                    preserve_raw
+                ),
             }
         )
 
@@ -3024,6 +3133,12 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
             )
         except Exception:
             pass
+        _set_control_text(
+            dialog,
+            dm,
+            "MergePreserveEd",
+            join_preserve_on_update_columns(mrg.get(u"preserve_on_update")),
+        )
         try:
             dialog.getControl("ApplyToSummaryChk").setState(
                 1 if lay.get(u"apply_to_summary") else 0
@@ -3178,6 +3293,58 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         except Exception as err:
             _log("show password timer: %s" % err)
 
+    def _preserve_list_from_edit():
+        return normalize_preserve_on_update_columns(
+            _get_control_text(dialog, dm, "MergePreserveEd")
+        )
+
+    def _set_preserve_edit(names):
+        _set_control_text(
+            dialog,
+            dm,
+            "MergePreserveEd",
+            join_preserve_on_update_columns(names),
+        )
+
+    def _preserve_add_from_combo():
+        if state.get(u"filling"):
+            return
+        raw = u""
+        try:
+            raw = _get_combo_text(dialog, dm, "MergePreserveCombo", preserve_choices)
+        except Exception:
+            raw = _get_control_text(dialog, dm, "MergePreserveCombo")
+        name = unicode(raw or u"").strip()
+        if not name:
+            return
+        cur = _preserve_list_from_edit()
+        key = name.casefold() if hasattr(name, "casefold") else name.lower()
+        have = False
+        ci = 0
+        while ci < len(cur):
+            c = unicode(cur[ci] or u"")
+            ck = c.casefold() if hasattr(c, "casefold") else c.lower()
+            if ck == key:
+                have = True
+                break
+            ci = ci + 1
+        if not have:
+            cur.append(name)
+            _set_preserve_edit(cur)
+
+    def _preserve_pop_last():
+        if state.get(u"filling"):
+            return
+        cur = _preserve_list_from_edit()
+        if cur:
+            cur = cur[:-1]
+        _set_preserve_edit(cur)
+
+    def _preserve_clear_all():
+        if state.get(u"filling"):
+            return
+        _set_preserve_edit([])
+
     class _Handler(unohelper.Base, XActionListener):
         def disposing(self, event):
             _cancel_hide_timer()
@@ -3199,6 +3366,12 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
                     _hide_password()
                 else:
                     _show_password_briefly()
+                return
+            if name == "MergePreservePopBtn":
+                _preserve_pop_last()
+                return
+            if name == "MergePreserveClearBtn":
+                _preserve_clear_all()
                 return
             if name == "ApplyWidthsBtn":
                 state[u"apply_widths"] = True
@@ -3245,6 +3418,8 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
         u"TabGeneralBtn",
         u"TabLayoutBtn",
         u"ApplyWidthsBtn",
+        u"MergePreservePopBtn",
+        u"MergePreserveClearBtn",
     ):
         try:
             dialog.getControl(btn_name).addActionListener(handler)
@@ -3265,11 +3440,19 @@ def show_todo_task_settings_dialog( doc=None, initial_general=None, initial_layo
                     src = event.Source.getModel().Name
                 except Exception:
                     src = u""
+                if src == u"MergePreserveCombo" or src == "MergePreserveCombo":
+                    _preserve_add_from_combo()
+                    return
                 if src != u"ScopeCombo" and src != "ScopeCombo":
                     return
                 _apply_scope(_scope_from_combo())
 
-        dialog.getControl("ScopeCombo").addItemListener(_ScopeItem())
+        scope_item = _ScopeItem()
+        dialog.getControl("ScopeCombo").addItemListener(scope_item)
+        try:
+            dialog.getControl("MergePreserveCombo").addItemListener(scope_item)
+        except Exception as err:
+            _log("settings preserve combo listener: %s" % err)
     except Exception as err:
         _log("settings scope item listener: %s" % err)
 

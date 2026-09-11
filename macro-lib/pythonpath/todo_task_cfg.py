@@ -2,7 +2,7 @@
 """Константы макросов управления строками таблицы задач (todo_task_*)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.722"
+MACRO_VERSION = "3.10.723"
 # Имена колонок заголовка (лист задач). Сопоставление — нормализованное.
 COL_NUM = u"№ п/п"
 COL_NAME = u"Наименование"
@@ -208,6 +208,39 @@ SETTINGS_MERGE_CHECK_MODIFIED_LABEL = (
 SETTINGS_MERGE_ACCUMULATE_COMMENTS_LABEL = (
     u"Слияние: накапливать комментарии"
 )
+# Поля листа руководителя, которые не перезаписываются при обновлении со свода.
+# При первой вставке задачи копируются все столбцы.
+DEFAULT_MERGE_PRESERVE_ON_UPDATE = ()
+SETTINGS_MERGE_PRESERVE_ON_UPDATE_LABEL = (
+    u"Слияние: поля руководителя (не обновлять со свода):"
+)
+SETTINGS_MERGE_PRESERVE_ON_UPDATE_HINT = (
+    u"При первом переносе копируются все столбцы. При обновлении существующей "
+    u"задачи перечисленные поля на листе руководителя сохраняются. "
+    u"Выбор из списка накапливается; × — убрать последний, ×× — очистить."
+)
+SETTINGS_MERGE_PRESERVE_POP_LABEL = u"×"
+SETTINGS_MERGE_PRESERVE_CLEAR_LABEL = u"××"
+
+
+def merge_preserve_column_choices():
+    """Заголовки для выбора в настройках (без «№ п/п»)."""
+    return (
+        COL_NAME,
+        COL_DUE,
+        COL_PRIORITY,
+        COL_SED,
+        COL_ASSIGNEE,
+        COL_STATUS,
+        COL_COMMENT,
+        COL_GUID,
+        COL_CREATED,
+        COL_MODIFIED,
+        COL_CREATED_BY,
+        COL_MODIFIED_BY,
+        COL_CATEGORY,
+    )
+
 
 # Справка по макросам todo_task (todo_task_help).
 HELP_DIALOG_TITLE = u"Справка по задачам"

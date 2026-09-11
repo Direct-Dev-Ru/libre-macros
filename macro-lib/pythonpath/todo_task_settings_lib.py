@@ -2,7 +2,7 @@
 """Настройки группы макросов todo_task (JSON в ~/.config/libre-macros/todo_task/)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.722"
+MACRO_VERSION = "3.10.723"
 import json
 import os
 import sys
@@ -40,6 +40,7 @@ DEFAULT_MERGE_SOURCE_SHEET = u"задачи_сотрудников"
 DEFAULT_MERGE_UPDATE_EXISTING_ONLY = False
 DEFAULT_MERGE_CHECK_MODIFIED = False
 DEFAULT_MERGE_ACCUMULATE_COMMENTS = False
+DEFAULT_MERGE_PRESERVE_ON_UPDATE = []
 DEFAULT_APPLY_WIDTHS_TO_SUMMARY = False
 _PROTECT_ENC_PREFIX = u"x1:"
 
@@ -558,12 +559,70 @@ def _owner_role_codes():
     )
 
 
+def _norm_preserve_column_key(name):
+    """Ключ сравнения имён столбцов (без учёта регистра и лишних пробелов)."""
+    s = unicode(name or u"").strip().lower().replace(u"ё", u"е")
+    s = s.replace(u"cрок", u"срок")
+    parts = s.split()
+    return u" ".join(parts)
+
+
+def normalize_preserve_on_update_columns(raw):
+    """
+    Список заголовков столбцов, сохраняемых у руководителя при обновлении.
+    Принимает list/tuple или строку (,/; / перевод строки).
+    """
+    items = []
+    if raw is None:
+        raw = DEFAULT_MERGE_PRESERVE_ON_UPDATE
+    if isinstance(raw, (list, tuple)):
+        i = 0
+        while i < len(raw):
+            items.append(unicode(raw[i] or u"").strip())
+            i = i + 1
+    else:
+        text = unicode(raw or u"").replace(u"\r\n", u"\n").replace(u"\r", u"\n")
+        text = text.replace(u";", u",").replace(u"\n", u",")
+        parts = text.split(u",")
+        pi = 0
+        while pi < len(parts):
+            items.append(unicode(parts[pi] or u"").strip())
+            pi = pi + 1
+    out = []
+    seen = {}
+    i = 0
+    while i < len(items):
+        name = unicode(items[i] or u"").strip()
+        i = i + 1
+        if not name:
+            continue
+        if (name.startswith(u"'") and name.endswith(u"'") and len(name) >= 2) or (
+            name.startswith(u'"') and name.endswith(u'"') and len(name) >= 2
+        ):
+            name = name[1:-1].strip()
+        if not name:
+            continue
+        key = _norm_preserve_column_key(name)
+        if not key or key in seen:
+            continue
+        seen[key] = True
+        out.append(name)
+    return out
+
+
+def join_preserve_on_update_columns(names):
+    """Текст для поля настроек: имена через запятую."""
+    parts = normalize_preserve_on_update_columns(names)
+    return u", ".join(parts)
+
+
 def normalize_merge_settings(obj):
     """Опции слияния с сводом сотрудников (todo_task_merge)."""
     out = {
         u"update_existing_only": bool(DEFAULT_MERGE_UPDATE_EXISTING_ONLY),
         u"check_modified": bool(DEFAULT_MERGE_CHECK_MODIFIED),
         u"accumulate_comments": bool(DEFAULT_MERGE_ACCUMULATE_COMMENTS),
+        u"preserve_on_update": list(DEFAULT_MERGE_PRESERVE_ON_UPDATE or []),
     }
     if not isinstance(obj, dict):
         return out
@@ -576,6 +635,12 @@ def normalize_merge_settings(obj):
     out[u"accumulate_comments"] = _as_bool(
         obj.get(u"accumulate_comments"), DEFAULT_MERGE_ACCUMULATE_COMMENTS
     )
+    raw_preserve = obj.get(u"preserve_on_update")
+    if raw_preserve is None:
+        raw_preserve = obj.get(u"preserve_columns")
+    if raw_preserve is None:
+        raw_preserve = obj.get(u"manager_preserve_columns")
+    out[u"preserve_on_update"] = normalize_preserve_on_update_columns(raw_preserve)
     return out
 
 
