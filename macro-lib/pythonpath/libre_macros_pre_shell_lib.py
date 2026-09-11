@@ -8,7 +8,7 @@ JSON в колонке B параметра «Предварительный_с�
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.727"
+MACRO_VERSION = "3.10.728"
 import datetime
 import json
 import os

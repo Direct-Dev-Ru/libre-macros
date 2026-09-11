@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.727"
+MACRO_VERSION = "3.10.728"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -4949,26 +4949,8 @@ def merge_run_context_begin(settings):
     _cw_cfg._MERGE_ROW_SOURCE_BY_SHEET = {}
     _cw_cfg._MERGE_SOURCE_VARIABLES_MAP = {}
     _cw_cfg._MERGE_SOURCE_VARIABLES_ORDER = []
-    try:
-        from libre_macros_global_settings_lib import GLOBAL_VARIABLES_FILE_KEY, GLOBAL_VARIABLES_SHEET_KEY, resolved_global_variables
-
-        for item in resolved_global_variables() or []:
-            nm = str(item.get('name') or '').strip()
-            if nm == '':
-                continue
-            val = item.get('value')
-            if val is None:
-                val = ''
-            _merge_source_variables_put(
-                nm,
-                GLOBAL_VARIABLES_SHEET_KEY,
-                GLOBAL_VARIABLES_FILE_KEY,
-                (str(val), 'text'),
-                report=None,
-                cell_ref='global',
-            )
-    except Exception:
-        pass
+    _merge_seed_global_settings_variables()
+    _merge_seed_env_os_variables()
     # Ручной ввод: переложить значения, собранные в parse_collect_settings
     # (карта очищается выше; без reinject плейсхолдеры в постобработке пропадут).
     try:
@@ -12641,9 +12623,22 @@ def collect_manual_variable_input_specs(doc):
 
 
 def _merge_seed_globals_into_variables_map():
-    """Очистить карту и залить глобальные переменные (ранний seed до expand)."""
+    """
+    Очистить карту и залить:
+      • глобальные переменные из настроек;
+      • __ENV_* (все переменные среды);
+      • __OS_* (пользователь, home, платформа, CPU, память, …).
+
+    Ранний seed до expand путей / pre-shell gate.
+    """
     _cw_cfg._MERGE_SOURCE_VARIABLES_MAP = {}
     _cw_cfg._MERGE_SOURCE_VARIABLES_ORDER = []
+    _merge_seed_global_settings_variables()
+    _merge_seed_env_os_variables()
+
+
+def _merge_seed_global_settings_variables():
+    """Только пользовательские глобальные переменные из merge_global_settings.json."""
     try:
         from libre_macros_global_settings_lib import (
             GLOBAL_VARIABLES_FILE_KEY,
@@ -12666,6 +12661,16 @@ def _merge_seed_globals_into_variables_map():
                 report=None,
                 cell_ref='global',
             )
+    except Exception:
+        pass
+
+
+def _merge_seed_env_os_variables():
+    """__ENV_* и __OS_* в сегмент Глобальные_переменные."""
+    try:
+        from libre_macros_runtime_env_lib import seed_env_os_into_variables_map
+
+        seed_env_os_into_variables_map(_merge_source_variables_put)
     except Exception:
         pass
 

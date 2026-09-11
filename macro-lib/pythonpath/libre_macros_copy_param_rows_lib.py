@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Для Постобработка_* / Финальная_обработка по умолчанию очищается колонка C
 (параметры функции); в диалоге подтверждения можно оставить параметры.
 """
-MACRO_VERSION = "3.10.727"
+MACRO_VERSION = "3.10.728"
 try:
     unicode
 except NameError:
