@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.720"
+MACRO_VERSION = "3.10.721"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -1513,6 +1513,101 @@ def _merge_pp_is_plugin_fn_key(fn_name):
     key = str(fn_name or '').strip().casefold()
     return key in ('функция_плагин', 'plugin_function', 'plugin')
 
+def _merge_attach_step_condition(target, fn_name, d_raw='', e_raw=''):
+    """Прикрепить сырой JSON условия (D codec / E plugin) к wrapped fn или step-dict."""
+    raw = ''
+    try:
+        from libre_macros_step_condition_lib import pick_condition_raw
+        raw = pick_condition_raw(fn_name, d_raw, e_raw)
+    except Exception:
+        try:
+            if _merge_pp_is_plugin_fn_key(fn_name):
+                raw = str(e_raw or '').strip()
+            else:
+                raw = str(d_raw or '').strip()
+        except Exception:
+            raw = ''
+    if target is None:
+        return target
+    if isinstance(target, dict):
+        target['condition_raw'] = raw
+        if 'condition_decision' in target:
+            try:
+                del target['condition_decision']
+            except Exception:
+                target['condition_decision'] = None
+        return target
+    try:
+        target._merge_step_condition_raw = raw
+        # Не оставлять кэш с прошлого запуска на shared map-callable.
+        if hasattr(target, '_merge_step_condition_decision'):
+            try:
+                delattr(target, '_merge_step_condition_decision')
+            except Exception:
+                target._merge_step_condition_decision = None
+    except Exception:
+        pass
+    return target
+
+def _merge_step_condition_allows(target, doc=None, label='', scope='диапазон', sheet_name='', final=False):
+    """
+    Gate условия выполнения шага.
+
+    True — выполнять; False — пропуск или ошибка условия (уже в журнале).
+    Результат кэшируется на target (один раз на шаг, не на каждый лист/строку).
+    """
+    if target is None:
+        return True
+    if isinstance(target, dict):
+        raw = target.get('condition_raw') or ''
+        if 'condition_decision' in target and target.get('condition_decision') is not None:
+            return bool(target.get('condition_decision'))
+    else:
+        raw = getattr(target, '_merge_step_condition_raw', None) or ''
+        if hasattr(target, '_merge_step_condition_decision'):
+            cached = getattr(target, '_merge_step_condition_decision', None)
+            if cached is not None:
+                return bool(cached)
+    if str(raw or '').strip() == '':
+        return True
+    summary = ''
+    ok = True
+    err_text = ''
+    try:
+        from libre_macros_step_condition_lib import eval_step_condition
+        ok, summary = eval_step_condition(raw)
+    except Exception as err:
+        ok = False
+        err_text = str(err)
+    if isinstance(target, dict):
+        target['condition_decision'] = bool(ok) and (err_text == '')
+        # при ошибке оценки — не кэшировать как «успешный skip»
+        if err_text != '':
+            target['condition_decision'] = False
+    else:
+        try:
+            if err_text != '':
+                target._merge_step_condition_decision = False
+            else:
+                target._merge_step_condition_decision = bool(ok)
+        except Exception:
+            pass
+    status = 'пропуск'
+    note = 'условие=False (%s)' % (summary or '')
+    if err_text != '':
+        status = 'ошибка'
+        note = 'условие: %s' % err_text
+        print('  ⚠ условие шага «%s»: %s' % (label or '?', err_text))
+    elif not ok:
+        print('  · условие шага «%s»: False — пропуск (%s)' % (label or '?', summary or ''))
+    else:
+        return True
+    if final:
+        _merge_log_final_processing(doc, str(label or ''), status, note)
+    else:
+        _merge_log_postprocess(doc, sheet_name, scope, label, status, note)
+    return False
+
 def _merge_pp_plugin_blocks_from_parsed(parsed):
     """Все блоки из JSON list/dict для «функция_плагин»."""
     if isinstance(parsed, list):
@@ -2378,6 +2473,9 @@ def _merge_run_final_processing_entries(doc, report, entries, sheets, data_range
     while i < len(entries):
         fn = entries[i]
         label = _merge_final_fn_label(fn)
+        if not _merge_step_condition_allows(fn, doc=doc, label=label, scope='финальная_обработка', final=True):
+            i = i + 1
+            continue
         merge_debug('_merge_run_final_processing_entries', 'step: %s' % label)
         merge_ui_set_phase('Финальная обработка', str(label), journal=False)
         prev_stage = _merge_pp_active_log_stage()
@@ -2533,7 +2631,7 @@ def read_postprocess_param_rows(doc, param_key):
         param_key — P_MERGE_POSTPROCESS_RANGE или P_MERGE_POSTPROCESS_ROW.
 
     Возвращает:
-        list[tuple(str, str, str)] — (fn_name из B, C, D); D может быть пустым.
+        list[tuple(str, str, str, str)] — (fn_name из B, C, D, E); D/E могут быть пустыми.
         Пустой список, если листа параметров нет.
 
     Связь:
@@ -2560,8 +2658,9 @@ def read_postprocess_param_rows(doc, param_key):
             fn_name = cell_text(sheet.getCellByPosition(1, row))
             c_raw = cell_text(sheet.getCellByPosition(2, row))
             d_raw = cell_text(sheet.getCellByPosition(3, row))
+            e_raw = cell_text(sheet.getCellByPosition(4, row))
             if fn_name != '':
-                rows.append((fn_name, c_raw, d_raw))
+                rows.append((fn_name, c_raw, d_raw, e_raw))
         row = row + 1
     return rows
 
@@ -2650,7 +2749,7 @@ def merge_verify_plugin_allow_gates(doc):
             entries = []
         ei = 0
         while ei < len(entries):
-            fn_name, c_raw, d_raw = entries[ei]
+            fn_name, c_raw, d_raw, e_raw = entries[ei]
             ei = ei + 1
             for plugin_block, _resolve_name, _extra_raw in _merge_pp_iter_plugin_row_specs(
                 fn_name, c_raw, d_raw,
@@ -2688,7 +2787,7 @@ def parse_postprocess_from_sheet(doc, param_key, function_map, row_callback=Fals
         return None
     functions = []
     scope_label = 'диапазон' if not row_callback else 'строка'
-    for fn_name, c_raw, d_raw in entries:
+    for fn_name, c_raw, d_raw, e_raw in entries:
         for plugin_block, resolve_name, extra_raw in _merge_pp_iter_plugin_row_specs(fn_name, c_raw, d_raw):
             fn = resolve_postprocess_function(resolve_name, function_map)
             if fn is None:
@@ -2699,13 +2798,14 @@ def parse_postprocess_from_sheet(doc, param_key, function_map, row_callback=Fals
             wrapped = _merge_pp_wrap_callback(fn, extra_args, row_callback, log_name)
             if plugin_block is not None:
                 wrapped._merge_pp_plugin_block = plugin_block
+            _merge_attach_step_condition(wrapped, fn_name, d_raw, e_raw)
             functions.append(wrapped)
     if len(functions) == 0:
         return None
     return tuple(functions)
 
 def read_final_processing_rows(doc):
-    """Строки «Финальная_обработка» с листа параметров: (fn_name, C, D)."""
+    """Строки «Финальная_обработка» с листа параметров: (fn_name, C, D, E)."""
     return read_postprocess_param_rows(doc, _cw_cfg.P_MERGE_FINAL_PROCESSING)
 
 def _merge_final_is_zebra_name(fn_name):
@@ -2992,7 +3092,7 @@ def parse_final_processing_from_sheet(doc, function_map):
     if len(entries) == 0:
         return None
     functions = []
-    for fn_name, c_raw, d_raw in entries:
+    for fn_name, c_raw, d_raw, e_raw in entries:
         for plugin_block, resolve_name, extra_raw in _merge_pp_iter_plugin_row_specs(fn_name, c_raw, d_raw):
             fn = resolve_final_processing_function(resolve_name, function_map)
             if fn is None:
@@ -3004,6 +3104,7 @@ def parse_final_processing_from_sheet(doc, function_map):
             if plugin_block is not None:
                 wrapped._merge_pp_plugin_block = plugin_block
                 wrapped = _merge_final_wrap_plugin_sheet_filter(wrapped)
+            _merge_attach_step_condition(wrapped, fn_name, d_raw, e_raw)
             functions.append(wrapped)
     if len(functions) == 0:
         return None
@@ -4294,6 +4395,8 @@ def build_processing_pipeline(doc, function_map_range, function_map_row):
                 wrapped = _merge_pp_wrap_callback(fn, extra_args, False, log_name)
                 if plugin_block is not None:
                     wrapped._merge_pp_plugin_block = plugin_block
+                e_raw = raw[3] if len(raw) > 3 else ''
+                _merge_attach_step_condition(wrapped, b_raw, d_raw, e_raw)
                 pipeline.append({'kind': 'range', 'name': log_name, 'fn': wrapped, 'row_num': row_num, 'pivot_extra': filter_extra if _merge_pp_is_pivot_table_postprocess_name(resolve_name) else None, 'sort_extra': filter_extra if _merge_pp_is_sort_postprocess_name(resolve_name) else None, 'colorize_extra': filter_extra if _merge_pp_is_colorize_postprocess_name(resolve_name) else None, 'header_height_extra': filter_extra if _merge_pp_is_header_plus_height_postprocess_name(resolve_name) else None, 'grid_extra': filter_extra if _merge_pp_is_any_grid_postprocess_name(resolve_name) else None, 'formula_extra': filter_extra if _merge_pp_is_apply_formula_postprocess_name(resolve_name) else None, 'color_scale_extra': filter_extra if _merge_pp_is_color_scale_postprocess_name(resolve_name) else None, 'format_extra': filter_extra if _merge_pp_is_format_postprocess_name(resolve_name) else None})
         elif kind == 'row':
             b_raw = raw[0] if len(raw) > 0 else ''
@@ -4310,6 +4413,8 @@ def build_processing_pipeline(doc, function_map_range, function_map_row):
                 wrapped = _merge_pp_wrap_callback(fn, extra_args, True, log_name)
                 if plugin_block is not None:
                     wrapped._merge_pp_plugin_block = plugin_block
+                e_raw = raw[3] if len(raw) > 3 else ''
+                _merge_attach_step_condition(wrapped, b_raw, d_raw, e_raw)
                 pipeline.append({'kind': 'row', 'name': log_name, 'fn': wrapped, 'row_num': row_num})
         elif kind == 'vlookup':
             spec, err = parse_vlookup_spec(raw, doc)
@@ -4358,10 +4463,11 @@ def build_xml_postprocess_pipeline(doc, function_map=None):
             b_raw = cell_text(sheet.getCellByPosition(1, row))
             c_raw = cell_text(sheet.getCellByPosition(2, row))
             d_raw = cell_text(sheet.getCellByPosition(3, row))
+            e_raw = cell_text(sheet.getCellByPosition(4, row))
             if str(b_raw).strip() == '':
                 row = row + 1
                 continue
-            raw = (b_raw, c_raw, d_raw)
+            raw = (b_raw, c_raw, d_raw, e_raw)
             for plugin_block, resolve_name, extra_raw in _merge_pp_pipeline_plugin_specs(b_raw, c_raw, d_raw, raw):
                 fn = resolve_postprocess_function(resolve_name, function_map)
                 if fn is None:
@@ -4371,6 +4477,7 @@ def build_xml_postprocess_pipeline(doc, function_map=None):
                 log_name = resolve_name if not _merge_pp_is_plugin_fn_key(b_raw) else '%s: %s' % (_cw_cfg.MERGE_PLUGIN_FUNCTION_KEY, _merge_pp_short_label(resolve_name))
                 filter_extra = _merge_pp_pipeline_filter_extra(extra_raw, extra_args)
                 step = {'kind': 'range', 'name': log_name, 'fn': None, 'row_num': row, 'extra': filter_extra}
+                _merge_attach_step_condition(step, b_raw, d_raw, e_raw)
                 if _merge_pp_is_pivot_table_postprocess_name(resolve_name):
                     step['pivot_extra'] = filter_extra
                 if _merge_pp_is_sort_postprocess_name(resolve_name):
@@ -4437,7 +4544,7 @@ def _merge_log_postprocess_setup(doc, param_key, function_map, scope_label):
     resolve_fn = resolve_postprocess_function
     if param_key == _cw_cfg.P_MERGE_FINAL_PROCESSING:
         resolve_fn = resolve_final_processing_function
-    for fn_name, c_raw, d_raw in entries:
+    for fn_name, c_raw, d_raw, e_raw in entries:
         resolve_name, extra_raw = _merge_pp_resolve_row_fn_and_extra(fn_name, c_raw, d_raw)
         fn = resolve_fn(resolve_name, function_map)
         if _merge_pp_is_plugin_fn_key(fn_name):
@@ -4450,9 +4557,11 @@ def _merge_log_postprocess_setup(doc, param_key, function_map, scope_label):
         if _merge_pp_is_plugin_fn_key(fn_name):
             c_note = c_raw if c_raw != '' else '(пусто)'
             d_note = extra_raw if extra_raw != '' else '(пусто)'
-            extra_note = 'C=%s, D=%s' % (c_note, d_note)
+            e_note = e_raw if e_raw != '' else '(пусто)'
+            extra_note = 'C=%s, D=%s, E=%s' % (c_note, d_note, e_note)
         else:
-            extra_note = extra_raw if extra_raw != '' else '(без C)'
+            cond_note = d_raw if d_raw != '' else '(без условия)'
+            extra_note = '%s; условие D=%s' % (extra_raw if extra_raw != '' else '(без C)', cond_note)
         _merge_log_postprocess(doc, '', 'настройка', label, 'в очереди', '%s, %s' % (scope_label, extra_note))
 
 def _merge_build_postprocess_chain(param_tuple, code_tuple):
@@ -18073,6 +18182,7 @@ def _merge_parse_final_fns_after_row(doc, split_row_num):
             fn_name = cell_text(sheet.getCellByPosition(1, row))
             c_raw = cell_text(sheet.getCellByPosition(2, row))
             d_raw = cell_text(sheet.getCellByPosition(3, row))
+            e_raw = cell_text(sheet.getCellByPosition(4, row))
             if fn_name != '':
                 for plugin_block, resolve_name, extra_raw in _merge_pp_iter_plugin_row_specs(fn_name, c_raw, d_raw):
                     fn = resolve_final_processing_function(resolve_name, function_map)
@@ -18084,6 +18194,7 @@ def _merge_parse_final_fns_after_row(doc, split_row_num):
                     if plugin_block is not None:
                         wrapped._merge_pp_plugin_block = plugin_block
                         wrapped = _merge_final_wrap_plugin_sheet_filter(wrapped)
+                    _merge_attach_step_condition(wrapped, fn_name, d_raw, e_raw)
                     functions.append(wrapped)
         row = row + 1
     if len(functions) == 0:
@@ -18098,6 +18209,9 @@ def _merge_run_final_processing_entries_on_sheets_info(doc, report, entries, she
     while i < len(entries):
         fn = entries[i]
         label = _merge_final_fn_label(fn)
+        if not _merge_step_condition_allows(fn, doc=doc, label=label, scope='финальная_обработка', final=True):
+            i = i + 1
+            continue
         merge_ui_set_phase('Финальная обработка', str(label), journal=False)
         prev_stage = _merge_pp_active_log_stage()
         _merge_pp_set_log_stage('финальная_обработка')
@@ -18365,6 +18479,11 @@ def _apply_book_pipeline_range_phase(doc, sheets_info, range_phase):
         kind = step.get('kind')
         if kind == 'range':
             fn = step.get('fn')
+            label = step.get('name') or _merge_postprocess_fn_label(fn)
+            gate_target = fn if fn is not None else step
+            if not _merge_step_condition_allows(gate_target, doc=doc, label=label, scope='диапазон'):
+                ri = ri + 1
+                continue
             coalesce_key = _merge_pp_group_by_coalesce_key(fn) if fn is not None else None
             bundle_steps = [step]
             rj = ri + 1
@@ -18632,6 +18751,9 @@ def _merge_run_postprocess_range(callback_spec, doc, sheet, pp_ctx):
         if _merge_pp_is_delete_sheets_postprocess_name(label):
             i = i + 1
             continue
+        if not _merge_step_condition_allows(fn, doc=doc, label=label, scope='диапазон', sheet_name=sheet_name):
+            i = i + 1
+            continue
         if not _merge_pp_wrapped_applies_to_sheet(fn, sheet):
             _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'пропуск', 'лист не в sheet JSON плагина')
             i = i + 1
@@ -18700,6 +18822,9 @@ def _merge_run_postprocess_row_fns(fns, doc, sheet, data_row_range, header_row_r
     while i < len(fns):
         fn = fns[i]
         label = _merge_postprocess_fn_label(fn)
+        if not _merge_step_condition_allows(fn, doc=doc, label=label, scope='строки данных', sheet_name=sheet_name):
+            i = i + 1
+            continue
         if not _merge_pp_wrapped_applies_to_sheet(fn, sheet):
             i = i + 1
             continue

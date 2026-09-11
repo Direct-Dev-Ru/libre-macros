@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.720"
+MACRO_VERSION = "3.10.721"
 import ast
 import glob
 import json
@@ -1405,6 +1405,13 @@ def _param_row_disabled_style_max_col(sheet, row, catalog=None):
     row = int(row)
     name = _cell_string(sheet.getCellByPosition(0, row))
     max_col = _param_sheet_header_value_max_col(sheet)
+    # Фактический хвост данных строки (условие D/E, plugin extra, …).
+    try:
+        row_last = _param_sheet_row_last_col(sheet, row, max_cols=40)
+        if row_last > max_col:
+            max_col = row_last
+    except Exception:
+        pass
     if catalog is not None:
         spec = _find_catalog_spec(catalog, name)
         if spec is not None and spec.get('mode') == 'vlookup':
@@ -1412,6 +1419,15 @@ def _param_row_disabled_style_max_col(sheet, row, catalog=None):
                 max_col = max(max_col, 2)
             else:
                 max_col = max(max_col, 5)
+        if spec is not None and spec.get('mode') in ('postprocess_range', 'postprocess_row'):
+            fn_b = _cell_string(sheet.getCellByPosition(1, row))
+            d_s = _cell_string(sheet.getCellByPosition(3, row))
+            e_s = _cell_string(sheet.getCellByPosition(4, row))
+            if _pp_is_plugin_primary(fn_b):
+                if e_s != u'' or d_s != u'':
+                    max_col = max(max_col, 4 if e_s != u'' else 3)
+            elif d_s != u'':
+                max_col = max(max_col, 3)
     return max_col
 
 def _param_reset_cell_text_color(cell):
@@ -6170,6 +6186,36 @@ def _wizard_launch_plan(doc, param_sheet, catalog):
             'initial': None,
             'subdialog': {'kind': 'columns_pick_rename', 'spec': spec, 'row': row, 'target_col': icol, 'initial_text': initial_text},
         }
+    if mode in ('postprocess_range', 'postprocess_row'):
+        fn_b = _cell_string(param_sheet.getCellByPosition(1, row))
+        # D (icol=3): условие для обычного fn; у плагина D = extra.
+        if icol == 3 and fn_b != u'' and (not _pp_is_plugin_primary(fn_b)):
+            return {
+                'action': 'subdialog',
+                'new_param_mode': False,
+                'initial': None,
+                'subdialog': {
+                    'kind': 'step_condition',
+                    'spec': spec,
+                    'row': row,
+                    'is_plugin': False,
+                    'initial_text': _cell_string(param_sheet.getCellByPosition(3, row)),
+                },
+            }
+        # E (icol=4): условие только для плагина.
+        if icol == 4 and fn_b != u'' and _pp_is_plugin_primary(fn_b):
+            return {
+                'action': 'subdialog',
+                'new_param_mode': False,
+                'initial': None,
+                'subdialog': {
+                    'kind': 'step_condition',
+                    'spec': spec,
+                    'row': row,
+                    'is_plugin': True,
+                    'initial_text': _cell_string(param_sheet.getCellByPosition(4, row)),
+                },
+            }
     if icol == 2:
         if _param_match(pname, u'удаление_верхних_строк'):
             initial_text = _cell_string(param_sheet.getCellByPosition(2, row))
@@ -6266,6 +6312,20 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         row = apply_param_value(
             sheet, spec, primary, d_extra, target_row=row, catalog=catalog, doc=doc, plugin_ref=c_ref,
         )
+    elif kind == 'step_condition':
+        try:
+            result_text = show_step_condition_param_dialog(
+                None,
+                sub.get('initial_text') or u'',
+                doc=doc,
+                is_plugin=bool(sub.get('is_plugin')),
+            )
+        except Exception as err:
+            _show_message(u'Условие: %s' % err, title=u'Условие выполнения')
+            return False
+        if result_text is None:
+            return False
+        _apply_step_condition_to_row(sheet, row, result_text, catalog=catalog, doc=doc)
     elif kind == 'delete_top_rows':
         result_text = show_delete_top_rows_param_dialog(None, sub.get('initial_text'), doc=doc)
         if result_text is None:
@@ -7341,13 +7401,14 @@ def _apply_param_value_unlocked(sheet, spec, primary, extra=None, target_row=Non
             if _pp_is_plugin_primary(primary):
                 sheet.getCellByPosition(2, row).String = unicode(plugin_ref or u'').strip()
                 sheet.getCellByPosition(3, row).String = unicode(extra or u'').strip() if extra is not None else u''
+                # E (условие) не трогаем
             else:
                 if extra is not None:
                     c_val = unicode(extra).strip()
                     if _is_pivot_table_pp_name(primary):
                         c_val = _pivot_canonical_storage_json(c_val) or c_val
                     sheet.getCellByPosition(2, row).String = c_val
-                sheet.getCellByPosition(3, row).String = u''
+                # D (условие) не очищаем — раньше писали ''
             return (row, 1)
         if mode == 'choice' and _spec_has_inline_transfer(spec) and (extra is not None):
             sheet.getCellByPosition(1, row).String = primary
@@ -15205,6 +15266,83 @@ def show_add_to_variables_map_param_dialog(parent_dialog=None, initial_text=u'',
 
 def show_manual_variable_input_param_dialog(parent_dialog=None, initial_text=u'', doc=None):
     return _show_sheet_block_form_dialog(parent_dialog, u'Ручной_ввод_в_карту_переменных', initial_text, doc=doc)
+
+
+def show_step_condition_param_dialog(parent_dialog=None, initial_text=u'', doc=None, is_plugin=False):
+    """Визард условия выполнения шага (колонка D / E)."""
+    from libre_macros_step_condition_dialog_lib import show_step_condition_dialog
+    return show_step_condition_dialog(
+        parent_dialog=parent_dialog,
+        initial_text=initial_text,
+        doc=doc,
+        is_plugin=is_plugin,
+        create_peer_fn=_nested_subdialog_create_peer,
+        add_fixed=_wizard_dlg_add_fixed,
+        add_edit=_wizard_dlg_add_edit,
+        add_button=_wizard_dlg_add_button,
+        add_combo=getattr(_pw_cfg, '_wizard_dlg_add_listbox', None) or _wizard_dlg_add_combo_if_any,
+        add_footer=_inner_dialog_add_footer,
+        wire_help=_wizard_wire_help_button,
+        set_sizeable=_inner_dialog_set_sizeable,
+        inner_height=_inner_dialog_height,
+    )
+
+
+def _wizard_dlg_add_combo_if_any(dm, name, x, y, w, h):
+    """Fallback listbox/combo для субвизарда условия."""
+    try:
+        _wizard_dlg_add_listbox(dm, name, x, y, w, h, multiselect=False)
+        return
+    except Exception:
+        pass
+    try:
+        model = dm.createInstance('com.sun.star.awt.UnoControlListBoxModel')
+        model.Name = name
+        model.PositionX = x
+        model.PositionY = y
+        model.Width = w
+        model.Height = h
+        model.Dropdown = True
+        dm.insertByName(name, model)
+    except Exception:
+        pass
+
+
+def _apply_step_condition_to_row(sheet, row, condition_text, catalog=None, doc=None):
+    """Записать JSON условия в D (codec) или E (plugin); расширить шапку."""
+    if sheet is None or row is None or int(row) < 0:
+        return
+    row = int(row)
+    fn_b = _cell_string(sheet.getCellByPosition(1, row))
+    is_plugin = _pp_is_plugin_primary(fn_b)
+    col = 4 if is_plugin else 3
+    text = unicode(condition_text or u'').strip()
+    _param_sheet_begin_write(sheet)
+    try:
+        sheet.getCellByPosition(col, row).String = text
+        need_header = col
+        try:
+            hdr_max = _param_sheet_header_value_max_col(sheet)
+            if hdr_max < need_header:
+                _restore_param_sheet_header_row(sheet, max(need_header, hdr_max, 2))
+        except Exception:
+            try:
+                _restore_param_sheet_header_row(sheet, need_header)
+            except Exception:
+                pass
+        try:
+            _param_apply_row_disabled_style(
+                sheet, row, _param_sheet_name_is_disabled(_cell_string(sheet.getCellByPosition(0, row))), catalog=catalog
+            )
+        except Exception:
+            pass
+        try:
+            _refresh_param_sheet_value_merges(doc, sheet, catalog)
+        except Exception:
+            pass
+    finally:
+        _param_sheet_end_write(sheet)
+
 
 def show_sheets_name_filter_dialog(parent_dialog=None, initial_text=u'', doc=None, title=u'Фильтр листов (C)', hint=None, example_code=None, example_btn_label=None):
     """
@@ -26270,6 +26408,13 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         source_extra_btn.Height = _pw_cfg._CTRL_H
         source_extra_btn.Label = u'Параметры…'
         source_extra_btn.Name = 'SourceExtraParamsBtn'
+        condition_btn = dialog_model.createInstance('com.sun.star.awt.UnoControlButtonModel')
+        condition_btn.PositionX = _pw_cfg._M
+        condition_btn.PositionY = _pw_cfg._PLUGIN_D_LBL_Y
+        condition_btn.Width = 140
+        condition_btn.Height = _pw_cfg._CTRL_H
+        condition_btn.Label = u'Условие…'
+        condition_btn.Name = 'ConditionBtn'
         lbl_desc = dialog_model.createInstance('com.sun.star.awt.UnoControlFixedTextModel')
         lbl_desc.PositionX = _pw_cfg._M
         lbl_desc.PositionY = _pw_cfg._DESC_Y - _pw_cfg._LBL_H
@@ -26384,6 +26529,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         dialog_model.insertByName('PivotParamsBtn', pivot_params_btn)
         dialog_model.insertByName('ColCParamsBtn', col_c_params_btn)
         dialog_model.insertByName('SourceExtraParamsBtn', source_extra_btn)
+        dialog_model.insertByName('ConditionBtn', condition_btn)
         dialog_model.insertByName('LblDesc', lbl_desc)
         dialog_model.insertByName('DescField', desc_field)
         dialog_model.insertByName('OkButton', ok_btn)
@@ -26404,7 +26550,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         dialog = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialog', ctx)
         dialog.setModel(dialog_model)
         presets = _wp_load_presets_list()
-        param_tab_controls = ('LblParam', 'ParamCombo', 'ParamDisabledCheck', 'LblValue', 'ValueEdit', 'ValueCombo', 'LblTransfer', 'TransferCombo', 'BrowseButton', 'FilesClearLastBtn', 'FilesClearAllBtn', 'SourceExtraLbl', 'SourceExtraList', 'SourceExtraParamsBtn', 'LblExtra', 'LblPlugin', 'PluginEdit', 'PluginEditorBtn', 'ExtraEdit', 'PivotParamsBtn', 'ColCParamsBtn', 'LblDesc', 'DescField', 'RefreshSheetCheck', 'ProtectSheetCheck', 'HideSheetCheck', 'SaveParamBtn', 'DeleteParamBtn')
+        param_tab_controls = ('LblParam', 'ParamCombo', 'ParamDisabledCheck', 'LblValue', 'ValueEdit', 'ValueCombo', 'LblTransfer', 'TransferCombo', 'BrowseButton', 'FilesClearLastBtn', 'FilesClearAllBtn', 'SourceExtraLbl', 'SourceExtraList', 'SourceExtraParamsBtn', 'LblExtra', 'LblPlugin', 'PluginEdit', 'PluginEditorBtn', 'ExtraEdit', 'PivotParamsBtn', 'ColCParamsBtn', 'ConditionBtn', 'LblDesc', 'DescField', 'RefreshSheetCheck', 'ProtectSheetCheck', 'HideSheetCheck', 'SaveParamBtn', 'DeleteParamBtn')
         preset_tab_controls = ('PresetListLabel', 'PresetCombo', 'PresetNameLabel', 'PresetNameEdit', 'PresetCommentLabel', 'PresetCommentField', 'PresetSummaryLabel', 'PresetSummaryField', 'SavePresetBtn', 'DeletePresetBtn', 'ExportPresetBtn', 'ImportPresetBtn', 'ApplyPresetBtn', 'ClearAllPresetsBtn')
         global_tab_controls = ('GlobalTitleLabel', 'GlobalHintLabel', 'GlobalDateFormatLabel', 'GlobalDateFormatCombo', 'GlobalNumberFormatLabel', 'GlobalNumberFormatCombo', 'GlobalFontNameLabel', 'GlobalFontNameEdit', 'GlobalFontSizeLabel', 'GlobalFontSizeEdit', 'GlobalParamPrefixLabel', 'GlobalParamPrefixEdit', 'GlobalSuppressParamMsgCheck', 'GlobalMirrorPathLabel', 'GlobalMirrorPathEdit', 'GlobalMirrorBrowseBtn', 'GlobalVariablesBtn', 'GlobalFlagsBtn', 'SaveGlobalSettingsBtn', 'ResetGlobalSettingsBtn')
         mode_tab_controls = ('LblNewParamMode', 'NewParamModeBtn')
@@ -26445,6 +26591,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                 self.source_extra_lbl = _dlg_control(dlg, 'SourceExtraLbl')
                 self.source_extra_list = _dlg_control(dlg, 'SourceExtraList')
                 self.source_extra_params_btn = _dlg_control(dlg, 'SourceExtraParamsBtn')
+                self.condition_btn = _dlg_control(dlg, 'ConditionBtn')
                 self._source_extra_cols = []
                 self._col_c_json_text = u''
                 self.browse_btn = _dlg_control(dlg, 'BrowseButton')
@@ -27188,8 +27335,26 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                         self.pivot_params_btn.Model.PositionY = extra_edit_y
                     except Exception:
                         pass
-                desc_y = _pw_content_y(_pw_cfg._DESC_Y + (_pw_cfg._PLUGIN_DESC_OFFSET if plugin_on else 0))
+                cond_y = extra_edit_y + _pw_cfg._EXTRA_EDIT_H + _pw_cfg._GAP_S
+                cond_btn = getattr(self, 'condition_btn', None)
+                _set_control_visible(cond_btn, show_pp, cond_y, _pw_cfg._CTRL_H, 140)
+                if show_pp and cond_btn is not None:
+                    try:
+                        entry = self._selected_sheet_entry() if self.edit_mode else None
+                        has_cond = False
+                        if entry is not None:
+                            r = int(entry['row'])
+                            col = 4 if plugin_on else 3
+                            has_cond = _cell_string(self.sheet.getCellByPosition(col, r)) != u''
+                        cond_btn.Model.Label = u'Условие… ✓' if has_cond else u'Условие…'
+                        cond_btn.Model.PositionY = cond_y
+                    except Exception:
+                        pass
+                cond_offset = (_pw_cfg._CTRL_H + _pw_cfg._GAP_S) if show_pp else 0
+                desc_y = _pw_content_y(_pw_cfg._DESC_Y + (_pw_cfg._PLUGIN_DESC_OFFSET if plugin_on else 0) + cond_offset)
                 desc_h = _pw_cfg._DESC_H_PLUGIN if plugin_on else _pw_cfg._DESC_H
+                if show_pp:
+                    desc_h = max(56, int(desc_h) - int(cond_offset))
                 try:
                     lbl = self.dialog.getControl('LblDesc')
                     lbl.Model.PositionY = desc_y - _pw_cfg._LBL_H
@@ -27236,6 +27401,46 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                         self.extra_edit.setText(d_extra)
                     except Exception:
                         pass
+
+            def _on_condition_btn_clicked(self):
+                spec = self._current_spec()
+                if spec is None or spec.get('mode') not in ('postprocess_range', 'postprocess_row'):
+                    return
+                if not self.edit_mode:
+                    _show_message(
+                        u'Сначала сохраните параметр на лист, затем задайте условие.',
+                        dialog=self.dialog,
+                        doc=self.doc,
+                        title=u'Условие выполнения',
+                    )
+                    return
+                entry = self._selected_sheet_entry()
+                if entry is None:
+                    return
+                row = int(entry['row'])
+                fn_b = _cell_string(self.sheet.getCellByPosition(1, row))
+                if fn_b == u'':
+                    try:
+                        fn_b = _combo_resolve_fn_key(self.value_combo) if self.value_combo is not None else u''
+                    except Exception:
+                        fn_b = u''
+                is_plugin = _pp_is_plugin_primary(fn_b)
+                col = 4 if is_plugin else 3
+                initial = _cell_string(self.sheet.getCellByPosition(col, row))
+                try:
+                    result = show_step_condition_param_dialog(
+                        self.dialog, initial, doc=self.doc, is_plugin=is_plugin
+                    )
+                except Exception as err:
+                    _show_message(u'Условие: %s' % err, dialog=self.dialog, doc=self.doc, title=u'Условие выполнения')
+                    return
+                if result is None:
+                    return
+                _apply_step_condition_to_row(self.sheet, row, result, catalog=self.catalog, doc=self.doc)
+                try:
+                    self._sync_plugin_form_layout(spec, fn_b)
+                except Exception:
+                    pass
 
             def _capture_edit_row_pp_snapshot(self, primary, extra, plugin_ref):
                 """Запомнить B/C строки при открытии редактирования (откат при возврате fn)."""
@@ -28207,6 +28412,9 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                 if btn == 'PivotParamsBtn':
                     self._on_pivot_params_clicked()
                     return
+                if btn == 'ConditionBtn':
+                    self._on_condition_btn_clicked()
+                    return
                 if btn == 'PluginEditorBtn':
                     self._on_plugin_editor_clicked()
                     return
@@ -28627,6 +28835,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         handler.extra_edit = _dlg_control(dialog, 'ExtraEdit')
         handler.pivot_params_btn = _dlg_control(dialog, 'PivotParamsBtn')
         handler.col_c_params_btn = _dlg_control(dialog, 'ColCParamsBtn')
+        handler.condition_btn = _dlg_control(dialog, 'ConditionBtn')
         handler.browse_btn = _dlg_control(dialog, 'BrowseButton')
         handler.files_clear_last_btn = _dlg_control(dialog, 'FilesClearLastBtn')
         handler.files_clear_all_btn = _dlg_control(dialog, 'FilesClearAllBtn')
@@ -28692,7 +28901,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                 preset_name_edit.addTextListener(handler)
             except Exception:
                 pass
-        for ctl_name in ('BrowseButton', 'FilesClearLastBtn', 'FilesClearAllBtn', 'PivotParamsBtn', 'ColCParamsBtn', 'SourceExtraParamsBtn', 'PluginEditorBtn', 'OkButton', 'CancelButton', 'SaveParamBtn', 'DeleteParamBtn', 'TabBtnParam', 'TabBtnPresets', 'TabBtnGlobal', 'NewParamModeBtn', 'SavePresetBtn', 'DeletePresetBtn', 'ExportPresetBtn', 'ImportPresetBtn', 'ApplyPresetBtn', 'ClearAllPresetsBtn', 'SaveGlobalSettingsBtn', 'ResetGlobalSettingsBtn', 'GlobalMirrorBrowseBtn', 'GlobalVariablesBtn', 'GlobalFlagsBtn'):
+        for ctl_name in ('BrowseButton', 'FilesClearLastBtn', 'FilesClearAllBtn', 'PivotParamsBtn', 'ColCParamsBtn', 'SourceExtraParamsBtn', 'ConditionBtn', 'PluginEditorBtn', 'OkButton', 'CancelButton', 'SaveParamBtn', 'DeleteParamBtn', 'TabBtnParam', 'TabBtnPresets', 'TabBtnGlobal', 'NewParamModeBtn', 'SavePresetBtn', 'DeletePresetBtn', 'ExportPresetBtn', 'ImportPresetBtn', 'ApplyPresetBtn', 'ClearAllPresetsBtn', 'SaveGlobalSettingsBtn', 'ResetGlobalSettingsBtn', 'GlobalMirrorBrowseBtn', 'GlobalVariablesBtn', 'GlobalFlagsBtn'):
             ctl = _dlg_control(dialog, ctl_name)
             if ctl is not None:
                 ctl.addActionListener(handler)

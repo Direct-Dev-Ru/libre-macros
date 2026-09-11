@@ -1,5 +1,5 @@
 from __future__ import print_function
-MACRO_VERSION = "3.10.720"
+MACRO_VERSION = "3.10.721"
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """

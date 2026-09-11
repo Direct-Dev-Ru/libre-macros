@@ -16,7 +16,7 @@
   todo_task_settings — настройки серии: частные (по пути книги) / глобальные по умолчанию
   todo_task_refs   — редактирование справочников __Справочники_задачи
 """
-MACRO_VERSION = "3.10.720"
+MACRO_VERSION = "3.10.721"
 from todo_task_lib import todo_task_add as _add
 from todo_task_lib import todo_task_colorize as _colorize
 from todo_task_lib import todo_task_copy as _copy

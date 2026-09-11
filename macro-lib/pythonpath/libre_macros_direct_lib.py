@@ -10,7 +10,7 @@
 """
 
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.720"
+MACRO_VERSION = "3.10.721"
 import calendar
 import os
 import re
@@ -12541,6 +12541,43 @@ def direct_run_xml_postprocess(target_path, settings, one_sheet):
                 u"(шаг в файле не выполняется)",
             )
             continue
+        # Условие выполнения (колонка D/E) — один раз на шаг.
+        try:
+            from libre_macros_step_condition_lib import eval_step_condition
+
+            cond_raw = (step or {}).get("condition_raw") or u""
+            if unicode(cond_raw).strip() != u"":
+                if "condition_decision" in (step or {}):
+                    if not step.get("condition_decision"):
+                        continue
+                else:
+                    try:
+                        ok_cond, summary = eval_step_condition(cond_raw)
+                    except Exception as err:
+                        step["condition_decision"] = False
+                        _direct_journal(
+                            u"",
+                            u"",
+                            u"",
+                            u"",
+                            u"ошибка",
+                            u"условие шага «%s»: %s" % ((step or {}).get("name") or u"", err),
+                        )
+                        continue
+                    step["condition_decision"] = bool(ok_cond)
+                    if not ok_cond:
+                        _direct_journal(
+                            u"",
+                            u"",
+                            u"",
+                            u"",
+                            u"пропуск",
+                            u"условие=False (%s) — %s"
+                            % (summary, (step or {}).get("name") or u""),
+                        )
+                        continue
+        except Exception:
+            pass
         name = step.get("name") or u""
         extra = step.get("formula_extra")
         if extra is None:
