@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.729"
+MACRO_VERSION = "3.10.730"
 import json
 import os
 import sys
@@ -2089,7 +2089,7 @@ def create_file_analyzer_dialog():
         )
 
         dlg_w = 540
-        dlg_h = 490
+        dlg_h = 416
         m = 10
         gap = 8
         content_w = dlg_w - m * 2
