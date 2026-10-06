@@ -5,6 +5,8 @@ __pycache__/
 *.so
 .Python
 
+.gigaide/
+
 # IDE
 .vscode/
 .idea/
@@ -42,3 +44,5 @@ qa/collect_headless/.profile/
 # Accidental unnamed Calc saves in manual templates
 test/collect_workbooks/workbooks/Без имени*.ods
 test/collect_workbooks/workbooks/Без\ имени*.ods
+
+
