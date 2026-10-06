@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.728"
+MACRO_VERSION = "3.10.729"
 import json
 import os
 import sys
@@ -15,8 +15,9 @@ from com.sun.star.awt.MessageBoxResults import CANCEL, NO, YES
 from com.sun.star.awt.MessageBoxType import MESSAGEBOX, QUERYBOX
 
 # Константы в pythonpath: AlterOffice 2026 вырезает модульные присваивания в .py-скрипте.
-from libre_macros_file_list_cfg import COLUMN_WIDTH_AUTOFILTER_PAD as _COLUMN_WIDTH_AUTOFILTER_PAD, DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
+from libre_macros_file_list_cfg import COLUMN_WIDTH_AUTOFILTER_PAD as _COLUMN_WIDTH_AUTOFILTER_PAD, DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_DLP_ANALYZE_CONTENT as _DEFAULT_DLP_ANALYZE_CONTENT, DEFAULT_DLP_ANALYZE_NAMES as _DEFAULT_DLP_ANALYZE_NAMES, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, DLP_LOG_PATTERN_HEADER as _DLP_LOG_PATTERN_HEADER, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_OWNER as _RESULT_HEADER_OWNER, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
 import libre_macros_file_list_cfg as _fl_state
+import libre_macros_file_list_lib as _fl_lib
 
 
 def _file_list_awt_toolkit():
@@ -238,6 +239,7 @@ def _settings_file_path():
 
 
 def _default_dialog_settings():
+    settings_dir = _settings_dir()
     return {
         "path": "",
         "sheet_name": "",
@@ -246,6 +248,10 @@ def _default_dialog_settings():
         "size_unit": _DEFAULT_SIZE_UNIT,
         "count_pages": _DEFAULT_COUNT_PAGES,
         "sort_mode": _DEFAULT_SORT_MODE,
+        "dlp_analyze_names": _DEFAULT_DLP_ANALYZE_NAMES,
+        "dlp_names_dict_path": _fl_lib.default_dlp_name_dict_path(settings_dir),
+        "dlp_analyze_content": _DEFAULT_DLP_ANALYZE_CONTENT,
+        "dlp_content_dict_path": _fl_lib.default_dlp_content_dict_path(settings_dir),
     }
 
 
@@ -322,12 +328,17 @@ def size_unit_from_label(label):
     return normalize_size_unit(text)
 
 
-def build_result_headers(size_unit, count_pages=False):
+def build_result_headers(size_unit, count_pages=False, include_owner=None):
     headers = list(_RESULT_HEADER_BASE)
     headers[5] = "Размер (%s)" % size_unit_label(size_unit)
     if count_pages:
         # После размера: Тип…Глубина, Размер, Страниц, Дата, Расширение, Полный путь
         headers = headers[:6] + [_RESULT_HEADER_PAGES] + headers[6:]
+    if include_owner is None:
+        include_owner = _fl_lib.is_windows_platform()
+    if include_owner:
+        # Owner перед «Полный путь»
+        headers = headers[:-1] + [_RESULT_HEADER_OWNER] + headers[-1:]
     return headers
 
 
@@ -363,6 +374,24 @@ def load_dialog_settings():
     settings["size_unit"] = normalize_size_unit(settings.get("size_unit"))
     settings["count_pages"] = normalize_count_pages(settings.get("count_pages"))
     settings["sort_mode"] = normalize_sort_mode(settings.get("sort_mode"))
+    settings["dlp_analyze_names"] = normalize_count_pages(
+        settings.get("dlp_analyze_names", _DEFAULT_DLP_ANALYZE_NAMES)
+    )
+    settings["dlp_analyze_content"] = normalize_count_pages(
+        settings.get("dlp_analyze_content", _DEFAULT_DLP_ANALYZE_CONTENT)
+    )
+    names_path = _uno_to_str(settings.get("dlp_names_dict_path", "")).strip()
+    if names_path == "":
+        names_path = _fl_lib.default_dlp_name_dict_path(_settings_dir())
+    settings["dlp_names_dict_path"] = names_path
+    content_path = _uno_to_str(settings.get("dlp_content_dict_path", "")).strip()
+    if content_path == "":
+        content_path = _fl_lib.default_dlp_content_dict_path(_settings_dir())
+    settings["dlp_content_dict_path"] = content_path
+    try:
+        _fl_lib.ensure_default_dlp_name_dict(_settings_dir())
+    except Exception:
+        pass
     return settings
 
 
@@ -379,6 +408,18 @@ def save_dialog_settings(settings):
         payload["size_unit"] = normalize_size_unit(payload.get("size_unit"))
         payload["count_pages"] = normalize_count_pages(payload.get("count_pages"))
         payload["sort_mode"] = normalize_sort_mode(payload.get("sort_mode"))
+        payload["dlp_analyze_names"] = normalize_count_pages(
+            payload.get("dlp_analyze_names", _DEFAULT_DLP_ANALYZE_NAMES)
+        )
+        payload["dlp_analyze_content"] = normalize_count_pages(
+            payload.get("dlp_analyze_content", _DEFAULT_DLP_ANALYZE_CONTENT)
+        )
+        payload["dlp_names_dict_path"] = _uno_to_str(
+            payload.get("dlp_names_dict_path", "")
+        ).strip()
+        payload["dlp_content_dict_path"] = _uno_to_str(
+            payload.get("dlp_content_dict_path", "")
+        ).strip()
         with open(_settings_file_path(), "w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
     except Exception as err:
@@ -636,6 +677,46 @@ def show_folder_picker(initial_dir=None):
         return None
     except Exception as e:
         print("Ошибка при выборе папки: %s" % e)
+        return None
+
+
+def show_json_file_picker(initial_path=None):
+    """Выбор JSON-словаря DLP (FilePicker)."""
+    try:
+        ctx = XSCRIPTCONTEXT.getComponentContext()
+        picker = ctx.getServiceManager().createInstanceWithContext(
+            "com.sun.star.ui.dialogs.FilePicker", ctx
+        )
+        start = path_from_user_input(initial_path) if initial_path else ""
+        start_dir = ""
+        if start and os.path.isfile(start):
+            start_dir = os.path.dirname(start)
+        elif start and os.path.isdir(start):
+            start_dir = start
+        if start_dir == "" or not os.path.isdir(start_dir):
+            start_dir = _settings_dir()
+            if not os.path.isdir(start_dir):
+                start_dir = os.path.expanduser("~")
+        start_url = _path_to_file_url(start_dir)
+        if start_url is not None:
+            try:
+                picker.setDisplayDirectory(start_url)
+            except Exception:
+                pass
+        try:
+            picker.appendFilter("JSON (*.json)", "*.json")
+            picker.appendFilter("Все файлы (*.*)", "*.*")
+            picker.setCurrentFilter("JSON (*.json)")
+        except Exception:
+            pass
+        if picker.execute() == 1:
+            urls = picker.getFiles()
+            if urls is None or len(urls) == 0:
+                return None
+            return path_from_user_input(urls[0])
+        return None
+    except Exception as e:
+        print("Ошибка при выборе файла: %s" % e)
         return None
 
 
@@ -1228,6 +1309,9 @@ def collect_path_entries(root_path, max_depth=None, masks=None, show_progress=Tr
 
             parent = parent_relative(root, full)
             rel_path = relative_entry_path(root, full)
+            owner = ""
+            if _fl_lib.is_windows_platform():
+                owner = _fl_lib.get_file_owner(full)
 
             if os.path.isfile(full):
                 if not file_matches_masks(name, mask_list):
@@ -1246,6 +1330,7 @@ def collect_path_entries(root_path, max_depth=None, masks=None, show_progress=Tr
                         "size": size,
                         "mtime": mtime_str,
                         "ext": os.path.splitext(name)[1],
+                        "owner": owner,
                         "full_path": os.path.normpath(full),
                     }
                 )
@@ -1262,6 +1347,7 @@ def collect_path_entries(root_path, max_depth=None, masks=None, show_progress=Tr
                         "size": size,
                         "mtime": mtime_str,
                         "ext": "",
+                        "owner": owner,
                         "full_path": os.path.normpath(full),
                     }
                 )
@@ -1419,9 +1505,11 @@ def resolve_target_sheet(doc, sheet_name):
     return sheet, "overwrite"
 
 
-def _build_sheet_data_rows(entries, size_unit, count_pages=False):
+def _build_sheet_data_rows(entries, size_unit, count_pages=False, include_owner=None):
     """Строки данных для setDataArray (без заголовка)."""
     unit = normalize_size_unit(size_unit)
+    if include_owner is None:
+        include_owner = _fl_lib.is_windows_platform()
     rows = []
     for item in entries:
         depth = int(item["depth"])
@@ -1442,13 +1530,11 @@ def _build_sheet_data_rows(entries, size_unit, count_pages=False):
                     row.append(float(pages))
                 except (TypeError, ValueError):
                     row.append("")
-        row.extend(
-            [
-                _uno_to_str(item["mtime"]),
-                _uno_to_str(item["ext"]),
-                _uno_to_str(item.get("full_path", "")),
-            ]
-        )
+        row.append(_uno_to_str(item["mtime"]))
+        row.append(_uno_to_str(item["ext"]))
+        if include_owner:
+            row.append(_uno_to_str(item.get("owner", "")))
+        row.append(_uno_to_str(item.get("full_path", "")))
         rows.append(row)
     return rows
 
@@ -1560,10 +1646,14 @@ def _apply_result_menu_autofilter(doc, sheet, ncols, data_rows):
         return False
 
 
-def write_entries_to_sheet( results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT, clear_first=True, show_progress=False, count_pages=False):
+def write_entries_to_sheet( results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT, clear_first=True, show_progress=False, count_pages=False, include_owner=None):
     if clear_first:
         clear_sheet_contents(results_sheet)
-    headers = build_result_headers(size_unit, count_pages=count_pages)
+    if include_owner is None:
+        include_owner = _fl_lib.is_windows_platform()
+    headers = build_result_headers(
+        size_unit, count_pages=count_pages, include_owner=include_owner
+    )
     ncols = len(headers)
     number_cols = [4, 5]
     if count_pages:
@@ -1572,7 +1662,9 @@ def write_entries_to_sheet( results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT
     _sheet_set_data_array(results_sheet, 0, [list(headers)], number_cols=number_cols)
     _format_header_row(results_sheet, ncols)
 
-    data_rows = _build_sheet_data_rows(entries, size_unit, count_pages=count_pages)
+    data_rows = _build_sheet_data_rows(
+        entries, size_unit, count_pages=count_pages, include_owner=include_owner
+    )
     total = len(data_rows)
     chunk_count = max(1, (total + FILE_LIST_WRITE_CHUNK - 1) // FILE_LIST_WRITE_CHUNK)
 
@@ -1646,7 +1738,108 @@ def freeze_sheet_first_row(doc, sheet):
         print("Не удалось закрепить первую строку: %s" % err)
 
 
-def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE):
+def _resolve_or_recreate_sheet(doc, sheet_name):
+    """Получить лист по имени; если есть — очистить; иначе создать."""
+    name = _uno_to_str(sheet_name).strip()
+    if name == "":
+        return None
+    sheet = get_sheet_by_name(doc, name)
+    if sheet is not None:
+        clear_sheet_contents(sheet)
+        return sheet
+    return _insert_sheet(doc, name)
+
+
+def write_dlp_log_sheet( doc, result_sheet_name, headers, data_rows, match_rows):
+    """
+    Лист лога DLP: колонка «Паттерн» + копия строки результата.
+    match_rows — список (pattern_id, data_row_index 0-based в data_rows).
+    """
+    if doc is None or not match_rows:
+        return None, 0
+    log_name = _fl_lib.dlp_log_sheet_name(result_sheet_name)
+    sheet = _resolve_or_recreate_sheet(doc, log_name)
+    if sheet is None:
+        show_message("Не удалось создать лист лога DLP «%s»." % log_name)
+        return None, 0
+    log_headers = [_DLP_LOG_PATTERN_HEADER] + list(headers)
+    ncols = len(log_headers)
+    rows_out = []
+    for pattern_id, row_idx in match_rows:
+        try:
+            src = list(data_rows[int(row_idx)])
+        except Exception:
+            continue
+        rows_out.append([_uno_to_str(pattern_id)] + src)
+    _sheet_set_data_array(sheet, 0, [list(log_headers)], number_cols=())
+    _format_header_row(sheet, ncols)
+    if rows_out:
+        _sheet_set_data_array(sheet, 1, rows_out, number_cols=())
+    try:
+        columns = sheet.getColumns()
+        for col in range(ncols):
+            columns.getByIndex(col).OptimalWidth = True
+    except Exception:
+        pass
+    freeze_sheet_first_row(doc, sheet)
+    _apply_result_menu_autofilter(doc, sheet, ncols, len(rows_out))
+    return sheet, len(rows_out)
+
+
+def apply_dlp_name_scan( doc, results_sheet, entries, headers, data_rows, dict_path, show_progress=True):
+    """
+    Один проход по строкам результата: весь словарь паттернов на каждую строку.
+    Подсветка совпадений + лист лога.
+    """
+    patterns, used_path = _fl_lib.load_dlp_patterns(dict_path, fallback_defaults=True)
+    compiled = _fl_lib.compile_dlp_patterns(patterns)
+    if not compiled:
+        show_message(
+            "DLP: словарь пуст или все regex некорректны.\nПуть: %s" % (used_path or "(по умолчанию)")
+        )
+        return 0, 0
+    total = len(entries)
+    match_pairs = []
+    highlight_rows = []
+    if show_progress and total > 0:
+        file_list_ui_status_start(u"DLP: анализ имён", total)
+    try:
+        for idx, entry in enumerate(entries):
+            hits = _fl_lib.match_entry_dlp_patterns(entry, compiled)
+            if hits:
+                highlight_rows.append(idx + 1)
+                for pid in hits:
+                    match_pairs.append((pid, idx))
+            if show_progress:
+                file_list_ui_status_set(
+                    idx + 1,
+                    u"DLP %d / %d (совпадений: %d)"
+                    % (idx + 1, total, len(match_pairs)),
+                )
+            file_list_ui_yield(counter=idx + 1)
+    finally:
+        if show_progress:
+            file_list_ui_status_finish()
+    ncols = len(headers)
+    if highlight_rows:
+        _fl_lib.highlight_sheet_rows(results_sheet, highlight_rows, ncols)
+    log_count = 0
+    if match_pairs:
+        _sheet, log_count = write_dlp_log_sheet(
+            doc,
+            results_sheet.Name if results_sheet is not None else u"",
+            headers,
+            data_rows,
+            match_pairs,
+        )
+    print(
+        "DLP имён: паттернов=%s, совпадений=%s, строк=%s, словарь=%s"
+        % (len(compiled), log_count, len(highlight_rows), used_path or "(defaults)")
+    )
+    return log_count, len(highlight_rows)
+
+
+def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE, dlp_analyze_names=_DEFAULT_DLP_ANALYZE_NAMES, dlp_names_dict_path="", dlp_analyze_content=_DEFAULT_DLP_ANALYZE_CONTENT, dlp_content_dict_path=""):
     """
     Собирает данные о файлах и папках и выводит на лист.
 
@@ -1655,6 +1848,7 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
     size_unit — b | kb | mb | gb (б, Кб, Мб, Гб).
     count_pages — считать страницы PDF/Writer/Impress/Draw через UNO.
     sort_mode — пресет сортировки (SORT_PRESETS).
+    dlp_analyze_names — мини-DLP по именам/путям (словарь regex).
     """
     try:
         root = path_from_user_input(path)
@@ -1673,6 +1867,13 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
 
         do_pages = normalize_count_pages(count_pages)
         mode_sort = normalize_sort_mode(sort_mode)
+        do_dlp_names = normalize_count_pages(dlp_analyze_names)
+        # Анализ содержимого — задел UI; пока не реализован.
+        _ = (
+            normalize_count_pages(dlp_analyze_content),
+            _uno_to_str(dlp_content_dict_path).strip(),
+        )
+        include_owner = _fl_lib.is_windows_platform()
 
         entries, root = collect_path_entries(
             root, max_depth=max_depth, masks=mask_list, show_progress=True
@@ -1700,21 +1901,56 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
         if results_sheet is None:
             return False
 
+        unit = normalize_size_unit(size_unit)
+        headers = build_result_headers(
+            unit, count_pages=do_pages, include_owner=include_owner
+        )
+        data_rows = _build_sheet_data_rows(
+            entries, unit, count_pages=do_pages, include_owner=include_owner
+        )
+
         _ensure_active_sheet(doc, results_sheet)
         written, ncols = write_entries_to_sheet(
             results_sheet,
             entries,
-            size_unit=normalize_size_unit(size_unit),
+            size_unit=unit,
             clear_first=(mode != "created"),
             show_progress=True,
             count_pages=do_pages,
+            include_owner=include_owner,
         )
         freeze_sheet_first_row(doc, results_sheet)
         _apply_result_menu_autofilter(doc, results_sheet, ncols, written)
+
+        dlp_hits = 0
+        dlp_rows = 0
+        if do_dlp_names:
+            names_dict = _uno_to_str(dlp_names_dict_path).strip()
+            if names_dict == "":
+                names_dict = _fl_lib.ensure_default_dlp_name_dict(_settings_dir())
+            dlp_hits, dlp_rows = apply_dlp_name_scan(
+                doc,
+                results_sheet,
+                entries,
+                headers,
+                data_rows,
+                names_dict,
+                show_progress=True,
+            )
+
         _focus_sheet_top_left(doc, results_sheet)
         print(
-            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s, сортировка=%s)"
-            % (written, results_sheet.Name, mode, do_pages, mode_sort)
+            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s, сортировка=%s, owner=%s, dlp_names=%s/%s)"
+            % (
+                written,
+                results_sheet.Name,
+                mode,
+                do_pages,
+                mode_sort,
+                include_owner,
+                dlp_hits,
+                dlp_rows,
+            )
         )
         return True
 
@@ -1819,6 +2055,31 @@ def _checkbox_set_state(control, checked):
         pass
 
 
+def _set_control_visible(dialog, dialog_model, name, visible):
+    try:
+        dialog_model.getByName(name).Visible = bool(visible)
+    except Exception:
+        pass
+    try:
+        dialog.getControl(name).setVisible(bool(visible))
+    except Exception:
+        pass
+
+
+def _set_control_enabled(dialog, dialog_model, name, enabled):
+    try:
+        dialog_model.getByName(name).Enabled = bool(enabled)
+    except Exception:
+        pass
+    try:
+        dialog.getControl(name).setEnable(bool(enabled))
+    except Exception:
+        try:
+            dialog.getControl(name).Model.Enabled = bool(enabled)
+        except Exception:
+            pass
+
+
 def create_file_analyzer_dialog():
     try:
         saved = load_dialog_settings()
@@ -1827,17 +2088,27 @@ def create_file_analyzer_dialog():
             "com.sun.star.awt.UnoControlDialogModel", XSCRIPTCONTEXT.getComponentContext()
         )
 
-        dlg_w = 520
-        dlg_h = 450
+        dlg_w = 540
+        dlg_h = 490
         m = 10
-        field_w = dlg_w - m * 2 - 100 - 8
+        gap = 8
+        content_w = dlg_w - m * 2
+        field_w = content_w - 100 - gap
         dialog_model.PositionX = 100
-        dialog_model.PositionY = 100
+        dialog_model.PositionY = 80
         dialog_model.Width = dlg_w
         dialog_model.Height = dlg_h
         dialog_model.Title = "Сбор данных о файлах и папках"
 
         y = m
+        tab_w = (content_w - gap) // 2
+        _add_button(dialog_model, "TabMainBtn", "Основное", m, y, tab_w, 22)
+        _add_button(dialog_model, "TabDlpBtn", "DLP", m + tab_w + gap, y, tab_w, 22)
+        y += 28
+        body_top = y
+
+        # --- вкладка Основное ---
+        y = body_top
         _add_label(dialog_model, "LabelPath", "Путь к папке:", m, y, 140, 14)
         y += 18
         _add_edit(
@@ -1849,7 +2120,7 @@ def create_file_analyzer_dialog():
             22,
             path_from_user_input(saved.get("path", "")),
         )
-        _add_button(dialog_model, "BrowseButton", "Обзор...", m + field_w + 8, y - 2, 100, 26)
+        _add_button(dialog_model, "BrowseButton", "Обзор...", m + field_w + gap, y - 2, 100, 26)
 
         y += 34
         _add_label(
@@ -1858,7 +2129,7 @@ def create_file_analyzer_dialog():
             "Имя листа (пусто = активный; если есть — спросим действие):",
             m,
             y,
-            dlg_w - m * 2,
+            content_w,
             14,
         )
         y += 18
@@ -1867,30 +2138,14 @@ def create_file_analyzer_dialog():
             "SheetField",
             m,
             y,
-            dlg_w - m * 2,
+            content_w,
             22,
             str(saved.get("sheet_name", "")),
         )
 
         y += 34
-        _add_label(
-            dialog_model,
-            "LabelDepth",
-            "Глубина (1 = первый уровень):",
-            m,
-            y,
-            180,
-            14,
-        )
-        _add_label(
-            dialog_model,
-            "LabelSizeUnit",
-            "Единицы размера:",
-            m + 250,
-            y,
-            140,
-            14,
-        )
+        _add_label(dialog_model, "LabelDepth", "Глубина (1 = первый уровень):", m, y, 180, 14)
+        _add_label(dialog_model, "LabelSizeUnit", "Единицы размера:", m + 250, y, 140, 14)
         y += 18
         _add_edit(
             dialog_model,
@@ -1910,7 +2165,7 @@ def create_file_analyzer_dialog():
             "Маски файлов (пусто = все; пример: *.xlsx;*.pdf):",
             m,
             y,
-            dlg_w - m * 2,
+            content_w,
             14,
         )
         y += 18
@@ -1919,23 +2174,15 @@ def create_file_analyzer_dialog():
             "MaskField",
             m,
             y,
-            dlg_w - m * 2,
+            content_w,
             22,
             str(saved.get("masks", "")),
         )
 
         y += 34
-        _add_label(
-            dialog_model,
-            "LabelSort",
-            "Сортировка результата:",
-            m,
-            y,
-            dlg_w - m * 2,
-            14,
-        )
+        _add_label(dialog_model, "LabelSort", "Сортировка результата:", m, y, content_w, 14)
         y += 18
-        _add_combo(dialog_model, "SortCombo", m, y, dlg_w - m * 2, 22)
+        _add_combo(dialog_model, "SortCombo", m, y, content_w, 22)
 
         y += 34
         _add_checkbox(
@@ -1944,9 +2191,140 @@ def create_file_analyzer_dialog():
             "Считать страницы (PDF, Writer, Impress/Draw через UNO; медленнее)",
             m,
             y,
-            dlg_w - m * 2,
+            content_w,
             18,
             normalize_count_pages(saved.get("count_pages", _DEFAULT_COUNT_PAGES)),
+        )
+
+        main_names = (
+            "LabelPath",
+            "PathField",
+            "BrowseButton",
+            "LabelSheet",
+            "SheetField",
+            "LabelDepth",
+            "LabelSizeUnit",
+            "DepthField",
+            "SizeUnitCombo",
+            "LabelMasks",
+            "MaskField",
+            "LabelSort",
+            "SortCombo",
+            "CountPagesCheck",
+        )
+
+        # --- вкладка DLP ---
+        y = body_top
+        _add_label(
+            dialog_model,
+            "DlpHintLabel",
+            "Мини-DLP: совпадение regex по имени/пути — подсветка строки и лист лога (*_DLP).",
+            m,
+            y,
+            content_w,
+            28,
+        )
+        try:
+            dialog_model.getByName("DlpHintLabel").MultiLine = True
+        except Exception:
+            pass
+        y += 34
+        _add_checkbox(
+            dialog_model,
+            "DlpNamesCheck",
+            "Анализ наименований объектов (имя, относительный и полный путь)",
+            m,
+            y,
+            content_w,
+            18,
+            normalize_count_pages(saved.get("dlp_analyze_names", _DEFAULT_DLP_ANALYZE_NAMES)),
+        )
+        y += 24
+        _add_label(
+            dialog_model,
+            "DlpNamesDictLabel",
+            "Словарь для анализа имён папок и файлов (JSON, id → regex):",
+            m,
+            y,
+            content_w,
+            14,
+        )
+        y += 18
+        _add_edit(
+            dialog_model,
+            "DlpNamesDictField",
+            m,
+            y,
+            field_w,
+            22,
+            path_from_user_input(saved.get("dlp_names_dict_path", "")),
+        )
+        _add_button(
+            dialog_model,
+            "DlpNamesBrowseButton",
+            "Обзор...",
+            m + field_w + gap,
+            y - 2,
+            100,
+            26,
+        )
+        y += 36
+        _add_checkbox(
+            dialog_model,
+            "DlpContentCheck",
+            "Анализ содержимого файлов (пока недоступно)",
+            m,
+            y,
+            content_w,
+            18,
+            False,
+        )
+        y += 24
+        _add_label(
+            dialog_model,
+            "DlpContentDictLabel",
+            "Словарь для анализа содержимого (JSON) — пока недоступно:",
+            m,
+            y,
+            content_w,
+            14,
+        )
+        y += 18
+        _add_edit(
+            dialog_model,
+            "DlpContentDictField",
+            m,
+            y,
+            field_w,
+            22,
+            path_from_user_input(saved.get("dlp_content_dict_path", "")),
+        )
+        _add_button(
+            dialog_model,
+            "DlpContentBrowseButton",
+            "Обзор...",
+            m + field_w + gap,
+            y - 2,
+            100,
+            26,
+        )
+
+        dlp_names = (
+            "DlpHintLabel",
+            "DlpNamesCheck",
+            "DlpNamesDictLabel",
+            "DlpNamesDictField",
+            "DlpNamesBrowseButton",
+            "DlpContentCheck",
+            "DlpContentDictLabel",
+            "DlpContentDictField",
+            "DlpContentBrowseButton",
+        )
+        dlp_disabled = (
+            "DlpContentCheck",
+            "DlpContentDictLabel",
+            "DlpContentDictField",
+            "DlpContentBrowseButton",
         )
 
         btn_y = dlg_h - 42
@@ -1976,17 +2354,50 @@ def create_file_analyzer_dialog():
                 self.size_unit_combo = None
                 self.sort_combo = None
                 self.count_pages_check = None
+                self.dlp_names_check = None
+                self.dlp_names_dict_field = None
+                self.dlp_content_check = None
+                self.dlp_content_dict_field = None
+                self.tab = "main"
+                self.main_names = main_names
+                self.dlp_names_list = dlp_names
+
+            def set_tab(self, tab_name):
+                self.tab = tab_name
+                show_main = tab_name == "main"
+                show_dlp = tab_name == "dlp"
+                for name in self.main_names:
+                    _set_control_visible(self.dialog, dialog_model, name, show_main)
+                for name in self.dlp_names_list:
+                    _set_control_visible(self.dialog, dialog_model, name, show_dlp)
+                for name in dlp_disabled:
+                    _set_control_enabled(self.dialog, dialog_model, name, False)
 
             def actionPerformed(self, event):
                 button_name = event.Source.Model.Name
+
+                if button_name == "TabMainBtn":
+                    self.set_tab("main")
+                    return
+                if button_name == "TabDlpBtn":
+                    self.set_tab("dlp")
+                    return
 
                 if button_name == "BrowseButton":
                     current = _control_get_text(self.path_field)
                     selected_path = show_folder_picker(current if current else None)
                     if selected_path:
                         _control_set_text(self.path_field, selected_path)
+                    return
 
-                elif button_name == "ClearButton":
+                if button_name == "DlpNamesBrowseButton":
+                    current = _control_get_text(self.dlp_names_dict_field)
+                    selected = show_json_file_picker(current if current else None)
+                    if selected:
+                        _control_set_text(self.dlp_names_dict_field, selected)
+                    return
+
+                if button_name == "ClearButton":
                     _control_set_text(self.path_field, "")
                     _control_set_text(self.sheet_field, "")
                     _control_set_text(self.depth_field, str(_DEFAULT_MAX_DEPTH))
@@ -2004,8 +2415,19 @@ def create_file_analyzer_dialog():
                             sort_mode_label(_DEFAULT_SORT_MODE),
                         )
                     _checkbox_set_state(self.count_pages_check, _DEFAULT_COUNT_PAGES)
+                    _checkbox_set_state(self.dlp_names_check, _DEFAULT_DLP_ANALYZE_NAMES)
+                    _control_set_text(
+                        self.dlp_names_dict_field,
+                        _fl_lib.default_dlp_name_dict_path(_settings_dir()),
+                    )
+                    _checkbox_set_state(self.dlp_content_check, False)
+                    _control_set_text(
+                        self.dlp_content_dict_field,
+                        _fl_lib.default_dlp_content_dict_path(_settings_dir()),
+                    )
+                    return
 
-                elif button_name == "RunButton":
+                if button_name == "RunButton":
                     try:
                         path = _control_get_text(self.path_field)
                         sheet_name = _control_get_text(self.sheet_field)
@@ -2022,6 +2444,14 @@ def create_file_analyzer_dialog():
                             else sort_mode_label(_DEFAULT_SORT_MODE)
                         )
                         count_pages = _checkbox_get_state(self.count_pages_check)
+                        dlp_analyze_names = _checkbox_get_state(self.dlp_names_check)
+                        dlp_names_dict_path = path_from_user_input(
+                            _control_get_text(self.dlp_names_dict_field)
+                        )
+                        dlp_analyze_content = False
+                        dlp_content_dict_path = path_from_user_input(
+                            _control_get_text(self.dlp_content_dict_field)
+                        )
 
                         path = path_from_user_input(path)
                         sheet_name = sheet_name.strip() if sheet_name else ""
@@ -2043,6 +2473,11 @@ def create_file_analyzer_dialog():
                             show_message("Глубина должна быть целым числом.")
                             return
 
+                        if dlp_analyze_names and dlp_names_dict_path == "":
+                            dlp_names_dict_path = _fl_lib.ensure_default_dlp_name_dict(
+                                _settings_dir()
+                            )
+
                         save_dialog_settings(
                             {
                                 "path": path,
@@ -2052,6 +2487,10 @@ def create_file_analyzer_dialog():
                                 "size_unit": size_unit,
                                 "count_pages": count_pages,
                                 "sort_mode": sort_mode,
+                                "dlp_analyze_names": dlp_analyze_names,
+                                "dlp_names_dict_path": dlp_names_dict_path,
+                                "dlp_analyze_content": dlp_analyze_content,
+                                "dlp_content_dict_path": dlp_content_dict_path,
                             }
                         )
                         self.result = (
@@ -2063,13 +2502,31 @@ def create_file_analyzer_dialog():
                             size_unit,
                             count_pages,
                             sort_mode,
+                            dlp_analyze_names,
+                            dlp_names_dict_path,
+                            dlp_analyze_content,
+                            dlp_content_dict_path,
                         )
                         self.dialog.endExecute()
                     except Exception as e:
                         show_message("Ошибка чтения полей диалога: %s" % e)
+                    return
 
-                elif button_name == "CancelButton":
-                    self.result = ("cancel", None, None, None, None, None, None, None)
+                if button_name == "CancelButton":
+                    self.result = (
+                        "cancel",
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
                     self.dialog.endExecute()
 
         handler = DialogHandler(dialog)
@@ -2080,6 +2537,10 @@ def create_file_analyzer_dialog():
         handler.size_unit_combo = dialog.getControl("SizeUnitCombo")
         handler.sort_combo = dialog.getControl("SortCombo")
         handler.count_pages_check = dialog.getControl("CountPagesCheck")
+        handler.dlp_names_check = dialog.getControl("DlpNamesCheck")
+        handler.dlp_names_dict_field = dialog.getControl("DlpNamesDictField")
+        handler.dlp_content_check = dialog.getControl("DlpContentCheck")
+        handler.dlp_content_dict_field = dialog.getControl("DlpContentDictField")
         _set_combo_items(
             handler.size_unit_combo,
             [label for _code, label in _SIZE_UNIT_OPTIONS],
@@ -2091,11 +2552,20 @@ def create_file_analyzer_dialog():
             sort_mode_label(saved.get("sort_mode", _DEFAULT_SORT_MODE)),
         )
 
-        for btn in ("BrowseButton", "ClearButton", "RunButton", "CancelButton"):
+        for btn in (
+            "TabMainBtn",
+            "TabDlpBtn",
+            "BrowseButton",
+            "DlpNamesBrowseButton",
+            "ClearButton",
+            "RunButton",
+            "CancelButton",
+        ):
             dialog.getControl(btn).addActionListener(handler)
 
         dialog.createPeer(toolkit, _parent_window())
         _paint_file_list_titlebar(dialog)
+        handler.set_tab("main")
         dialog.execute()
         return handler.result
 
@@ -2110,11 +2580,33 @@ def analyze_files_dialog(*args):
         result = create_file_analyzer_dialog()
 
         if result and result[0] == "run":
-            _, path, sheet_name, max_depth, mask_text, size_unit, count_pages, sort_mode = result
+            (
+                _,
+                path,
+                sheet_name,
+                max_depth,
+                mask_text,
+                size_unit,
+                count_pages,
+                sort_mode,
+                dlp_analyze_names,
+                dlp_names_dict_path,
+                dlp_analyze_content,
+                dlp_content_dict_path,
+            ) = result
             sheet_arg = sheet_name if sheet_name else None
             print(
-                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s, сортировка=%s"
-                % (path, sheet_arg, max_depth, mask_text, size_unit, count_pages, sort_mode)
+                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s, сортировка=%s, dlp_names=%s"
+                % (
+                    path,
+                    sheet_arg,
+                    max_depth,
+                    mask_text,
+                    size_unit,
+                    count_pages,
+                    sort_mode,
+                    dlp_analyze_names,
+                )
             )
             success = analyze_files(
                 path,
@@ -2124,14 +2616,19 @@ def analyze_files_dialog(*args):
                 size_unit=size_unit,
                 count_pages=count_pages,
                 sort_mode=sort_mode,
+                dlp_analyze_names=dlp_analyze_names,
+                dlp_names_dict_path=dlp_names_dict_path,
+                dlp_analyze_content=dlp_analyze_content,
+                dlp_content_dict_path=dlp_content_dict_path,
             )
             if success:
                 mask_note = ""
                 if mask_text:
                     mask_note = "\nМаски: %s" % mask_text
                 pages_note = "\nСтраницы: да (UNO)" if count_pages else ""
+                dlp_note = "\nDLP имён: да" if dlp_analyze_names else ""
                 show_message(
-                    "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s\nСортировка: %s%s%s"
+                    "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s\nСортировка: %s%s%s%s"
                     % (
                         normalize_path(path),
                         max_depth,
@@ -2139,6 +2636,7 @@ def analyze_files_dialog(*args):
                         sort_mode_label(sort_mode),
                         mask_note,
                         pages_note,
+                        dlp_note,
                     )
                 )
             else:

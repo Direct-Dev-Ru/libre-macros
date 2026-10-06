@@ -9,7 +9,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.728"
+MACRO_VERSION = "3.10.729"
 import os
 import re
 import sys
