@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 """Вспомогательная логика file_list_macro: Owner (Windows) и мини-DLP по именам."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.730"
+MACRO_VERSION = "3.10.731"
+import csv
 import json
 import os
 import re
 import sys
 
 import libre_macros_file_list_cfg as _cfg
+
+# Символы, по которым паттерн считаем «настоящим» regex (не простое слово).
+_DLP_REGEX_META_RE = re.compile(r"[.\\^$*+?{}\[\]|()\\\\]")
 
 try:
     unicode
@@ -206,6 +210,20 @@ def ensure_default_dlp_name_dict(settings_dir):
     return path
 
 
+def coerce_dlp_pattern(pattern):
+    """
+    Простое слово → поиск подфразы без учёта регистра: (?i)слово.
+    Уже regex (есть метасимволы или флаги (?…)) — как есть.
+    «(?i)» — inline ignore-case в Python re.
+    """
+    p = _u(pattern).strip()
+    if not p:
+        return p
+    if p.startswith(u"(?") or _DLP_REGEX_META_RE.search(p):
+        return p
+    return u"(?i)" + re.escape(p)
+
+
 def normalize_dlp_patterns(raw):
     """dict id→regex или list[{id,pattern}|{name,pattern}] → dict."""
     out = {}
@@ -223,7 +241,7 @@ def normalize_dlp_patterns(raw):
                 pid = _u(key).strip()
                 preg = _u(pattern).strip()
             if pid and preg:
-                out[pid] = preg
+                out[pid] = coerce_dlp_pattern(preg)
         return out
     if isinstance(raw, (list, tuple)):
         for item in raw:
@@ -232,28 +250,111 @@ def normalize_dlp_patterns(raw):
             pid = _u(item.get("id") or item.get("name") or "").strip()
             preg = _u(item.get("pattern") or item.get("regex") or "").strip()
             if pid and preg:
-                out[pid] = preg
+                out[pid] = coerce_dlp_pattern(preg)
     return out
+
+
+def _csv_sniff_delimiter(sample):
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+        return dialect.delimiter
+    except Exception:
+        pass
+    # Excel RU часто «;»
+    if sample.count(";") >= sample.count(","):
+        return ";"
+    return ","
+
+
+def _csv_header_row(name_cell, pattern_cell):
+    n = _u(name_cell).strip().casefold()
+    p = _u(pattern_cell).strip().casefold()
+    name_headers = (
+        u"name",
+        u"id",
+        u"имя",
+        u"название",
+        u"pattern_name",
+        u"ключ",
+    )
+    pattern_headers = (
+        u"pattern",
+        u"regex",
+        u"паттерн",
+        u"шаблон",
+        u"выражение",
+    )
+    return n in name_headers or p in pattern_headers
+
+
+def load_dlp_patterns_from_csv(path):
+    """
+    CSV: колонка 1 — имя, колонка 2 — паттерн/слово.
+    Разделитель , или ; (автоопределение). Простое слово → (?i)слово.
+    """
+    path = _u(path)
+    out = {}
+    with open(path, "r", encoding="utf-8-sig", newline="") as handle:
+        sample = handle.read(4096)
+        handle.seek(0)
+        delim = _csv_sniff_delimiter(sample)
+        reader = csv.reader(handle, delimiter=delim)
+        first = True
+        for row in reader:
+            if not row or len(row) < 2:
+                continue
+            pid = _u(row[0]).strip()
+            preg = _u(row[1]).strip()
+            if not pid and not preg:
+                continue
+            if first:
+                first = False
+                if _csv_header_row(pid, preg):
+                    continue
+            if pid and preg:
+                out[pid] = coerce_dlp_pattern(preg)
+    return out
+
+
+def load_dlp_patterns_from_json(path):
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        data = json.load(handle)
+    return normalize_dlp_patterns(data)
 
 
 def load_dlp_patterns(dict_path, fallback_defaults=True):
     """
-    Загрузить словарь regex из JSON.
+    Загрузить словарь из JSON или CSV (имя, паттерн).
     При ошибке/пустом пути — DEFAULT_DLP_NAME_PATTERNS (если fallback_defaults).
     """
     path = _u(dict_path).strip()
     if path and os.path.isfile(path):
+        ext = os.path.splitext(path)[1].lower()
+        patterns = {}
+        err_msg = None
         try:
-            with open(path, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
-            patterns = normalize_dlp_patterns(data)
-            if patterns:
-                return patterns, path
-            print("DLP: файл «%s» не содержит паттернов" % path)
+            if ext == ".csv":
+                patterns = load_dlp_patterns_from_csv(path)
+            elif ext in (".json", ".jsn"):
+                patterns = load_dlp_patterns_from_json(path)
+            else:
+                # расширение неизвестно — сначала JSON, затем CSV
+                try:
+                    patterns = load_dlp_patterns_from_json(path)
+                except Exception:
+                    patterns = load_dlp_patterns_from_csv(path)
         except Exception as err:
-            print("DLP: не удалось прочитать «%s»: %s" % (path, err))
+            err_msg = err
+            patterns = {}
+        if patterns:
+            return patterns, path
+        if err_msg is not None:
+            print("DLP: не удалось прочитать «%s»: %s" % (path, err_msg))
+        else:
+            print("DLP: файл «%s» не содержит паттернов" % path)
     if fallback_defaults:
-        return default_dlp_name_patterns(), path
+        # defaults тоже прогоняем через coerce (на случай простых слов в cfg)
+        return normalize_dlp_patterns(default_dlp_name_patterns()), path
     return {}, path
 
 

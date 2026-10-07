@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.730"
+MACRO_VERSION = "3.10.731"
 import json
 import os
 import sys
@@ -680,8 +680,8 @@ def show_folder_picker(initial_dir=None):
         return None
 
 
-def show_json_file_picker(initial_path=None):
-    """Выбор JSON-словаря DLP (FilePicker)."""
+def show_dlp_dict_file_picker(initial_path=None):
+    """Выбор словаря DLP: JSON или CSV (FilePicker)."""
     try:
         ctx = XSCRIPTCONTEXT.getComponentContext()
         picker = ctx.getServiceManager().createInstanceWithContext(
@@ -704,9 +704,11 @@ def show_json_file_picker(initial_path=None):
             except Exception:
                 pass
         try:
+            picker.appendFilter("Словари DLP (*.json;*.csv)", "*.json;*.csv")
             picker.appendFilter("JSON (*.json)", "*.json")
+            picker.appendFilter("CSV (*.csv)", "*.csv")
             picker.appendFilter("Все файлы (*.*)", "*.*")
-            picker.setCurrentFilter("JSON (*.json)")
+            picker.setCurrentFilter("Словари DLP (*.json;*.csv)")
         except Exception:
             pass
         if picker.execute() == 1:
@@ -2243,7 +2245,7 @@ def create_file_analyzer_dialog():
         _add_label(
             dialog_model,
             "DlpNamesDictLabel",
-            "Словарь для анализа имён папок и файлов (JSON, id → regex):",
+            "Словарь имён (JSON или CSV: имя;паттерн; слово → поиск без регистра):",
             m,
             y,
             content_w,
@@ -2283,7 +2285,7 @@ def create_file_analyzer_dialog():
         _add_label(
             dialog_model,
             "DlpContentDictLabel",
-            "Словарь для анализа содержимого (JSON) — пока недоступно:",
+            "Словарь содержимого (JSON/CSV) — пока недоступно:",
             m,
             y,
             content_w,
@@ -2392,7 +2394,7 @@ def create_file_analyzer_dialog():
 
                 if button_name == "DlpNamesBrowseButton":
                     current = _control_get_text(self.dlp_names_dict_field)
-                    selected = show_json_file_picker(current if current else None)
+                    selected = show_dlp_dict_file_picker(current if current else None)
                     if selected:
                         _control_set_text(self.dlp_names_dict_field, selected)
                     return
