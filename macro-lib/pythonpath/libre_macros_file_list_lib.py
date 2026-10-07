@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Вспомогательная логика file_list_macro: Owner (Windows) и мини-DLP по именам."""
+"""Вспомогательная логика file_list_macro: Owner (Windows) и поиск по именам/содержимому."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.731"
+MACRO_VERSION = "3.10.739"
 import csv
 import json
 import os
@@ -9,9 +9,6 @@ import re
 import sys
 
 import libre_macros_file_list_cfg as _cfg
-
-# Символы, по которым паттерн считаем «настоящим» regex (не простое слово).
-_DLP_REGEX_META_RE = re.compile(r"[.\\^$*+?{}\[\]|()\\\\]")
 
 try:
     unicode
@@ -206,7 +203,7 @@ def ensure_default_dlp_name_dict(settings_dir):
                     indent=2,
                 )
     except Exception as err:
-        print("DLP: не удалось записать словарь по умолчанию: %s" % err)
+        print("Поиск: не удалось записать словарь по умолчанию: %s" % err)
     return path
 
 
@@ -219,7 +216,8 @@ def coerce_dlp_pattern(pattern):
     p = _u(pattern).strip()
     if not p:
         return p
-    if p.startswith(u"(?") or _DLP_REGEX_META_RE.search(p):
+    # Метасимволы regex / inline-флаги — оставляем как есть (re в теле def: AO-safe).
+    if p.startswith(u"(?") or re.search(r"[.\\^$*+?{}\[\]|()\\\\]", p):
         return p
     return u"(?i)" + re.escape(p)
 
@@ -349,9 +347,9 @@ def load_dlp_patterns(dict_path, fallback_defaults=True):
         if patterns:
             return patterns, path
         if err_msg is not None:
-            print("DLP: не удалось прочитать «%s»: %s" % (path, err_msg))
+            print("Поиск: не удалось прочитать «%s»: %s" % (path, err_msg))
         else:
-            print("DLP: файл «%s» не содержит паттернов" % path)
+            print("Поиск: файл «%s» не содержит паттернов" % path)
     if fallback_defaults:
         # defaults тоже прогоняем через coerce (на случай простых слов в cfg)
         return normalize_dlp_patterns(default_dlp_name_patterns()), path
@@ -367,7 +365,7 @@ def compile_dlp_patterns(patterns):
         try:
             compiled.append((_u(pid), re.compile(_u(preg))))
         except re.error as err:
-            print("DLP: неверный regex «%s»: %s" % (pid, err))
+            print("Поиск: неверный regex «%s»: %s" % (pid, err))
     return compiled
 
 
@@ -384,22 +382,196 @@ def dlp_haystack_for_entry(entry):
     return u"\n".join([p for p in parts if p])
 
 
+def match_text_dlp_patterns(text, compiled_patterns):
+    """Проверить произвольный текст по всему словарю → список id."""
+    hay = _u(text)
+    if not hay or not compiled_patterns:
+        return []
+    hits = []
+    for pid, cre in compiled_patterns:
+        try:
+            if cre.search(hay):
+                hits.append(pid)
+        except Exception:
+            pass
+    return hits
+
+
 def match_entry_dlp_patterns(entry, compiled_patterns):
     """
     Проверить запись по всему словарю.
     Возвращает список id паттернов с совпадением (порядок словаря).
     """
-    text = dlp_haystack_for_entry(entry)
-    if not text or not compiled_patterns:
-        return []
-    hits = []
-    for pid, cre in compiled_patterns:
+    return match_text_dlp_patterns(dlp_haystack_for_entry(entry), compiled_patterns)
+
+
+def _norm_ext(path_or_ext):
+    text = _u(path_or_ext).strip().lower()
+    if not text:
+        return u""
+    # путь / имя.файла → расширение; голый «.docx» / «docx» — как есть
+    if u"/" in text or u"\\" in text or (u"." in text[1:] and not text.startswith(u".")):
+        text = os.path.splitext(text)[1]
+    if text and not text.startswith(u"."):
+        text = u"." + text
+    return text
+
+
+def dlp_ext_in_set(path, ext_set):
+    return _norm_ext(path) in (ext_set or frozenset())
+
+
+def is_dlp_text_file(path):
+    return dlp_ext_in_set(path, getattr(_cfg, "DLP_TEXT_EXTS", frozenset()))
+
+
+def is_dlp_word_file(path):
+    return dlp_ext_in_set(path, getattr(_cfg, "DLP_WORD_EXTS", frozenset()))
+
+
+def is_dlp_excel_file(path):
+    return dlp_ext_in_set(path, getattr(_cfg, "DLP_EXCEL_EXTS", frozenset()))
+
+
+def _bom_encoding(raw):
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return "utf-8-sig"
+    if raw.startswith(b"\xff\xfe"):
+        return "utf-16-le"
+    if raw.startswith(b"\xfe\xff"):
+        return "utf-16-be"
+    if raw.startswith(b"\xff\xfe\x00\x00"):
+        return "utf-32-le"
+    if raw.startswith(b"\x00\x00\xfe\xff"):
+        return "utf-32-be"
+    return None
+
+
+def _decode_score(text):
+    """Грубая оценка «похоже на текст» (больше — лучше)."""
+    if not text:
+        return -1
+    sample = text[:4000]
+    if not sample:
+        return -1
+    bad = 0
+    good = 0
+    for ch in sample:
+        o = ord(ch)
+        if ch in ("\x00", "\ufffd"):
+            bad += 3
+        elif o < 32 and ch not in ("\n", "\r", "\t"):
+            bad += 1
+        else:
+            good += 1
+    return good - bad * 4
+
+
+def detect_and_decode_bytes(raw):
+    """
+    Каскад кодировок: BOM → utf-8 → cp1251 → cp866 → utf-16 → latin-1.
+    Возвращает (text, encoding_label).
+    """
+    if not raw:
+        return u"", u""
+    bom_enc = _bom_encoding(raw)
+    candidates = []
+    if bom_enc:
+        candidates.append(bom_enc)
+    for enc in ("utf-8", "cp1251", "cp866", "utf-16-le", "utf-16-be", "latin-1"):
+        if enc not in candidates:
+            candidates.append(enc)
+    best_text = u""
+    best_enc = u""
+    best_score = -10**9
+    for enc in candidates:
         try:
-            if cre.search(text):
-                hits.append(pid)
+            if enc == "utf-8":
+                text = raw.decode("utf-8")
+            else:
+                text = raw.decode(enc)
         except Exception:
-            pass
-    return hits
+            continue
+        score = _decode_score(text)
+        # BOM / utf-8 без ошибок — бонус
+        if enc == bom_enc:
+            score += 50
+        if enc == "utf-8" and bom_enc is None:
+            score += 10
+        if score > best_score:
+            best_score = score
+            best_text = text
+            best_enc = enc
+    return best_text, best_enc
+
+
+def read_text_file_for_dlp(path, max_bytes=None, max_chars=None):
+    """
+    Прочитать текстовый файл с каскадом кодировок.
+    Возвращает (text, encoding_label); при ошибке («», «»).
+    """
+    full = _u(path)
+    if not full or not os.path.isfile(full):
+        return u"", u""
+    if max_bytes is None:
+        max_bytes = int(getattr(_cfg, "DLP_CONTENT_MAX_BYTES", 2 * 1024 * 1024))
+    if max_chars is None:
+        max_chars = int(getattr(_cfg, "DLP_CONTENT_MAX_CHARS", 500000))
+    try:
+        with open(full, "rb") as handle:
+            raw = handle.read(int(max_bytes) + 1)
+    except Exception as err:
+        print("Поиск (чтение): «%s»: %s" % (full, err))
+        return u"", u""
+    if not raw:
+        return u"", u""
+    truncated = len(raw) > int(max_bytes)
+    if truncated:
+        raw = raw[: int(max_bytes)]
+    text, enc = detect_and_decode_bytes(raw)
+    if max_chars and len(text) > int(max_chars):
+        text = text[: int(max_chars)]
+    label = enc or u"unknown"
+    if truncated:
+        label = label + u"+trunc"
+    return text, label
+
+
+def ensure_default_dlp_content_dict(settings_dir):
+    """Создать JSON-словарь содержимого по умолчанию, если файла ещё нет."""
+    path = default_dlp_content_dict_path(settings_dir)
+    try:
+        folder = os.path.dirname(path)
+        if folder and not os.path.isdir(folder):
+            os.makedirs(folder)
+        if not os.path.isfile(path):
+            raw = getattr(_cfg, "DEFAULT_DLP_CONTENT_PATTERNS", None)
+            if not raw:
+                raw = default_dlp_name_patterns()
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump(
+                    normalize_dlp_patterns(raw),
+                    handle,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+    except Exception as err:
+        print("Поиск: не удалось записать словарь содержимого: %s" % err)
+    return path
+
+
+def dlp_content_scope_for_path(path, want_text, want_word, want_excel):
+    """
+    Какой экстрактор использовать: 'text' | 'word' | 'excel' | None.
+    Word/Excel предпочтительнее text при пересечении расширений (например .rtf).
+    """
+    if want_word and is_dlp_word_file(path):
+        return u"word"
+    if want_excel and is_dlp_excel_file(path):
+        return u"excel"
+    if want_text and is_dlp_text_file(path):
+        return u"text"
+    return None
 
 
 def dlp_log_sheet_name(result_sheet_name):
@@ -417,7 +589,7 @@ def dlp_log_sheet_name(result_sheet_name):
 
 
 def highlight_sheet_rows(sheet, row_indices, ncols, color=None):
-    """Подкрасить строки (0-based индексы листа) цветом DLP_MATCH_ROW_COLOR."""
+    """Подкрасить строки (1-based индексы листа) цветом DLP_MATCH_ROW_COLOR."""
     if sheet is None or not row_indices or ncols < 1:
         return 0
     fill = color

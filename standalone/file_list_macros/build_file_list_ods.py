@@ -5,7 +5,7 @@
 - Один Scripts/python/file_list_macro.py (cfg+lib+help вшиты) —
   document-pythonpath в AlterOffice/LO для tdoc: не работает.
 - лист «Старт» с кнопками «Сбор файлов» и «Справка»
-- docs/file_list_user_guide.odt (и тот же файл как base64 внутри класса _C)
+- docs/file_list_user_guide.odt вшивается as-is (править вручную в Writer)
 
 Запуск:
 
@@ -14,7 +14,6 @@
 from __future__ import print_function
 
 import base64
-import io
 import os
 import re
 import shutil
@@ -23,7 +22,6 @@ import tempfile
 import zipfile
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils
-from xml.sax.saxutils import escape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, "..", ".."))
@@ -31,7 +29,6 @@ MACRO_LIB = os.path.join(REPO, "macro-lib")
 PYTHONPATH_SRC = os.path.join(MACRO_LIB, "pythonpath")
 TEMPLATE_ODS = os.path.join(REPO, "installer", "template.ods")
 DOCS_DIR = os.path.join(HERE, "docs")
-MD_GUIDE = os.path.join(DOCS_DIR, "file_list_user_guide.md")
 ODT_GUIDE = os.path.join(DOCS_DIR, "file_list_user_guide.odt")
 ODS_NAME = "file_list_macro.ods"
 SCRIPT_NAME = "file_list_macro.py"
@@ -53,11 +50,19 @@ _CFG_ALIASES = (
     ("DEFAULT_COUNT_PAGES", "_DEFAULT_COUNT_PAGES"),
     ("DEFAULT_DLP_ANALYZE_CONTENT", "_DEFAULT_DLP_ANALYZE_CONTENT"),
     ("DEFAULT_DLP_ANALYZE_NAMES", "_DEFAULT_DLP_ANALYZE_NAMES"),
+    ("DEFAULT_DLP_CONTENT_EXCEL", "_DEFAULT_DLP_CONTENT_EXCEL"),
+    ("DEFAULT_DLP_CONTENT_TEXT", "_DEFAULT_DLP_CONTENT_TEXT"),
+    ("DEFAULT_DLP_CONTENT_WORD", "_DEFAULT_DLP_CONTENT_WORD"),
     ("DEFAULT_MAX_DEPTH", "_DEFAULT_MAX_DEPTH"),
+    ("DEFAULT_RESULT_SHEET_NAME", "_DEFAULT_RESULT_SHEET_NAME"),
     ("DEFAULT_SIZE_UNIT", "_DEFAULT_SIZE_UNIT"),
     ("DEFAULT_SORT_MODE", "_DEFAULT_SORT_MODE"),
     ("DEPTH_INDENT", "_DEPTH_INDENT"),
+    ("DLP_CONTENT_MAX_CHARS", "_DLP_CONTENT_MAX_CHARS"),
     ("DLP_LOG_PATTERN_HEADER", "_DLP_LOG_PATTERN_HEADER"),
+    ("DLP_LOG_SOURCE_HEADER", "_DLP_LOG_SOURCE_HEADER"),
+    ("DLP_SOURCE_CONTENT", "_DLP_SOURCE_CONTENT"),
+    ("DLP_SOURCE_NAME", "_DLP_SOURCE_NAME"),
     ("PAGE_COUNT_EXTS", "_PAGE_COUNT_EXTS"),
     ("RESULT_HEADER_BASE", "_RESULT_HEADER_BASE"),
     ("RESULT_HEADER_OWNER", "_RESULT_HEADER_OWNER"),
@@ -82,254 +87,9 @@ def _read_text(path):
         return fh.read()
 
 
-def _write_bytes(path, data):
-    parent = os.path.dirname(path)
-    if parent and not os.path.isdir(parent):
-        os.makedirs(parent)
-    with open(path, "wb") as fh:
-        fh.write(data)
-
-
-# --- ODT from markdown (placeholders {{IMAGE: id | caption}}) ---
-
-
-def _inline_xml(text):
-    s = str(text or "")
-    out = []
-    i = 0
-    n = len(s)
-    while i < n:
-        if s.startswith("**", i):
-            j = s.find("**", i + 2)
-            if j > i:
-                out.append(
-                    '<text:span text:style-name="TBold">%s</text:span>'
-                    % escape(s[i + 2 : j])
-                )
-                i = j + 2
-                continue
-        out.append(escape(s[i]))
-        i += 1
-    return "".join(out)
-
-
-def _parse_blocks(md):
-    blocks = []
-    image_re = re.compile(
-        r"^\{\{IMAGE:\s*([^|]+?)\s*\|\s*(.+?)\s*\}\}$"
-    )
-    for raw in md.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-        line = raw.rstrip()
-        if not line.strip():
-            blocks.append(("blank", ""))
-            continue
-        m = image_re.match(line.strip())
-        if m:
-            blocks.append(("image", m.group(1).strip(), m.group(2).strip()))
-            continue
-        if line.startswith("|") and "---" not in line:
-            # skip markdown table separator rows later; keep simple pipe rows as body
-            if set(line.replace("|", "").strip()) <= set("-: "):
-                continue
-            blocks.append(("p", line.strip()))
-        elif line.startswith("### "):
-            blocks.append(("h3", line[4:].strip()))
-        elif line.startswith("## "):
-            blocks.append(("h2", line[3:].strip()))
-        elif line.startswith("# "):
-            blocks.append(("h1", line[2:].strip()))
-        elif line.startswith("- "):
-            blocks.append(("li", line[2:].strip()))
-        elif line.strip() == "---":
-            blocks.append(("blank", ""))
-        else:
-            blocks.append(("p", line.strip()))
-    return blocks
-
-
-def _odt_content_xml(blocks):
-    paras = []
-    first_h1 = True
-    for item in blocks:
-        kind = item[0]
-        if kind == "blank":
-            paras.append('<text:p text:style-name="PGap"/>')
-            continue
-        if kind == "image":
-            _img_id, caption = item[1], item[2]
-            paras.append(
-                '<text:p text:style-name="PImageBox">'
-                "<text:span text:style-name=\"TBold\">[МЕСТО ДЛЯ РИСУНКА]</text:span>"
-                "<text:line-break/>"
-                "%s"
-                "<text:line-break/>"
-                "<text:span text:style-name=\"TMuted\">"
-                "(вставьте изображение сюда; id: %s)"
-                "</text:span>"
-                "</text:p>"
-                % (_inline_xml(caption), escape(_img_id))
-            )
-            # дополнительный «воздух» под скриншот
-            for _ in range(4):
-                paras.append('<text:p text:style-name="PImagePad"/>')
-            continue
-        text = item[1]
-        body = _inline_xml(text)
-        if kind == "h1":
-            style = "PTitle" if first_h1 else "PH1"
-            first_h1 = False
-            paras.append('<text:p text:style-name="%s">%s</text:p>' % (style, body))
-        elif kind == "h2":
-            paras.append('<text:p text:style-name="PH2">%s</text:p>' % body)
-        elif kind == "h3":
-            paras.append('<text:p text:style-name="PH3">%s</text:p>' % body)
-        elif kind == "li":
-            paras.append(
-                '<text:p text:style-name="PBullet"><text:s text:c="1"/>•  %s</text:p>'
-                % body
-            )
-        else:
-            paras.append('<text:p text:style-name="PBody">%s</text:p>' % body)
-    inner = "\n".join("      " + p for p in paras)
-    return """<?xml version="1.0" encoding="UTF-8"?>
-<office:document-content
- xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
- xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
- xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
- xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
- office:version="1.2">
-  <office:automatic-styles>
-    <style:style style:name="PTitle" style:family="paragraph">
-      <style:paragraph-properties fo:margin-bottom="0.35cm" fo:margin-top="0cm"/>
-      <style:text-properties fo:font-size="20pt" fo:font-weight="bold" fo:color="#1B5E20"/>
-    </style:style>
-    <style:style style:name="PH1" style:family="paragraph">
-      <style:paragraph-properties fo:margin-top="0.55cm" fo:margin-bottom="0.18cm"/>
-      <style:text-properties fo:font-size="16pt" fo:font-weight="bold" fo:color="#2E7D32"/>
-    </style:style>
-    <style:style style:name="PH2" style:family="paragraph">
-      <style:paragraph-properties fo:margin-top="0.38cm" fo:margin-bottom="0.12cm"/>
-      <style:text-properties fo:font-size="13pt" fo:font-weight="bold" fo:color="#388E3C"/>
-    </style:style>
-    <style:style style:name="PH3" style:family="paragraph">
-      <style:paragraph-properties fo:margin-top="0.28cm" fo:margin-bottom="0.08cm"/>
-      <style:text-properties fo:font-size="12pt" fo:font-weight="bold" fo:color="#43A047"/>
-    </style:style>
-    <style:style style:name="PBody" style:family="paragraph">
-      <style:paragraph-properties fo:margin-bottom="0.12cm" fo:line-height="120%%"/>
-      <style:text-properties fo:font-size="11pt"/>
-    </style:style>
-    <style:style style:name="PBullet" style:family="paragraph">
-      <style:paragraph-properties fo:margin-left="0.45cm" fo:margin-bottom="0.06cm" fo:line-height="120%%"/>
-      <style:text-properties fo:font-size="11pt"/>
-    </style:style>
-    <style:style style:name="PGap" style:family="paragraph">
-      <style:paragraph-properties fo:margin-bottom="0.08cm"/>
-      <style:text-properties fo:font-size="6pt"/>
-    </style:style>
-    <style:style style:name="PImageBox" style:family="paragraph">
-      <style:paragraph-properties fo:margin-top="0.25cm" fo:margin-bottom="0.1cm"
-       fo:padding="0.35cm" fo:border="0.06cm dashed #A1887F"
-       fo:background-color="#FFF8E1" fo:text-align="center"/>
-      <style:text-properties fo:font-size="11pt" fo:color="#5D4037"/>
-    </style:style>
-    <style:style style:name="PImagePad" style:family="paragraph">
-      <style:paragraph-properties fo:margin-bottom="0.55cm"/>
-      <style:text-properties fo:font-size="8pt" fo:color="#BDBDBD"/>
-    </style:style>
-    <style:style style:name="TBold" style:family="text">
-      <style:text-properties fo:font-weight="bold"/>
-    </style:style>
-    <style:style style:name="TMuted" style:family="text">
-      <style:text-properties fo:font-size="9pt" fo:color="#795548" fo:font-style="italic"/>
-    </style:style>
-  </office:automatic-styles>
-  <office:body>
-    <office:text>
-%s
-    </office:text>
-  </office:body>
-</office:document-content>
-""" % inner
-
-
-def _odt_styles_xml():
-    return """<?xml version="1.0" encoding="UTF-8"?>
-<office:document-styles
- xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
- xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
- xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
- office:version="1.2">
-  <office:styles>
-    <style:default-style style:family="paragraph">
-      <style:paragraph-properties fo:line-height="120%"/>
-      <style:text-properties fo:font-size="11pt" style:font-name="Liberation Serif"
-       fo:language="ru" fo:country="RU"/>
-    </style:default-style>
-  </office:styles>
-  <office:automatic-styles>
-    <style:page-layout style:name="pm1">
-      <style:page-layout-properties fo:page-width="21.0cm" fo:page-height="29.7cm"
-       fo:margin-top="1.6cm" fo:margin-bottom="1.6cm"
-       fo:margin-left="1.8cm" fo:margin-right="1.8cm"/>
-    </style:page-layout>
-  </office:automatic-styles>
-  <office:master-styles>
-    <style:master-page style:name="Standard" style:page-layout-name="pm1"/>
-  </office:master-styles>
-</office:document-styles>
-"""
-
-
-def _odt_meta_xml():
-    return """<?xml version="1.0" encoding="UTF-8"?>
-<office:document-meta
- xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
- xmlns:dc="http://purl.org/dc/elements/1.1/"
- xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0"
- office:version="1.2">
-  <office:meta>
-    <dc:title>Справка: сбор файлов и папок (file_list)</dc:title>
-    <meta:generator>libre-macros/standalone/file_list_macros/build_file_list_ods.py</meta:generator>
-  </office:meta>
-</office:document-meta>
-"""
-
-
-def _odt_settings_xml():
-    return (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        "<office:document-settings"
-        ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
-        ' office:version="1.2"><office:settings/></office:document-settings>'
-    )
-
-
-def _odt_manifest_xml():
-    return """<?xml version="1.0" encoding="UTF-8"?>
-<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
-  <manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/>
-  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
-  <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
-  <manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/>
-  <manifest:file-entry manifest:full-path="settings.xml" manifest:media-type="text/xml"/>
-</manifest:manifest>
-"""
-
-
-def build_odt_bytes(md_text):
-    blocks = _parse_blocks(md_text)
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        info = zipfile.ZipInfo("mimetype")
-        info.compress_type = zipfile.ZIP_STORED
-        z.writestr(info, "application/vnd.oasis.opendocument.text")
-        z.writestr("content.xml", _odt_content_xml(blocks).encode("utf-8"))
-        z.writestr("styles.xml", _odt_styles_xml().encode("utf-8"))
-        z.writestr("meta.xml", _odt_meta_xml().encode("utf-8"))
-        z.writestr("settings.xml", _odt_settings_xml().encode("utf-8"))
-        z.writestr("META-INF/manifest.xml", _odt_manifest_xml().encode("utf-8"))
-    return buf.getvalue()
+def _read_bytes(path):
+    with open(path, "rb") as fh:
+        return fh.read()
 
 
 def _strip_leading_noise(src):
@@ -967,12 +727,10 @@ def build_ods(output_path=None):
     output_path = output_path or os.path.join(HERE, ODS_NAME)
     if not os.path.isfile(TEMPLATE_ODS):
         raise IOError("Не найден шаблон ODS: %s" % TEMPLATE_ODS)
-    if not os.path.isfile(MD_GUIDE):
-        raise IOError("Нет файла документации: %s" % MD_GUIDE)
+    if not os.path.isfile(ODT_GUIDE):
+        raise IOError("Нет файла справки ODT: %s" % ODT_GUIDE)
 
-    md = _read_text(MD_GUIDE)
-    odt_bytes = build_odt_bytes(md)
-    _write_bytes(ODT_GUIDE, odt_bytes)
+    odt_bytes = _read_bytes(ODT_GUIDE)
 
     entry_src = prepare_entry_script(odt_bytes)
     script_rel = "Scripts/python/" + SCRIPT_NAME
@@ -1024,8 +782,7 @@ def build_ods(output_path=None):
 def main():
     path, odt_len, n_py = build_ods()
     print("OK:", path)
-    print("docs odt:", ODT_GUIDE, "(%d bytes)" % odt_len)
-    print("docs md:", MD_GUIDE)
+    print("docs odt (embedded as-is):", ODT_GUIDE, "(%d bytes)" % odt_len)
     print("python modules in ODS:", n_py, "(single-file bundle)")
     print("staged copy:", os.path.join(HERE, "_staged_python"))
     return 0

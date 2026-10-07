@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние file_list_macro (AlterOffice 2026: модульный код .py-скрипта вырезается)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.731"
+MACRO_VERSION = "3.10.739"
 DEFAULT_MAX_DEPTH = 1
 DEFAULT_SIZE_UNIT = "b"
 DEFAULT_COUNT_PAGES = False
 DEFAULT_SORT_MODE = "tree"
+# Имя листа результата, если в диалоге поле пустое (не активный лист).
+DEFAULT_RESULT_SHEET_NAME = "file_list_result"
 DEPTH_INDENT = "    "
 SETTINGS_APP_NAME = "libre-macros"
 SETTINGS_MODULE_NAME = "file_list_macro"
@@ -79,15 +81,78 @@ COLUMN_WIDTH_AUTOFILTER_PAD = 0.15
 UI_YIELD_EVERY = 10
 WRITE_CHUNK = 300
 
-# --- DLP (мини): анализ имён/путей по словарю regex ---
+# --- Поиск: анализ имён/путей и содержимого по словарю regex ---
 DEFAULT_DLP_ANALYZE_NAMES = False
 DEFAULT_DLP_ANALYZE_CONTENT = False
-DLP_NAME_DICT_FILENAME = "dlp_name_patterns.json"
-DLP_CONTENT_DICT_FILENAME = "dlp_content_patterns.json"
-DLP_LOG_SHEET_SUFFIX = "_DLP"
+DEFAULT_DLP_CONTENT_TEXT = True
+DEFAULT_DLP_CONTENT_WORD = True
+DEFAULT_DLP_CONTENT_EXCEL = True
+DLP_NAME_DICT_FILENAME = "search_name_patterns.json"
+DLP_CONTENT_DICT_FILENAME = "search_content_patterns.json"
+DLP_LOG_SHEET_SUFFIX = "_Поиск"
 DLP_LOG_PATTERN_HEADER = "Паттерн"
+DLP_LOG_SOURCE_HEADER = "Источник"
+DLP_SOURCE_NAME = "имя"
+DLP_SOURCE_CONTENT = "содержимое"
 # Подсветка строки результата при совпадении (RGB Calc).
 DLP_MATCH_ROW_COLOR = 0xFFCCCC
+# Лимиты чтения содержимого (байты с диска / символы после decode).
+DLP_CONTENT_MAX_BYTES = 2 * 1024 * 1024
+DLP_CONTENT_MAX_CHARS = 500000
+# Текстовые расширения (фаза A).
+DLP_TEXT_EXTS = frozenset(
+    (
+        ".txt",
+        ".csv",
+        ".tsv",
+        ".json",
+        ".xml",
+        ".log",
+        ".md",
+        ".html",
+        ".htm",
+        ".ini",
+        ".cfg",
+        ".yml",
+        ".yaml",
+        ".sql",
+        ".py",
+        ".js",
+        ".css",
+        ".properties",
+        ".rtf",
+    )
+)
+# Word / AText (+ шаблоны, legacy).
+DLP_WORD_EXTS = frozenset(
+    (
+        ".doc",
+        ".docx",
+        ".docm",
+        ".dot",
+        ".dotx",
+        ".dotm",
+        ".odt",
+        ".ott",
+        ".fodt",
+        ".rtf",
+    )
+)
+# Excel / ACell (+ шаблоны, legacy).
+DLP_EXCEL_EXTS = frozenset(
+    (
+        ".xls",
+        ".xlsx",
+        ".xlsm",
+        ".xlsb",
+        ".xlt",
+        ".xltx",
+        ".xltm",
+        ".ods",
+        ".ots",
+        ".fods",
+    )
+)
 # Словарь по умолчанию: id → regex (флаги можно встроить, напр. (?i)).
 DEFAULT_DLP_NAME_PATTERNS = {
     "confidential": r"(?i)конфиденц",
@@ -99,6 +164,7 @@ DEFAULT_DLP_NAME_PATTERNS = {
     "internal_only": r"(?i)только[\s_\-]*для[\s_\-]*внутренн",
     "password_hint": r"(?i)(?:парол|password|passwd|pwd)[_\-\s.]*(?:list|файл|file|баз)?",
 }
+DEFAULT_DLP_CONTENT_PATTERNS = dict(DEFAULT_DLP_NAME_PATTERNS)
 
 # Мутабельное состояние UI (живёт в pythonpath — не проходит через AO-фильтр скрипта)
 status_indicator = None

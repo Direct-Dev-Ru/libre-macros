@@ -1,6 +1,6 @@
 # Standalone: file_list_macro
 
-Самодостаточная книга Calc с макросом сбора файлов/папок, мини-DLP и вшитой справкой.
+Самодостаточная книга Calc с макросом сбора файлов/папок, поиском по именам/содержимому и вшитой справкой.
 
 ## Пересборка
 
@@ -13,8 +13,7 @@ python3 standalone/file_list_macros/build_file_list_ods.py
 | Путь | Что |
 |------|-----|
 | `file_list_macro.ods` | книга с макросами и кнопками |
-| `docs/file_list_user_guide.md` | исходник справки |
-| `docs/file_list_user_guide.odt` | справка (и blob внутри ODS) |
+| `docs/file_list_user_guide.odt` | справка (вшивается в ODS as-is; править в Writer) |
 | `_staged_python/` | копии скриптов, попавших в ODS |
 
 ## Зависимости внутри ODS
@@ -26,14 +25,9 @@ python3 standalone/file_list_macros/build_file_list_ods.py
 «Could not compile file and find macro».
 
 Константы: `class _C` (file_list cfg) и `class _Ui` (тема soft-gray/green).
-`libre_macros_lib` (автофильтр/стиль заголовка) по-прежнему optional.
+Стиль заголовка и меню-автофильтр — локальные fallback’и в entry (без `libre_macros_lib`).
 
-## Скриншоты в справке
+## Справка
 
-В `docs/file_list_user_guide.md` маркеры:
-
-```text
-{{IMAGE: dialog_main | Диалог запуска — вкладка «Основное»}}
-```
-
-После правки md пересоберите скриптом — в ODT появятся блоки «МЕСТО ДЛЯ РИСУНКА»; вставьте туда картинки вручную в Writer.
+Источник — только `docs/file_list_user_guide.odt`. Скрипт сборки **не** пересобирает ODT;
+после правок в Writer снова запустите `build_file_list_ods.py`, чтобы обновить blob в ODS.

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.731"
+MACRO_VERSION = "3.10.739"
 import json
 import os
 import sys
@@ -15,7 +15,7 @@ from com.sun.star.awt.MessageBoxResults import CANCEL, NO, YES
 from com.sun.star.awt.MessageBoxType import MESSAGEBOX, QUERYBOX
 
 # Константы в pythonpath: AlterOffice 2026 вырезает модульные присваивания в .py-скрипте.
-from libre_macros_file_list_cfg import COLUMN_WIDTH_AUTOFILTER_PAD as _COLUMN_WIDTH_AUTOFILTER_PAD, DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_DLP_ANALYZE_CONTENT as _DEFAULT_DLP_ANALYZE_CONTENT, DEFAULT_DLP_ANALYZE_NAMES as _DEFAULT_DLP_ANALYZE_NAMES, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, DLP_LOG_PATTERN_HEADER as _DLP_LOG_PATTERN_HEADER, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_OWNER as _RESULT_HEADER_OWNER, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
+from libre_macros_file_list_cfg import COLUMN_WIDTH_AUTOFILTER_PAD as _COLUMN_WIDTH_AUTOFILTER_PAD, DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_DLP_ANALYZE_CONTENT as _DEFAULT_DLP_ANALYZE_CONTENT, DEFAULT_DLP_ANALYZE_NAMES as _DEFAULT_DLP_ANALYZE_NAMES, DEFAULT_DLP_CONTENT_EXCEL as _DEFAULT_DLP_CONTENT_EXCEL, DEFAULT_DLP_CONTENT_TEXT as _DEFAULT_DLP_CONTENT_TEXT, DEFAULT_DLP_CONTENT_WORD as _DEFAULT_DLP_CONTENT_WORD, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_RESULT_SHEET_NAME as _DEFAULT_RESULT_SHEET_NAME, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, DLP_CONTENT_MAX_CHARS as _DLP_CONTENT_MAX_CHARS, DLP_LOG_PATTERN_HEADER as _DLP_LOG_PATTERN_HEADER, DLP_LOG_SOURCE_HEADER as _DLP_LOG_SOURCE_HEADER, DLP_SOURCE_CONTENT as _DLP_SOURCE_CONTENT, DLP_SOURCE_NAME as _DLP_SOURCE_NAME, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_OWNER as _RESULT_HEADER_OWNER, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
 import libre_macros_file_list_cfg as _fl_state
 import libre_macros_file_list_lib as _fl_lib
 
@@ -248,10 +248,12 @@ def _default_dialog_settings():
         "size_unit": _DEFAULT_SIZE_UNIT,
         "count_pages": _DEFAULT_COUNT_PAGES,
         "sort_mode": _DEFAULT_SORT_MODE,
-        "dlp_analyze_names": _DEFAULT_DLP_ANALYZE_NAMES,
+        # dlp_analyze_names / dlp_analyze_content — не сохраняются (всегда default).
         "dlp_names_dict_path": _fl_lib.default_dlp_name_dict_path(settings_dir),
-        "dlp_analyze_content": _DEFAULT_DLP_ANALYZE_CONTENT,
         "dlp_content_dict_path": _fl_lib.default_dlp_content_dict_path(settings_dir),
+        "dlp_content_text": _DEFAULT_DLP_CONTENT_TEXT,
+        "dlp_content_word": _DEFAULT_DLP_CONTENT_WORD,
+        "dlp_content_excel": _DEFAULT_DLP_CONTENT_EXCEL,
     }
 
 
@@ -374,11 +376,17 @@ def load_dialog_settings():
     settings["size_unit"] = normalize_size_unit(settings.get("size_unit"))
     settings["count_pages"] = normalize_count_pages(settings.get("count_pages"))
     settings["sort_mode"] = normalize_sort_mode(settings.get("sort_mode"))
-    settings["dlp_analyze_names"] = normalize_count_pages(
-        settings.get("dlp_analyze_names", _DEFAULT_DLP_ANALYZE_NAMES)
+    # Галочки «искать в именах / в содержимом» не восстанавливаем из файла.
+    settings["dlp_analyze_names"] = _DEFAULT_DLP_ANALYZE_NAMES
+    settings["dlp_analyze_content"] = _DEFAULT_DLP_ANALYZE_CONTENT
+    settings["dlp_content_text"] = normalize_count_pages(
+        settings.get("dlp_content_text", _DEFAULT_DLP_CONTENT_TEXT)
     )
-    settings["dlp_analyze_content"] = normalize_count_pages(
-        settings.get("dlp_analyze_content", _DEFAULT_DLP_ANALYZE_CONTENT)
+    settings["dlp_content_word"] = normalize_count_pages(
+        settings.get("dlp_content_word", _DEFAULT_DLP_CONTENT_WORD)
+    )
+    settings["dlp_content_excel"] = normalize_count_pages(
+        settings.get("dlp_content_excel", _DEFAULT_DLP_CONTENT_EXCEL)
     )
     names_path = _uno_to_str(settings.get("dlp_names_dict_path", "")).strip()
     if names_path == "":
@@ -390,6 +398,10 @@ def load_dialog_settings():
     settings["dlp_content_dict_path"] = content_path
     try:
         _fl_lib.ensure_default_dlp_name_dict(_settings_dir())
+    except Exception:
+        pass
+    try:
+        _fl_lib.ensure_default_dlp_content_dict(_settings_dir())
     except Exception:
         pass
     return settings
@@ -408,11 +420,17 @@ def save_dialog_settings(settings):
         payload["size_unit"] = normalize_size_unit(payload.get("size_unit"))
         payload["count_pages"] = normalize_count_pages(payload.get("count_pages"))
         payload["sort_mode"] = normalize_sort_mode(payload.get("sort_mode"))
-        payload["dlp_analyze_names"] = normalize_count_pages(
-            payload.get("dlp_analyze_names", _DEFAULT_DLP_ANALYZE_NAMES)
+        # Не сохраняем состояние «искать в именах / в содержимом».
+        payload.pop("dlp_analyze_names", None)
+        payload.pop("dlp_analyze_content", None)
+        payload["dlp_content_text"] = normalize_count_pages(
+            payload.get("dlp_content_text", _DEFAULT_DLP_CONTENT_TEXT)
         )
-        payload["dlp_analyze_content"] = normalize_count_pages(
-            payload.get("dlp_analyze_content", _DEFAULT_DLP_ANALYZE_CONTENT)
+        payload["dlp_content_word"] = normalize_count_pages(
+            payload.get("dlp_content_word", _DEFAULT_DLP_CONTENT_WORD)
+        )
+        payload["dlp_content_excel"] = normalize_count_pages(
+            payload.get("dlp_content_excel", _DEFAULT_DLP_CONTENT_EXCEL)
         )
         payload["dlp_names_dict_path"] = _uno_to_str(
             payload.get("dlp_names_dict_path", "")
@@ -681,7 +699,7 @@ def show_folder_picker(initial_dir=None):
 
 
 def show_dlp_dict_file_picker(initial_path=None):
-    """Выбор словаря DLP: JSON или CSV (FilePicker)."""
+    """Выбор словаря поиска: JSON или CSV (FilePicker)."""
     try:
         ctx = XSCRIPTCONTEXT.getComponentContext()
         picker = ctx.getServiceManager().createInstanceWithContext(
@@ -704,11 +722,11 @@ def show_dlp_dict_file_picker(initial_path=None):
             except Exception:
                 pass
         try:
-            picker.appendFilter("Словари DLP (*.json;*.csv)", "*.json;*.csv")
+            picker.appendFilter("Словари поиска (*.json;*.csv)", "*.json;*.csv")
             picker.appendFilter("JSON (*.json)", "*.json")
             picker.appendFilter("CSV (*.csv)", "*.csv")
             picker.appendFilter("Все файлы (*.*)", "*.*")
-            picker.setCurrentFilter("Словари DLP (*.json;*.csv)")
+            picker.setCurrentFilter("Словари поиска (*.json;*.csv)")
         except Exception:
             pass
         if picker.execute() == 1:
@@ -1109,6 +1127,180 @@ def enrich_entries_with_page_counts(entries, show_progress=False):
     return entries
 
 
+def _truncate_dlp_text(text, max_chars=None):
+    out = _uno_to_str(text)
+    if max_chars is None:
+        max_chars = int(_DLP_CONTENT_MAX_CHARS)
+    if max_chars and len(out) > int(max_chars):
+        return out[: int(max_chars)]
+    return out
+
+
+def _text_from_writer_doc(doc, max_chars=None):
+    parts = []
+    try:
+        parts.append(_uno_to_str(doc.getText().getString()))
+    except Exception:
+        pass
+    try:
+        if hasattr(doc, "getTextFrames"):
+            frames = doc.getTextFrames()
+            if frames is not None:
+                names = list(frames.getElementNames())
+                for name in names[:40]:
+                    try:
+                        frame = frames.getByName(name)
+                        parts.append(_uno_to_str(frame.getString()))
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    return _truncate_dlp_text(u"\n".join([p for p in parts if p]), max_chars)
+
+
+def _cell_to_dlp_text(value):
+    if value is None:
+        return u""
+    if isinstance(value, bool):
+        return u"1" if value else u"0"
+    if isinstance(value, (int, float)):
+        try:
+            if float(value) == int(value):
+                return _uno_to_str(int(value))
+        except Exception:
+            pass
+        return _uno_to_str(value)
+    return _uno_to_str(value).strip()
+
+
+def _text_from_calc_doc(doc, max_chars=None):
+    if max_chars is None:
+        max_chars = int(_DLP_CONTENT_MAX_CHARS)
+    parts = []
+    total = 0
+    try:
+        sheets = doc.getSheets()
+        count = int(sheets.getCount())
+    except Exception:
+        return u""
+    for i in range(count):
+        if total >= int(max_chars):
+            break
+        try:
+            sheet = sheets.getByIndex(i)
+        except Exception:
+            continue
+        try:
+            cursor = sheet.createCursor()
+            cursor.gotoStartOfUsedArea(False)
+            cursor.gotoEndOfUsedArea(True)
+            data = cursor.getDataArray()
+        except Exception:
+            continue
+        if not data:
+            continue
+        try:
+            sheet_name = _uno_to_str(sheet.getName())
+        except Exception:
+            sheet_name = u""
+        if sheet_name:
+            parts.append(sheet_name)
+            total += len(sheet_name) + 1
+        for row in data:
+            if total >= int(max_chars):
+                break
+            cells = []
+            for cell in row:
+                t = _cell_to_dlp_text(cell)
+                if t:
+                    cells.append(t)
+            if cells:
+                line = u"\t".join(cells)
+                parts.append(line)
+                total += len(line) + 1
+    return _truncate_dlp_text(u"\n".join(parts), max_chars)
+
+
+def uno_extract_document_text(path, prefer=None, max_chars=None):
+    """
+    Текст через UNO (Hidden+ReadOnly), как подсчёт страниц.
+    prefer: 'word' | 'excel' | None — подсказка типа документа.
+    Возвращает (text, label); label пуст при ошибке.
+    """
+    full = normalize_path(path)
+    if full == "" or not os.path.isfile(full):
+        return u"", u""
+    if max_chars is None:
+        max_chars = int(_DLP_CONTENT_MAX_CHARS)
+    doc = None
+    try:
+        url = uno.systemPathToFileUrl(os.path.abspath(full))
+        props = [
+            _make_load_prop("Hidden", True),
+            _make_load_prop("ReadOnly", True),
+        ]
+        handler = _silent_interaction_handler()
+        if handler is not None:
+            props.append(_make_load_prop("InteractionHandler", handler))
+        desktop = XSCRIPTCONTEXT.getDesktop()
+        doc = desktop.loadComponentFromURL(url, "_blank", 0, tuple(props))
+        if doc is None:
+            return u"", u""
+        is_writer = False
+        is_calc = False
+        try:
+            is_writer = bool(doc.supportsService("com.sun.star.text.TextDocument"))
+        except Exception:
+            is_writer = False
+        try:
+            is_calc = bool(doc.supportsService("com.sun.star.sheet.SpreadsheetDocument"))
+        except Exception:
+            is_calc = False
+        prefer = _uno_to_str(prefer).strip().lower()
+        if prefer == "excel" and is_calc:
+            return _text_from_calc_doc(doc, max_chars), u"uno-excel"
+        if prefer == "word" and is_writer:
+            return _text_from_writer_doc(doc, max_chars), u"uno-word"
+        if is_writer:
+            return _text_from_writer_doc(doc, max_chars), u"uno-word"
+        if is_calc:
+            return _text_from_calc_doc(doc, max_chars), u"uno-excel"
+        # Fallback: попробовать оба API.
+        text = _text_from_writer_doc(doc, max_chars)
+        if text:
+            return text, u"uno-text"
+        text = _text_from_calc_doc(doc, max_chars)
+        if text:
+            return text, u"uno-excel"
+        return u"", u""
+    except Exception as err:
+        print("Поиск UNO extract («%s»): %s" % (full, err))
+        return u"", u""
+    finally:
+        _close_doc_discard(doc)
+        file_list_ui_yield(force=True)
+
+
+def extract_entry_content_for_dlp(entry, want_text=True, want_word=True, want_excel=True):
+    """
+    Извлечь текст записи для поиска по содержимому.
+    Возвращает (text, detail_label).
+    """
+    if not entry or entry.get("kind") != "файл":
+        return u"", u""
+    path = entry.get("full_path") or ""
+    scope = _fl_lib.dlp_content_scope_for_path(path, want_text, want_word, want_excel)
+    if not scope:
+        return u"", u""
+    if scope == u"text":
+        return _fl_lib.read_text_file_for_dlp(path)
+    if scope == u"word":
+        return uno_extract_document_text(path, prefer="word")
+    if scope == u"excel":
+        return uno_extract_document_text(path, prefer="excel")
+    return u"", u""
+
+
 def sort_entries_hierarchical(entries):
     """
     Древовидный порядок: предки перед потомками по сегментам пути.
@@ -1442,7 +1634,45 @@ def _focus_sheet_top_left(doc, sheet):
         pass
 
 
+def _cell_clear_all_flags():
+    """CellFlags для clearContents: значения, формулы и оформление (в т.ч. заливка)."""
+    try:
+        from com.sun.star.sheet.CellFlags import (
+            ANNOTATION,
+            DATETIME,
+            EDITATTR,
+            FORMATTED,
+            FORMULA,
+            FORMULA_FORMAT,
+            HARDATTR,
+            OBJECTS,
+            STRING,
+            STYLES,
+            VALUE,
+        )
+
+        return (
+            int(VALUE)
+            | int(DATETIME)
+            | int(STRING)
+            | int(ANNOTATION)
+            | int(FORMULA)
+            | int(HARDATTR)
+            | int(STYLES)
+            | int(OBJECTS)
+            | int(EDITATTR)
+            | int(FORMULA_FORMAT)
+            | int(FORMATTED)
+        )
+    except Exception:
+        return 7
+
+
 def clear_sheet_contents(sheet, max_cols=16, max_rows=20000):
+    """
+    Подготовка листа к перезаписи: удалить строки данных (со 2-й) одним вызовом UNO,
+    затем очистить заголовок (строка 1) с полным сбросом оформления.
+    """
     if sheet is None:
         return
     end_row = 0
@@ -1455,29 +1685,38 @@ def clear_sheet_contents(sheet, max_cols=16, max_rows=20000):
         end_col = max(int(used.EndColumn), max_cols - 1)
     except Exception:
         end_row = 0
+    flags = _cell_clear_all_flags()
+    if end_row >= 1:
+        try:
+            sheet.getRows().removeByIndex(1, end_row)
+        except Exception as err:
+            print("Не удалось удалить строки листа: %s" % err)
+            try:
+                range_addr = sheet.getCellRangeByPosition(0, 1, end_col, end_row)
+                range_addr.clearContents(flags)
+            except Exception:
+                pass
     try:
-        range_addr = sheet.getCellRangeByPosition(0, 0, end_col, end_row)
-        range_addr.clearContents(7)
+        sheet.getCellRangeByPosition(0, 0, end_col, 0).clearContents(flags)
     except Exception:
-        for row in range(min(end_row + 1, 500)):
-            for col in range(max_cols):
-                cell = sheet.getCellByPosition(col, row)
+        for col in range(max_cols):
+            try:
+                cell = sheet.getCellByPosition(col, 0)
                 cell.String = ""
-                try:
-                    cell.Value = 0.0
-                except Exception:
-                    pass
+                cell.CellBackColor = -1
+            except Exception:
+                pass
 
 
 def resolve_target_sheet(doc, sheet_name):
     """
-    Получить лист для вывода. None/пусто — активный лист.
+    Получить лист для вывода. None/пусто — DEFAULT_RESULT_SHEET_NAME.
     Если лист есть — спросить: перезаписать / удалить и создать / отмена.
     """
-    if sheet_name is None or str(sheet_name).strip() == "":
-        return doc.getCurrentController().getActiveSheet(), "active"
+    target_name = _uno_to_str(sheet_name).strip()
+    if target_name == "":
+        target_name = _DEFAULT_RESULT_SHEET_NAME
 
-    target_name = str(sheet_name).strip()
     if target_name not in _sheet_names(doc):
         new_sheet = _insert_sheet(doc, target_name)
         if new_sheet is None:
@@ -1577,8 +1816,98 @@ def _sheet_set_data_array(sheet, start_row, rows, number_cols=None):
         return False
 
 
+def _file_list_color_token_to_rgb(token, default_rgb):
+    """Имя цвета / hex → 0xRRGGBB (локально, без libre_macros_lib)."""
+    text = _uno_to_str(token).strip().lower().replace(u"ё", u"е")
+    if not text:
+        return default_rgb
+    known = {
+        u"excel_header": 0x1F4E79,
+        u"белый": 0xFFFFFF,
+        u"white": 0xFFFFFF,
+        u"черный": 0x000000,
+        u"black": 0x000000,
+        u"серый": 0xD9D9D9,
+        u"grey": 0xD9D9D9,
+        u"gray": 0xD9D9D9,
+    }
+    if text in known:
+        return known[text]
+    if text.startswith(u"0x") or text.startswith(u"#"):
+        try:
+            hx = text[2:] if text.startswith(u"0x") else text[1:]
+            return int(hx, 16) & 0xFFFFFF
+        except Exception:
+            return default_rgb
+    return default_rgb
+
+
+def _file_list_header_colors_from_style(spec):
+    """RESULT_HEADER_STYLE «заливка/шрифт» → (bg, fg)."""
+    bg = 0x1F4E79
+    fg = 0xFFFFFF
+    text = _uno_to_str(spec).strip()
+    if not text:
+        return bg, fg
+    if u"/" in text:
+        fill_t, _, font_t = text.partition(u"/")
+        bg = _file_list_color_token_to_rgb(fill_t, bg)
+        fg = _file_list_color_token_to_rgb(font_t, fg)
+    else:
+        bg = _file_list_color_token_to_rgb(text, bg)
+    return bg, fg
+
+
+def _format_header_row_local(sheet, ncols):
+    """Оформление шапки без libre_macros_lib (standalone / fallback)."""
+    ec = int(ncols) - 1
+    bg, fg = _file_list_header_colors_from_style(_RESULT_HEADER_STYLE)
+    try:
+        hdr = sheet.getCellRangeByPosition(0, 0, ec, 0)
+    except Exception:
+        return False
+    try:
+        hdr.CellBackColor = int(bg)
+    except Exception:
+        pass
+    try:
+        hdr.CharWeight = 150
+    except Exception:
+        pass
+    try:
+        hdr.CharHeight = 11.0
+    except Exception:
+        pass
+    try:
+        from com.sun.star.table.CellHoriJustify import CENTER as H_CENTER
+
+        hdr.HoriJustify = H_CENTER
+    except Exception:
+        try:
+            hdr.HoriJustify = 2
+        except Exception:
+            pass
+    try:
+        hdr.VertJustify = 2
+    except Exception:
+        pass
+    # Цвет шрифта — по ячейкам (на диапазоне CharColor иногда не держится).
+    col = 0
+    while col <= ec:
+        try:
+            cell = sheet.getCellByPosition(col, 0)
+            try:
+                cell.CharColor2 = int(fg)
+            except Exception:
+                cell.CharColor = int(fg)
+        except Exception:
+            pass
+        col += 1
+    return True
+
+
 def _format_header_row(sheet, ncols):
-    """Заголовок в стиле проекта: excel_header / белый, жирный."""
+    """Заголовок: excel_header / белый, жирный (+ lib, если есть)."""
     if sheet is None or ncols < 1:
         return
     ec = int(ncols) - 1
@@ -1599,8 +1928,10 @@ def _format_header_row(sheet, ncols):
         except Exception:
             pass
         return
-    except Exception as err:
-        print("Оформление заголовка: %s" % err)
+    except Exception:
+        pass
+    if _format_header_row_local(sheet, ncols):
+        return
     try:
         sheet.getCellRangeByPosition(0, 0, ec, 0).CharWeight = 150
     except Exception:
@@ -1611,6 +1942,71 @@ def _format_header_row(sheet, ncols):
             except Exception:
                 pass
             col += 1
+
+
+def _file_list_sheet_index(sheet):
+    if sheet is None:
+        return -1
+    try:
+        return int(sheet.getCellRangeByPosition(0, 0, 0, 0).getRangeAddress().Sheet)
+    except Exception:
+        return -1
+
+
+def _file_list_unnamed_db_ranges(doc):
+    if doc is None:
+        return None
+    try:
+        udr = doc.getPropertyValue("UnnamedDatabaseRanges")
+        if udr is not None:
+            return udr
+    except Exception:
+        pass
+    try:
+        return getattr(doc, "UnnamedDatabaseRanges", None)
+    except Exception:
+        return None
+
+
+def _apply_result_menu_autofilter_local(doc, sheet, sc, sr, ec, er):
+    """Меню-автофильтр через UnnamedDatabaseRanges (без libre_macros_lib)."""
+    want = _file_list_sheet_index(sheet)
+    if want < 0:
+        return False
+    udr = _file_list_unnamed_db_ranges(doc)
+    if udr is None:
+        return False
+    try:
+        from com.sun.star.table import CellRangeAddress
+
+        addr = CellRangeAddress()
+        addr.Sheet = int(want)
+        addr.StartColumn = int(sc)
+        addr.StartRow = int(sr)
+        addr.EndColumn = int(ec)
+        addr.EndRow = int(er)
+        try:
+            if bool(udr.hasByTable(int(want))):
+                db0 = udr.getByTable(int(want))
+                try:
+                    db0.AutoFilter = False
+                except Exception:
+                    try:
+                        db0.setPropertyValue("AutoFilter", False)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        udr.setByTable(addr)
+        db = udr.getByTable(int(want))
+        try:
+            db.AutoFilter = True
+        except Exception:
+            db.setPropertyValue("AutoFilter", True)
+        return True
+    except Exception as err:
+        print("Автофильтр (local): %s" % err)
+        return False
 
 
 def _apply_result_menu_autofilter(doc, sheet, ncols, data_rows):
@@ -1643,9 +2039,9 @@ def _apply_result_menu_autofilter(doc, sheet, ncols, data_rows):
         return bool(
             _lm_pp_ensure_sheet_menu_autofilter(doc, sheet, 0, 0, ec, er)
         )
-    except Exception as err:
-        print("Автофильтр (меню): %s" % err)
-        return False
+    except Exception:
+        pass
+    return bool(_apply_result_menu_autofilter_local(doc, sheet, 0, 0, ec, er))
 
 
 def write_entries_to_sheet( results_sheet, entries, size_unit=_DEFAULT_SIZE_UNIT, clear_first=True, show_progress=False, count_pages=False, include_owner=None):
@@ -1754,25 +2150,33 @@ def _resolve_or_recreate_sheet(doc, sheet_name):
 
 def write_dlp_log_sheet( doc, result_sheet_name, headers, data_rows, match_rows):
     """
-    Лист лога DLP: колонка «Паттерн» + копия строки результата.
-    match_rows — список (pattern_id, data_row_index 0-based в data_rows).
+    Лист лога поиска: «Паттерн» | «Источник» | копия строки результата.
+    match_rows — список (pattern_id, source, data_row_index 0-based)
+    или legacy (pattern_id, data_row_index).
     """
     if doc is None or not match_rows:
         return None, 0
     log_name = _fl_lib.dlp_log_sheet_name(result_sheet_name)
     sheet = _resolve_or_recreate_sheet(doc, log_name)
     if sheet is None:
-        show_message("Не удалось создать лист лога DLP «%s»." % log_name)
+        show_message("Не удалось создать лист лога поиска «%s»." % log_name)
         return None, 0
-    log_headers = [_DLP_LOG_PATTERN_HEADER] + list(headers)
+    log_headers = [_DLP_LOG_PATTERN_HEADER, _DLP_LOG_SOURCE_HEADER] + list(headers)
     ncols = len(log_headers)
     rows_out = []
-    for pattern_id, row_idx in match_rows:
+    for item in match_rows:
         try:
+            if len(item) >= 3:
+                pattern_id, source, row_idx = item[0], item[1], item[2]
+            else:
+                pattern_id, row_idx = item[0], item[1]
+                source = _DLP_SOURCE_NAME
             src = list(data_rows[int(row_idx)])
         except Exception:
             continue
-        rows_out.append([_uno_to_str(pattern_id)] + src)
+        rows_out.append(
+            [_uno_to_str(pattern_id), _uno_to_str(source)] + src
+        )
     _sheet_set_data_array(sheet, 0, [list(log_headers)], number_cols=())
     _format_header_row(sheet, ncols)
     if rows_out:
@@ -1788,40 +2192,160 @@ def write_dlp_log_sheet( doc, result_sheet_name, headers, data_rows, match_rows)
     return sheet, len(rows_out)
 
 
-def apply_dlp_name_scan( doc, results_sheet, entries, headers, data_rows, dict_path, show_progress=True):
-    """
-    Один проход по строкам результата: весь словарь паттернов на каждую строку.
-    Подсветка совпадений + лист лога.
-    """
-    patterns, used_path = _fl_lib.load_dlp_patterns(dict_path, fallback_defaults=True)
-    compiled = _fl_lib.compile_dlp_patterns(patterns)
-    if not compiled:
-        show_message(
-            "DLP: словарь пуст или все regex некорректны.\nПуть: %s" % (used_path or "(по умолчанию)")
-        )
-        return 0, 0
-    total = len(entries)
+def collect_dlp_name_matches( entries, compiled, show_progress=True):
+    """Совпадения по именам (только файлы): [(pattern_id, source, row_idx), ...], highlight 1-based."""
     match_pairs = []
     highlight_rows = []
+    file_rows = [
+        (idx, entry)
+        for idx, entry in enumerate(entries)
+        if entry.get("kind") == "файл"
+    ]
+    total = len(file_rows)
     if show_progress and total > 0:
-        file_list_ui_status_start(u"DLP: анализ имён", total)
+        file_list_ui_status_start(u"Поиск: анализ имён", total)
     try:
-        for idx, entry in enumerate(entries):
+        for done, (idx, entry) in enumerate(file_rows, start=1):
             hits = _fl_lib.match_entry_dlp_patterns(entry, compiled)
             if hits:
                 highlight_rows.append(idx + 1)
                 for pid in hits:
-                    match_pairs.append((pid, idx))
+                    match_pairs.append((pid, _DLP_SOURCE_NAME, idx))
             if show_progress:
                 file_list_ui_status_set(
-                    idx + 1,
-                    u"DLP %d / %d (совпадений: %d)"
-                    % (idx + 1, total, len(match_pairs)),
+                    done,
+                    u"Поиск имён %d / %d (совпадений: %d)"
+                    % (done, total, len(match_pairs)),
                 )
-            file_list_ui_yield(counter=idx + 1)
+            file_list_ui_yield(counter=done)
     finally:
         if show_progress:
             file_list_ui_status_finish()
+    return match_pairs, highlight_rows
+
+
+def collect_dlp_content_matches( entries, compiled, want_text=True, want_word=True, want_excel=True, show_progress=True):
+    """Совпадения по содержимому: [(pattern_id, source, row_idx), ...], highlight 1-based."""
+    targets = []
+    for idx, entry in enumerate(entries):
+        if entry.get("kind") != "файл":
+            continue
+        scope = _fl_lib.dlp_content_scope_for_path(
+            entry.get("full_path") or "",
+            want_text,
+            want_word,
+            want_excel,
+        )
+        if scope:
+            targets.append((idx, entry, scope))
+    total = len(targets)
+    match_pairs = []
+    highlight_set = set()
+    if show_progress and total > 0:
+        file_list_ui_status_start(u"Поиск: анализ содержимого", total)
+    try:
+        for done, (idx, entry, scope) in enumerate(targets, start=1):
+            text, detail = extract_entry_content_for_dlp(
+                entry,
+                want_text=want_text,
+                want_word=want_word,
+                want_excel=want_excel,
+            )
+            hits = _fl_lib.match_text_dlp_patterns(text, compiled) if text else []
+            if hits:
+                highlight_set.add(idx + 1)
+                source = _DLP_SOURCE_CONTENT
+                if detail:
+                    source = u"%s/%s" % (_DLP_SOURCE_CONTENT, detail)
+                for pid in hits:
+                    match_pairs.append((pid, source, idx))
+            if show_progress:
+                file_list_ui_status_set(
+                    done,
+                    u"Поиск содержимого %d / %d [%s] (совпадений: %d)"
+                    % (
+                        done,
+                        total,
+                        scope,
+                        len(match_pairs),
+                    ),
+                )
+            file_list_ui_yield(force=(scope in (u"word", u"excel")), counter=done)
+    finally:
+        if show_progress:
+            file_list_ui_status_finish()
+    return match_pairs, sorted(highlight_set)
+
+
+def apply_dlp_scans( doc, results_sheet, entries, headers, data_rows, do_names=False, names_dict_path="", do_content=False, content_dict_path="", want_text=True, want_word=True, want_excel=True, show_progress=True):
+    """
+    Имена и/или содержимое: единый лог *_Поиск и подсветка строк результата.
+    Возвращает (log_rows, highlighted_rows).
+    """
+    match_pairs = []
+    highlight_set = set()
+    if do_names:
+        patterns, used_path = _fl_lib.load_dlp_patterns(
+            names_dict_path, fallback_defaults=True
+        )
+        compiled = _fl_lib.compile_dlp_patterns(patterns)
+        if not compiled:
+            show_message(
+                "Поиск имён: словарь пуст или все regex некорректны.\nПуть: %s"
+                % (used_path or "(по умолчанию)")
+            )
+        else:
+            name_pairs, name_hl = collect_dlp_name_matches(
+                entries, compiled, show_progress=show_progress
+            )
+            match_pairs.extend(name_pairs)
+            highlight_set.update(name_hl)
+            print(
+                "Поиск имён: паттернов=%s, совпадений=%s, словарь=%s"
+                % (len(compiled), len(name_pairs), used_path or "(defaults)")
+            )
+    if do_content:
+        if not (want_text or want_word or want_excel):
+            show_message(
+                "Поиск содержимого: включите хотя бы один тип файлов "
+                "(текстовые / Word·AText / Excel·ACell)."
+            )
+        else:
+            patterns, used_path = _fl_lib.load_dlp_patterns(
+                content_dict_path, fallback_defaults=True
+            )
+            if not patterns:
+                patterns = _fl_lib.default_dlp_name_patterns()
+            compiled = _fl_lib.compile_dlp_patterns(patterns)
+            if not compiled:
+                show_message(
+                    "Поиск содержимого: словарь пуст или все regex некорректны.\nПуть: %s"
+                    % (used_path or "(по умолчанию)")
+                )
+            else:
+                content_pairs, content_hl = collect_dlp_content_matches(
+                    entries,
+                    compiled,
+                    want_text=want_text,
+                    want_word=want_word,
+                    want_excel=want_excel,
+                    show_progress=show_progress,
+                )
+                match_pairs.extend(content_pairs)
+                highlight_set.update(content_hl)
+                print(
+                    "Поиск содержимого: паттернов=%s, совпадений=%s, словарь=%s, "
+                    "text=%s word=%s excel=%s"
+                    % (
+                        len(compiled),
+                        len(content_pairs),
+                        used_path or "(defaults)",
+                        want_text,
+                        want_word,
+                        want_excel,
+                    )
+                )
+    highlight_rows = sorted(highlight_set)
     ncols = len(headers)
     if highlight_rows:
         _fl_lib.highlight_sheet_rows(results_sheet, highlight_rows, ncols)
@@ -1834,14 +2358,10 @@ def apply_dlp_name_scan( doc, results_sheet, entries, headers, data_rows, dict_p
             data_rows,
             match_pairs,
         )
-    print(
-        "DLP имён: паттернов=%s, совпадений=%s, строк=%s, словарь=%s"
-        % (len(compiled), log_count, len(highlight_rows), used_path or "(defaults)")
-    )
     return log_count, len(highlight_rows)
 
 
-def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE, dlp_analyze_names=_DEFAULT_DLP_ANALYZE_NAMES, dlp_names_dict_path="", dlp_analyze_content=_DEFAULT_DLP_ANALYZE_CONTENT, dlp_content_dict_path=""):
+def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE, dlp_analyze_names=_DEFAULT_DLP_ANALYZE_NAMES, dlp_names_dict_path="", dlp_analyze_content=_DEFAULT_DLP_ANALYZE_CONTENT, dlp_content_dict_path="", dlp_content_text=_DEFAULT_DLP_CONTENT_TEXT, dlp_content_word=_DEFAULT_DLP_CONTENT_WORD, dlp_content_excel=_DEFAULT_DLP_CONTENT_EXCEL):
     """
     Собирает данные о файлах и папках и выводит на лист.
 
@@ -1850,7 +2370,8 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
     size_unit — b | kb | mb | gb (б, Кб, Мб, Гб).
     count_pages — считать страницы PDF/Writer/Impress/Draw через UNO.
     sort_mode — пресет сортировки (SORT_PRESETS).
-    dlp_analyze_names — мини-DLP по именам/путям (словарь regex).
+    dlp_analyze_names — поиск по именам/путям (словарь regex).
+    dlp_analyze_content — поиск по содержимому (текст / Word·AText / Excel·ACell).
     """
     try:
         root = path_from_user_input(path)
@@ -1870,11 +2391,10 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
         do_pages = normalize_count_pages(count_pages)
         mode_sort = normalize_sort_mode(sort_mode)
         do_dlp_names = normalize_count_pages(dlp_analyze_names)
-        # Анализ содержимого — задел UI; пока не реализован.
-        _ = (
-            normalize_count_pages(dlp_analyze_content),
-            _uno_to_str(dlp_content_dict_path).strip(),
-        )
+        do_dlp_content = normalize_count_pages(dlp_analyze_content)
+        want_text = normalize_count_pages(dlp_content_text)
+        want_word = normalize_count_pages(dlp_content_word)
+        want_excel = normalize_count_pages(dlp_content_excel)
         include_owner = _fl_lib.is_windows_platform()
 
         entries, root = collect_path_entries(
@@ -1926,23 +2446,32 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
 
         dlp_hits = 0
         dlp_rows = 0
-        if do_dlp_names:
+        if do_dlp_names or do_dlp_content:
             names_dict = _uno_to_str(dlp_names_dict_path).strip()
-            if names_dict == "":
+            if do_dlp_names and names_dict == "":
                 names_dict = _fl_lib.ensure_default_dlp_name_dict(_settings_dir())
-            dlp_hits, dlp_rows = apply_dlp_name_scan(
+            content_dict = _uno_to_str(dlp_content_dict_path).strip()
+            if do_dlp_content and content_dict == "":
+                content_dict = _fl_lib.ensure_default_dlp_content_dict(_settings_dir())
+            dlp_hits, dlp_rows = apply_dlp_scans(
                 doc,
                 results_sheet,
                 entries,
                 headers,
                 data_rows,
-                names_dict,
+                do_names=do_dlp_names,
+                names_dict_path=names_dict,
+                do_content=do_dlp_content,
+                content_dict_path=content_dict,
+                want_text=want_text,
+                want_word=want_word,
+                want_excel=want_excel,
                 show_progress=True,
             )
 
         _focus_sheet_top_left(doc, results_sheet)
         print(
-            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s, сортировка=%s, owner=%s, dlp_names=%s/%s)"
+            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s, сортировка=%s, owner=%s, поиск=%s/%s, content=%s)"
             % (
                 written,
                 results_sheet.Name,
@@ -1952,6 +2481,7 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
                 include_owner,
                 dlp_hits,
                 dlp_rows,
+                do_dlp_content,
             )
         )
         return True
@@ -2091,13 +2621,13 @@ def create_file_analyzer_dialog():
         )
 
         dlg_w = 540
-        dlg_h = 416
+        dlg_h = 417
         m = 10
         gap = 8
         content_w = dlg_w - m * 2
         field_w = content_w - 100 - gap
         dialog_model.PositionX = 100
-        dialog_model.PositionY = 80
+        dialog_model.PositionY = 60
         dialog_model.Width = dlg_w
         dialog_model.Height = dlg_h
         dialog_model.Title = "Сбор данных о файлах и папках"
@@ -2105,7 +2635,7 @@ def create_file_analyzer_dialog():
         y = m
         tab_w = (content_w - gap) // 2
         _add_button(dialog_model, "TabMainBtn", "Основное", m, y, tab_w, 22)
-        _add_button(dialog_model, "TabDlpBtn", "DLP", m + tab_w + gap, y, tab_w, 22)
+        _add_button(dialog_model, "TabDlpBtn", "Поиск", m + tab_w + gap, y, tab_w, 22)
         y += 28
         body_top = y
 
@@ -2128,7 +2658,8 @@ def create_file_analyzer_dialog():
         _add_label(
             dialog_model,
             "LabelSheet",
-            "Имя листа (пусто = активный; если есть — спросим действие):",
+            "Имя листа (пусто = %s; если есть — спросим действие):"
+            % _DEFAULT_RESULT_SHEET_NAME,
             m,
             y,
             content_w,
@@ -2215,22 +2746,22 @@ def create_file_analyzer_dialog():
             "CountPagesCheck",
         )
 
-        # --- вкладка DLP ---
+        # --- вкладка Поиск ---
         y = body_top
         _add_label(
             dialog_model,
             "DlpHintLabel",
-            "Мини-DLP: совпадение regex по имени/пути — подсветка строки и лист лога (*_DLP).",
+            "Поиск: regex по имени/пути и содержимому — подсветка и лист лога (*_Поиск: Паттерн|Источник|…).",
             m,
             y,
             content_w,
-            28,
+            24,
         )
         try:
             dialog_model.getByName("DlpHintLabel").MultiLine = True
         except Exception:
             pass
-        y += 34
+        y += 28
         _add_checkbox(
             dialog_model,
             "DlpNamesCheck",
@@ -2238,10 +2769,10 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            18,
-            normalize_count_pages(saved.get("dlp_analyze_names", _DEFAULT_DLP_ANALYZE_NAMES)),
+            16,
+            _DEFAULT_DLP_ANALYZE_NAMES,
         )
-        y += 24
+        y += 20
         _add_label(
             dialog_model,
             "DlpNamesDictLabel",
@@ -2249,16 +2780,16 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            14,
+            12,
         )
-        y += 18
+        y += 14
         _add_edit(
             dialog_model,
             "DlpNamesDictField",
             m,
             y,
             field_w,
-            22,
+            20,
             path_from_user_input(saved.get("dlp_names_dict_path", "")),
         )
         _add_button(
@@ -2268,37 +2799,72 @@ def create_file_analyzer_dialog():
             m + field_w + gap,
             y - 2,
             100,
-            26,
+            24,
         )
-        y += 36
+        y += 28
         _add_checkbox(
             dialog_model,
             "DlpContentCheck",
-            "Анализ содержимого файлов (пока недоступно)",
+            "Анализ содержимого файлов (текст + Word/AText + Excel/ACell; UNO медленнее)",
             m,
             y,
             content_w,
-            18,
-            False,
+            16,
+            _DEFAULT_DLP_ANALYZE_CONTENT,
         )
-        y += 24
+        y += 18
+        _add_checkbox(
+            dialog_model,
+            "DlpContentTextCheck",
+            "Текстовые файлы (txt/csv/json/xml…, каскад кодировок)",
+            m + 12,
+            y,
+            content_w - 12,
+            16,
+            normalize_count_pages(saved.get("dlp_content_text", _DEFAULT_DLP_CONTENT_TEXT)),
+        )
+        y += 16
+        _add_checkbox(
+            dialog_model,
+            "DlpContentWordCheck",
+            "Файлы Word / AText (doc/docx/odt/dot…, через UNO)",
+            m + 12,
+            y,
+            content_w - 12,
+            16,
+            normalize_count_pages(saved.get("dlp_content_word", _DEFAULT_DLP_CONTENT_WORD)),
+        )
+        y += 16
+        _add_checkbox(
+            dialog_model,
+            "DlpContentExcelCheck",
+            "Файлы Excel / ACell (xls/xlsx/ods/xlt…, через UNO)",
+            m + 12,
+            y,
+            content_w - 12,
+            16,
+            normalize_count_pages(
+                saved.get("dlp_content_excel", _DEFAULT_DLP_CONTENT_EXCEL)
+            ),
+        )
+        y += 20
         _add_label(
             dialog_model,
             "DlpContentDictLabel",
-            "Словарь содержимого (JSON/CSV) — пока недоступно:",
+            "Словарь содержимого (JSON/CSV: имя;паттерн):",
             m,
             y,
             content_w,
-            14,
+            12,
         )
-        y += 18
+        y += 14
         _add_edit(
             dialog_model,
             "DlpContentDictField",
             m,
             y,
             field_w,
-            22,
+            20,
             path_from_user_input(saved.get("dlp_content_dict_path", "")),
         )
         _add_button(
@@ -2308,7 +2874,7 @@ def create_file_analyzer_dialog():
             m + field_w + gap,
             y - 2,
             100,
-            26,
+            24,
         )
 
         dlp_names = (
@@ -2318,12 +2884,9 @@ def create_file_analyzer_dialog():
             "DlpNamesDictField",
             "DlpNamesBrowseButton",
             "DlpContentCheck",
-            "DlpContentDictLabel",
-            "DlpContentDictField",
-            "DlpContentBrowseButton",
-        )
-        dlp_disabled = (
-            "DlpContentCheck",
+            "DlpContentTextCheck",
+            "DlpContentWordCheck",
+            "DlpContentExcelCheck",
             "DlpContentDictLabel",
             "DlpContentDictField",
             "DlpContentBrowseButton",
@@ -2359,6 +2922,9 @@ def create_file_analyzer_dialog():
                 self.dlp_names_check = None
                 self.dlp_names_dict_field = None
                 self.dlp_content_check = None
+                self.dlp_content_text_check = None
+                self.dlp_content_word_check = None
+                self.dlp_content_excel_check = None
                 self.dlp_content_dict_field = None
                 self.tab = "main"
                 self.main_names = main_names
@@ -2372,8 +2938,6 @@ def create_file_analyzer_dialog():
                     _set_control_visible(self.dialog, dialog_model, name, show_main)
                 for name in self.dlp_names_list:
                     _set_control_visible(self.dialog, dialog_model, name, show_dlp)
-                for name in dlp_disabled:
-                    _set_control_enabled(self.dialog, dialog_model, name, False)
 
             def actionPerformed(self, event):
                 button_name = event.Source.Model.Name
@@ -2399,6 +2963,13 @@ def create_file_analyzer_dialog():
                         _control_set_text(self.dlp_names_dict_field, selected)
                     return
 
+                if button_name == "DlpContentBrowseButton":
+                    current = _control_get_text(self.dlp_content_dict_field)
+                    selected = show_dlp_dict_file_picker(current if current else None)
+                    if selected:
+                        _control_set_text(self.dlp_content_dict_field, selected)
+                    return
+
                 if button_name == "ClearButton":
                     _control_set_text(self.path_field, "")
                     _control_set_text(self.sheet_field, "")
@@ -2422,7 +2993,18 @@ def create_file_analyzer_dialog():
                         self.dlp_names_dict_field,
                         _fl_lib.default_dlp_name_dict_path(_settings_dir()),
                     )
-                    _checkbox_set_state(self.dlp_content_check, False)
+                    _checkbox_set_state(
+                        self.dlp_content_check, _DEFAULT_DLP_ANALYZE_CONTENT
+                    )
+                    _checkbox_set_state(
+                        self.dlp_content_text_check, _DEFAULT_DLP_CONTENT_TEXT
+                    )
+                    _checkbox_set_state(
+                        self.dlp_content_word_check, _DEFAULT_DLP_CONTENT_WORD
+                    )
+                    _checkbox_set_state(
+                        self.dlp_content_excel_check, _DEFAULT_DLP_CONTENT_EXCEL
+                    )
                     _control_set_text(
                         self.dlp_content_dict_field,
                         _fl_lib.default_dlp_content_dict_path(_settings_dir()),
@@ -2450,7 +3032,16 @@ def create_file_analyzer_dialog():
                         dlp_names_dict_path = path_from_user_input(
                             _control_get_text(self.dlp_names_dict_field)
                         )
-                        dlp_analyze_content = False
+                        dlp_analyze_content = _checkbox_get_state(self.dlp_content_check)
+                        dlp_content_text = _checkbox_get_state(
+                            self.dlp_content_text_check
+                        )
+                        dlp_content_word = _checkbox_get_state(
+                            self.dlp_content_word_check
+                        )
+                        dlp_content_excel = _checkbox_get_state(
+                            self.dlp_content_excel_check
+                        )
                         dlp_content_dict_path = path_from_user_input(
                             _control_get_text(self.dlp_content_dict_field)
                         )
@@ -2479,6 +3070,18 @@ def create_file_analyzer_dialog():
                             dlp_names_dict_path = _fl_lib.ensure_default_dlp_name_dict(
                                 _settings_dir()
                             )
+                        if dlp_analyze_content and dlp_content_dict_path == "":
+                            dlp_content_dict_path = _fl_lib.ensure_default_dlp_content_dict(
+                                _settings_dir()
+                            )
+                        if dlp_analyze_content and not (
+                            dlp_content_text or dlp_content_word or dlp_content_excel
+                        ):
+                            show_message(
+                                "Для поиска по содержимому отметьте хотя бы один тип: "
+                                "текстовые / Word·AText / Excel·ACell."
+                            )
+                            return
 
                         save_dialog_settings(
                             {
@@ -2489,10 +3092,11 @@ def create_file_analyzer_dialog():
                                 "size_unit": size_unit,
                                 "count_pages": count_pages,
                                 "sort_mode": sort_mode,
-                                "dlp_analyze_names": dlp_analyze_names,
                                 "dlp_names_dict_path": dlp_names_dict_path,
-                                "dlp_analyze_content": dlp_analyze_content,
                                 "dlp_content_dict_path": dlp_content_dict_path,
+                                "dlp_content_text": dlp_content_text,
+                                "dlp_content_word": dlp_content_word,
+                                "dlp_content_excel": dlp_content_excel,
                             }
                         )
                         self.result = (
@@ -2508,6 +3112,9 @@ def create_file_analyzer_dialog():
                             dlp_names_dict_path,
                             dlp_analyze_content,
                             dlp_content_dict_path,
+                            dlp_content_text,
+                            dlp_content_word,
+                            dlp_content_excel,
                         )
                         self.dialog.endExecute()
                     except Exception as e:
@@ -2517,6 +3124,9 @@ def create_file_analyzer_dialog():
                 if button_name == "CancelButton":
                     self.result = (
                         "cancel",
+                        None,
+                        None,
+                        None,
                         None,
                         None,
                         None,
@@ -2542,6 +3152,9 @@ def create_file_analyzer_dialog():
         handler.dlp_names_check = dialog.getControl("DlpNamesCheck")
         handler.dlp_names_dict_field = dialog.getControl("DlpNamesDictField")
         handler.dlp_content_check = dialog.getControl("DlpContentCheck")
+        handler.dlp_content_text_check = dialog.getControl("DlpContentTextCheck")
+        handler.dlp_content_word_check = dialog.getControl("DlpContentWordCheck")
+        handler.dlp_content_excel_check = dialog.getControl("DlpContentExcelCheck")
         handler.dlp_content_dict_field = dialog.getControl("DlpContentDictField")
         _set_combo_items(
             handler.size_unit_combo,
@@ -2559,6 +3172,7 @@ def create_file_analyzer_dialog():
             "TabDlpBtn",
             "BrowseButton",
             "DlpNamesBrowseButton",
+            "DlpContentBrowseButton",
             "ClearButton",
             "RunButton",
             "CancelButton",
@@ -2595,10 +3209,13 @@ def analyze_files_dialog(*args):
                 dlp_names_dict_path,
                 dlp_analyze_content,
                 dlp_content_dict_path,
+                dlp_content_text,
+                dlp_content_word,
+                dlp_content_excel,
             ) = result
-            sheet_arg = sheet_name if sheet_name else None
+            sheet_arg = sheet_name if sheet_name else _DEFAULT_RESULT_SHEET_NAME
             print(
-                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s, сортировка=%s, dlp_names=%s"
+                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s, сортировка=%s, поиск_имён=%s, поиск_содержимого=%s (t=%s/w=%s/e=%s)"
                 % (
                     path,
                     sheet_arg,
@@ -2608,6 +3225,10 @@ def analyze_files_dialog(*args):
                     count_pages,
                     sort_mode,
                     dlp_analyze_names,
+                    dlp_analyze_content,
+                    dlp_content_text,
+                    dlp_content_word,
+                    dlp_content_excel,
                 )
             )
             success = analyze_files(
@@ -2622,13 +3243,29 @@ def analyze_files_dialog(*args):
                 dlp_names_dict_path=dlp_names_dict_path,
                 dlp_analyze_content=dlp_analyze_content,
                 dlp_content_dict_path=dlp_content_dict_path,
+                dlp_content_text=dlp_content_text,
+                dlp_content_word=dlp_content_word,
+                dlp_content_excel=dlp_content_excel,
             )
             if success:
                 mask_note = ""
                 if mask_text:
                     mask_note = "\nМаски: %s" % mask_text
                 pages_note = "\nСтраницы: да (UNO)" if count_pages else ""
-                dlp_note = "\nDLP имён: да" if dlp_analyze_names else ""
+                dlp_note = ""
+                if dlp_analyze_names:
+                    dlp_note += "\nПоиск имён: да"
+                if dlp_analyze_content:
+                    scopes = []
+                    if dlp_content_text:
+                        scopes.append(u"текст")
+                    if dlp_content_word:
+                        scopes.append(u"Word/AText")
+                    if dlp_content_excel:
+                        scopes.append(u"Excel/ACell")
+                    dlp_note += "\nПоиск содержимого: да (%s)" % (
+                        u", ".join(scopes) if scopes else u"—"
+                    )
                 show_message(
                     "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s\nСортировка: %s%s%s%s"
                     % (
@@ -2644,7 +3281,7 @@ def analyze_files_dialog(*args):
             else:
                 show_message(
                     "Сбор не выполнен.\nПроверьте путь, маски и имя листа: %s"
-                    % (sheet_arg or "(активный)")
+                    % (sheet_arg or _DEFAULT_RESULT_SHEET_NAME)
                 )
         elif result and result[0] == "cancel":
             print("Операция отменена пользователем")

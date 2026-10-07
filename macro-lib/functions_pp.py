@@ -1,4 +1,4 @@
-MACRO_VERSION = "3.10.731"
+MACRO_VERSION = "3.10.739"
 # region Справка — namespace и хелперы (свернуть: ▼ слева или Ctrl+Shift+[)
 """
 functions_pp.py — пользовательские функции постобработки (диапазон / строка).
