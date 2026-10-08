@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние file_list_macro (AlterOffice 2026: модульный код .py-скрипта вырезается)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.739"
+MACRO_VERSION = "3.10.740"
 DEFAULT_MAX_DEPTH = 1
 DEFAULT_SIZE_UNIT = "b"
 DEFAULT_COUNT_PAGES = False
+DEFAULT_COUNT_SHA256 = False
+# Макс. размер файла для SHA256 (Гб); больше — пропуск.
+DEFAULT_SHA256_MAX_GB = 1.0
 DEFAULT_SORT_MODE = "tree"
 # Имя листа результата, если в диалоге поле пустое (не активный лист).
 DEFAULT_RESULT_SHEET_NAME = "file_list_result"
@@ -61,6 +64,11 @@ PAGE_COUNT_EXTS = frozenset(
     )
 )
 RESULT_HEADER_PAGES = "Страниц"
+RESULT_HEADER_SHA256 = "SHA256"
+RESULT_HEADER_DUP = "Дубль"
+RESULT_HEADER_DUP_N = "№ дубля"
+# Чтение файла для SHA256 порциями.
+SHA256_READ_CHUNK = 1024 * 1024
 # Windows: владелец NTFS (часто совпадает с последним редактором в доменных шарах).
 RESULT_HEADER_OWNER = "Owner"
 RESULT_HEADER_BASE = [

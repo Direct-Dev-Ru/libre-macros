@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.739"
+MACRO_VERSION = "3.10.740"
 import json
 import os
 import sys
@@ -15,7 +15,7 @@ from com.sun.star.awt.MessageBoxResults import CANCEL, NO, YES
 from com.sun.star.awt.MessageBoxType import MESSAGEBOX, QUERYBOX
 
 # Константы в pythonpath: AlterOffice 2026 вырезает модульные присваивания в .py-скрипте.
-from libre_macros_file_list_cfg import COLUMN_WIDTH_AUTOFILTER_PAD as _COLUMN_WIDTH_AUTOFILTER_PAD, DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_DLP_ANALYZE_CONTENT as _DEFAULT_DLP_ANALYZE_CONTENT, DEFAULT_DLP_ANALYZE_NAMES as _DEFAULT_DLP_ANALYZE_NAMES, DEFAULT_DLP_CONTENT_EXCEL as _DEFAULT_DLP_CONTENT_EXCEL, DEFAULT_DLP_CONTENT_TEXT as _DEFAULT_DLP_CONTENT_TEXT, DEFAULT_DLP_CONTENT_WORD as _DEFAULT_DLP_CONTENT_WORD, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_RESULT_SHEET_NAME as _DEFAULT_RESULT_SHEET_NAME, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, DLP_CONTENT_MAX_CHARS as _DLP_CONTENT_MAX_CHARS, DLP_LOG_PATTERN_HEADER as _DLP_LOG_PATTERN_HEADER, DLP_LOG_SOURCE_HEADER as _DLP_LOG_SOURCE_HEADER, DLP_SOURCE_CONTENT as _DLP_SOURCE_CONTENT, DLP_SOURCE_NAME as _DLP_SOURCE_NAME, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_OWNER as _RESULT_HEADER_OWNER, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
+from libre_macros_file_list_cfg import COLUMN_WIDTH_AUTOFILTER_PAD as _COLUMN_WIDTH_AUTOFILTER_PAD, DEFAULT_COUNT_PAGES as _DEFAULT_COUNT_PAGES, DEFAULT_DLP_ANALYZE_CONTENT as _DEFAULT_DLP_ANALYZE_CONTENT, DEFAULT_DLP_ANALYZE_NAMES as _DEFAULT_DLP_ANALYZE_NAMES, DEFAULT_DLP_CONTENT_EXCEL as _DEFAULT_DLP_CONTENT_EXCEL, DEFAULT_DLP_CONTENT_TEXT as _DEFAULT_DLP_CONTENT_TEXT, DEFAULT_DLP_CONTENT_WORD as _DEFAULT_DLP_CONTENT_WORD, DEFAULT_COUNT_SHA256 as _DEFAULT_COUNT_SHA256, DEFAULT_MAX_DEPTH as _DEFAULT_MAX_DEPTH, DEFAULT_RESULT_SHEET_NAME as _DEFAULT_RESULT_SHEET_NAME, DEFAULT_SHA256_MAX_GB as _DEFAULT_SHA256_MAX_GB, DEFAULT_SIZE_UNIT as _DEFAULT_SIZE_UNIT, DEFAULT_SORT_MODE as _DEFAULT_SORT_MODE, DEPTH_INDENT as _DEPTH_INDENT, DLP_CONTENT_MAX_CHARS as _DLP_CONTENT_MAX_CHARS, DLP_LOG_PATTERN_HEADER as _DLP_LOG_PATTERN_HEADER, DLP_LOG_SOURCE_HEADER as _DLP_LOG_SOURCE_HEADER, DLP_SOURCE_CONTENT as _DLP_SOURCE_CONTENT, DLP_SOURCE_NAME as _DLP_SOURCE_NAME, PAGE_COUNT_EXTS as _PAGE_COUNT_EXTS, RESULT_HEADER_BASE as _RESULT_HEADER_BASE, RESULT_HEADER_OWNER as _RESULT_HEADER_OWNER, RESULT_HEADER_DUP as _RESULT_HEADER_DUP, RESULT_HEADER_DUP_N as _RESULT_HEADER_DUP_N, RESULT_HEADER_PAGES as _RESULT_HEADER_PAGES, RESULT_HEADER_SHA256 as _RESULT_HEADER_SHA256, RESULT_HEADER_STYLE as _RESULT_HEADER_STYLE, SETTINGS_APP_NAME as _SETTINGS_APP_NAME, SETTINGS_MODULE_NAME as _SETTINGS_MODULE_NAME, SIZE_UNIT_DIVISOR as _SIZE_UNIT_DIVISOR, SIZE_UNIT_OPTIONS as _SIZE_UNIT_OPTIONS, SORT_PRESETS as _SORT_PRESETS, UI_YIELD_EVERY as FILE_LIST_UI_YIELD_EVERY, WRITE_CHUNK as FILE_LIST_WRITE_CHUNK
 import libre_macros_file_list_cfg as _fl_state
 import libre_macros_file_list_lib as _fl_lib
 
@@ -247,6 +247,8 @@ def _default_dialog_settings():
         "masks": "",
         "size_unit": _DEFAULT_SIZE_UNIT,
         "count_pages": _DEFAULT_COUNT_PAGES,
+        "count_sha256": _DEFAULT_COUNT_SHA256,
+        "sha256_max_gb": _DEFAULT_SHA256_MAX_GB,
         "sort_mode": _DEFAULT_SORT_MODE,
         # dlp_analyze_names / dlp_analyze_content — не сохраняются (всегда default).
         "dlp_names_dict_path": _fl_lib.default_dlp_name_dict_path(settings_dir),
@@ -264,6 +266,16 @@ def normalize_count_pages(value):
         return bool(int(value))
     text = str(value or "").strip().lower()
     return text in ("1", "true", "yes", "y", "да", "on")
+
+
+def normalize_sha256_max_gb(value):
+    try:
+        gb = float(value)
+    except (TypeError, ValueError):
+        gb = float(_DEFAULT_SHA256_MAX_GB)
+    if gb <= 0:
+        gb = float(_DEFAULT_SHA256_MAX_GB)
+    return gb
 
 
 def normalize_sort_mode(value):
@@ -375,6 +387,12 @@ def load_dialog_settings():
         settings["max_depth"] = _DEFAULT_MAX_DEPTH
     settings["size_unit"] = normalize_size_unit(settings.get("size_unit"))
     settings["count_pages"] = normalize_count_pages(settings.get("count_pages"))
+    settings["count_sha256"] = normalize_count_pages(
+        settings.get("count_sha256", _DEFAULT_COUNT_SHA256)
+    )
+    settings["sha256_max_gb"] = normalize_sha256_max_gb(
+        settings.get("sha256_max_gb", _DEFAULT_SHA256_MAX_GB)
+    )
     settings["sort_mode"] = normalize_sort_mode(settings.get("sort_mode"))
     # Галочки «искать в именах / в содержимом» не восстанавливаем из файла.
     settings["dlp_analyze_names"] = _DEFAULT_DLP_ANALYZE_NAMES
@@ -419,6 +437,12 @@ def save_dialog_settings(settings):
         payload["max_depth"] = int(payload.get("max_depth") or _DEFAULT_MAX_DEPTH)
         payload["size_unit"] = normalize_size_unit(payload.get("size_unit"))
         payload["count_pages"] = normalize_count_pages(payload.get("count_pages"))
+        payload["count_sha256"] = normalize_count_pages(
+            payload.get("count_sha256", _DEFAULT_COUNT_SHA256)
+        )
+        payload["sha256_max_gb"] = normalize_sha256_max_gb(
+            payload.get("sha256_max_gb", _DEFAULT_SHA256_MAX_GB)
+        )
         payload["sort_mode"] = normalize_sort_mode(payload.get("sort_mode"))
         # Не сохраняем состояние «искать в именах / в содержимом».
         payload.pop("dlp_analyze_names", None)
@@ -2361,7 +2385,88 @@ def apply_dlp_scans( doc, results_sheet, entries, headers, data_rows, do_names=F
     return log_count, len(highlight_rows)
 
 
-def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE, dlp_analyze_names=_DEFAULT_DLP_ANALYZE_NAMES, dlp_names_dict_path="", dlp_analyze_content=_DEFAULT_DLP_ANALYZE_CONTENT, dlp_content_dict_path="", dlp_content_text=_DEFAULT_DLP_CONTENT_TEXT, dlp_content_word=_DEFAULT_DLP_CONTENT_WORD, dlp_content_excel=_DEFAULT_DLP_CONTENT_EXCEL):
+def apply_sha256_dup_columns( doc, results_sheet, entries, base_ncols, data_rows_count, max_gb=None, show_progress=True):
+    """
+    После списка и поиска: SHA256 файлов → колонки SHA256 | Дубль | № дубля.
+    Дубль=«Да» и номер 1..N только если одна и та же сумма у нескольких строк.
+    Возвращает новый ncols.
+    """
+    if results_sheet is None or not entries:
+        return int(base_ncols or 0)
+    max_bytes = _fl_lib.sha256_max_bytes_from_gb(
+        normalize_sha256_max_gb(max_gb if max_gb is not None else _DEFAULT_SHA256_MAX_GB)
+    )
+    col_sha = int(base_ncols)
+    col_dup = col_sha + 1
+    col_n = col_sha + 2
+    new_ncols = col_n + 1
+
+    def _progress(done, total, name):
+        if not show_progress:
+            return
+        file_list_ui_status_set(
+            done,
+            u"SHA256 %d / %d: %s" % (done, total, _truncate_status_text(name)),
+        )
+
+    if show_progress:
+        file_list_ui_status_start(u"SHA256 файлов", len(entries))
+    try:
+        digests, hash_map = _fl_lib.collect_entry_sha256_digests(
+            entries, max_bytes=max_bytes, progress_cb=_progress
+        )
+    finally:
+        if show_progress:
+            file_list_ui_status_finish()
+    marks = _fl_lib.dup_marks_from_sha256_map(digests, hash_map)
+
+    try:
+        results_sheet.getCellByPosition(col_sha, 0).String = _RESULT_HEADER_SHA256
+        results_sheet.getCellByPosition(col_dup, 0).String = _RESULT_HEADER_DUP
+        results_sheet.getCellByPosition(col_n, 0).String = _RESULT_HEADER_DUP_N
+    except Exception as err:
+        print("SHA256 заголовки: %s" % err)
+        return int(base_ncols or 0)
+
+    for idx, dig in enumerate(digests):
+        row = idx + 1
+        try:
+            results_sheet.getCellByPosition(col_sha, row).String = _uno_to_str(dig)
+        except Exception:
+            pass
+        flag, order = marks[idx]
+        try:
+            results_sheet.getCellByPosition(col_dup, row).String = _uno_to_str(flag)
+        except Exception:
+            pass
+        try:
+            cell_n = results_sheet.getCellByPosition(col_n, row)
+            if order is None:
+                cell_n.String = ""
+            else:
+                cell_n.Value = float(order)
+        except Exception:
+            pass
+        file_list_ui_yield(counter=idx + 1)
+
+    _format_header_row(results_sheet, new_ncols)
+    try:
+        columns = results_sheet.getColumns()
+        for col in (col_sha, col_dup, col_n):
+            columns.getByIndex(col).OptimalWidth = True
+    except Exception:
+        pass
+    _apply_result_menu_autofilter(doc, results_sheet, new_ncols, data_rows_count)
+    dup_groups = sum(1 for _h, idxs in hash_map.items() if len(idxs) > 1)
+    hashed = sum(1 for d in digests if d)
+    print(
+        "SHA256: файлов=%s, с суммой=%s, групп дублей=%s, лимит=%s байт"
+        % (len(entries), hashed, dup_groups, max_bytes)
+    )
+    return new_ncols
+
+
+def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE, dlp_analyze_names=_DEFAULT_DLP_ANALYZE_NAMES, dlp_names_dict_path="", dlp_analyze_content=_DEFAULT_DLP_ANALYZE_CONTENT, dlp_content_dict_path="", dlp_content_text=_DEFAULT_DLP_CONTENT_TEXT, dlp_content_word=_DEFAULT_DLP_CONTENT_WORD, dlp_content_excel=_DEFAULT_DLP_CONTENT_EXCEL, count_sha256=_DEFAULT_COUNT_SHA256, sha256_max_gb=_DEFAULT_SHA256_MAX_GB):
     """
     Собирает данные о файлах и папках и выводит на лист.
 
@@ -2372,6 +2477,8 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
     sort_mode — пресет сортировки (SORT_PRESETS).
     dlp_analyze_names — поиск по именам/путям (словарь regex).
     dlp_analyze_content — поиск по содержимому (текст / Word·AText / Excel·ACell).
+    count_sha256 — после результата/поиска посчитать SHA256 и отметить дубли.
+    sha256_max_gb — не читать файлы крупнее этого размера (Гб).
     """
     try:
         root = path_from_user_input(path)
@@ -2395,6 +2502,8 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
         want_text = normalize_count_pages(dlp_content_text)
         want_word = normalize_count_pages(dlp_content_word)
         want_excel = normalize_count_pages(dlp_content_excel)
+        do_sha256 = normalize_count_pages(count_sha256)
+        sha_max_gb = normalize_sha256_max_gb(sha256_max_gb)
         include_owner = _fl_lib.is_windows_platform()
 
         entries, root = collect_path_entries(
@@ -2469,9 +2578,20 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
                 show_progress=True,
             )
 
+        if do_sha256:
+            ncols = apply_sha256_dup_columns(
+                doc,
+                results_sheet,
+                entries,
+                ncols,
+                written,
+                max_gb=sha_max_gb,
+                show_progress=True,
+            )
+
         _focus_sheet_top_left(doc, results_sheet)
         print(
-            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s, сортировка=%s, owner=%s, поиск=%s/%s, content=%s)"
+            "Записано %s элементов на лист «%s» (режим: %s, страницы=%s, сортировка=%s, owner=%s, поиск=%s/%s, content=%s, sha256=%s)"
             % (
                 written,
                 results_sheet.Name,
@@ -2482,6 +2602,7 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
                 dlp_hits,
                 dlp_rows,
                 do_dlp_content,
+                do_sha256,
             )
         )
         return True
@@ -2621,13 +2742,13 @@ def create_file_analyzer_dialog():
         )
 
         dlg_w = 540
-        dlg_h = 417
+        dlg_h = 458
         m = 10
         gap = 8
         content_w = dlg_w - m * 2
         field_w = content_w - 100 - gap
         dialog_model.PositionX = 100
-        dialog_model.PositionY = 60
+        dialog_model.PositionY = 50
         dialog_model.Width = dlg_w
         dialog_model.Height = dlg_h
         dialog_model.Title = "Сбор данных о файлах и папках"
@@ -2725,8 +2846,38 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            18,
+            16,
             normalize_count_pages(saved.get("count_pages", _DEFAULT_COUNT_PAGES)),
+        )
+        y += 20
+        _add_checkbox(
+            dialog_model,
+            "CountSha256Check",
+            "Считать SHA256 файлов (после списка и поиска; дубли по сумме)",
+            m,
+            y,
+            content_w,
+            16,
+            normalize_count_pages(saved.get("count_sha256", _DEFAULT_COUNT_SHA256)),
+        )
+        y += 18
+        _add_label(
+            dialog_model,
+            "Sha256MaxLabel",
+            "Макс. размер файла для SHA256 (Гб):",
+            m,
+            y,
+            220,
+            14,
+        )
+        _add_edit(
+            dialog_model,
+            "Sha256MaxField",
+            m + 230,
+            y - 2,
+            80,
+            20,
+            str(normalize_sha256_max_gb(saved.get("sha256_max_gb", _DEFAULT_SHA256_MAX_GB))),
         )
 
         main_names = (
@@ -2744,6 +2895,9 @@ def create_file_analyzer_dialog():
             "LabelSort",
             "SortCombo",
             "CountPagesCheck",
+            "CountSha256Check",
+            "Sha256MaxLabel",
+            "Sha256MaxField",
         )
 
         # --- вкладка Поиск ---
@@ -2919,6 +3073,8 @@ def create_file_analyzer_dialog():
                 self.size_unit_combo = None
                 self.sort_combo = None
                 self.count_pages_check = None
+                self.count_sha256_check = None
+                self.sha256_max_field = None
                 self.dlp_names_check = None
                 self.dlp_names_dict_field = None
                 self.dlp_content_check = None
@@ -2988,6 +3144,10 @@ def create_file_analyzer_dialog():
                             sort_mode_label(_DEFAULT_SORT_MODE),
                         )
                     _checkbox_set_state(self.count_pages_check, _DEFAULT_COUNT_PAGES)
+                    _checkbox_set_state(self.count_sha256_check, _DEFAULT_COUNT_SHA256)
+                    _control_set_text(
+                        self.sha256_max_field, str(_DEFAULT_SHA256_MAX_GB)
+                    )
                     _checkbox_set_state(self.dlp_names_check, _DEFAULT_DLP_ANALYZE_NAMES)
                     _control_set_text(
                         self.dlp_names_dict_field,
@@ -3028,6 +3188,12 @@ def create_file_analyzer_dialog():
                             else sort_mode_label(_DEFAULT_SORT_MODE)
                         )
                         count_pages = _checkbox_get_state(self.count_pages_check)
+                        count_sha256 = _checkbox_get_state(self.count_sha256_check)
+                        sha256_max_text = _control_get_text(self.sha256_max_field)
+                        try:
+                            sha256_max_gb = normalize_sha256_max_gb(sha256_max_text)
+                        except Exception:
+                            sha256_max_gb = float(_DEFAULT_SHA256_MAX_GB)
                         dlp_analyze_names = _checkbox_get_state(self.dlp_names_check)
                         dlp_names_dict_path = path_from_user_input(
                             _control_get_text(self.dlp_names_dict_field)
@@ -3091,6 +3257,8 @@ def create_file_analyzer_dialog():
                                 "masks": mask_text,
                                 "size_unit": size_unit,
                                 "count_pages": count_pages,
+                                "count_sha256": count_sha256,
+                                "sha256_max_gb": sha256_max_gb,
                                 "sort_mode": sort_mode,
                                 "dlp_names_dict_path": dlp_names_dict_path,
                                 "dlp_content_dict_path": dlp_content_dict_path,
@@ -3115,6 +3283,8 @@ def create_file_analyzer_dialog():
                             dlp_content_text,
                             dlp_content_word,
                             dlp_content_excel,
+                            count_sha256,
+                            sha256_max_gb,
                         )
                         self.dialog.endExecute()
                     except Exception as e:
@@ -3124,6 +3294,8 @@ def create_file_analyzer_dialog():
                 if button_name == "CancelButton":
                     self.result = (
                         "cancel",
+                        None,
+                        None,
                         None,
                         None,
                         None,
@@ -3149,6 +3321,8 @@ def create_file_analyzer_dialog():
         handler.size_unit_combo = dialog.getControl("SizeUnitCombo")
         handler.sort_combo = dialog.getControl("SortCombo")
         handler.count_pages_check = dialog.getControl("CountPagesCheck")
+        handler.count_sha256_check = dialog.getControl("CountSha256Check")
+        handler.sha256_max_field = dialog.getControl("Sha256MaxField")
         handler.dlp_names_check = dialog.getControl("DlpNamesCheck")
         handler.dlp_names_dict_field = dialog.getControl("DlpNamesDictField")
         handler.dlp_content_check = dialog.getControl("DlpContentCheck")
@@ -3212,10 +3386,12 @@ def analyze_files_dialog(*args):
                 dlp_content_text,
                 dlp_content_word,
                 dlp_content_excel,
+                count_sha256,
+                sha256_max_gb,
             ) = result
             sheet_arg = sheet_name if sheet_name else _DEFAULT_RESULT_SHEET_NAME
             print(
-                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s, сортировка=%s, поиск_имён=%s, поиск_содержимого=%s (t=%s/w=%s/e=%s)"
+                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s, сортировка=%s, поиск_имён=%s, поиск_содержимого=%s (t=%s/w=%s/e=%s), sha256=%s, sha256_max_gb=%s"
                 % (
                     path,
                     sheet_arg,
@@ -3229,6 +3405,8 @@ def analyze_files_dialog(*args):
                     dlp_content_text,
                     dlp_content_word,
                     dlp_content_excel,
+                    count_sha256,
+                    sha256_max_gb,
                 )
             )
             success = analyze_files(
@@ -3246,12 +3424,17 @@ def analyze_files_dialog(*args):
                 dlp_content_text=dlp_content_text,
                 dlp_content_word=dlp_content_word,
                 dlp_content_excel=dlp_content_excel,
+                count_sha256=count_sha256,
+                sha256_max_gb=sha256_max_gb,
             )
             if success:
                 mask_note = ""
                 if mask_text:
                     mask_note = "\nМаски: %s" % mask_text
                 pages_note = "\nСтраницы: да (UNO)" if count_pages else ""
+                sha_note = ""
+                if count_sha256:
+                    sha_note = "\nSHA256: да (макс. %s Гб)" % sha256_max_gb
                 dlp_note = ""
                 if dlp_analyze_names:
                     dlp_note += "\nПоиск имён: да"
@@ -3267,7 +3450,7 @@ def analyze_files_dialog(*args):
                         u", ".join(scopes) if scopes else u"—"
                     )
                 show_message(
-                    "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s\nСортировка: %s%s%s%s"
+                    "Сбор завершён.\nПуть: %s\nГлубина: %s\nРазмер: %s\nСортировка: %s%s%s%s%s"
                     % (
                         normalize_path(path),
                         max_depth,
@@ -3275,6 +3458,7 @@ def analyze_files_dialog(*args):
                         sort_mode_label(sort_mode),
                         mask_note,
                         pages_note,
+                        sha_note,
                         dlp_note,
                     )
                 )

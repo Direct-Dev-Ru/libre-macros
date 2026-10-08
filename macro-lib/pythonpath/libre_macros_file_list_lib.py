@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Вспомогательная логика file_list_macro: Owner (Windows) и поиск по именам/содержимому."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.739"
+MACRO_VERSION = "3.10.740"
 import csv
+import hashlib
 import json
 import os
 import re
@@ -618,3 +619,107 @@ def highlight_sheet_rows(sheet, row_indices, ncols, color=None):
             except Exception:
                 pass
     return done
+
+
+def sha256_max_bytes_from_gb(max_gb):
+    """Гб (float/str) → лимит в байтах; по умолчанию 1 Гб."""
+    try:
+        gb = float(max_gb)
+    except (TypeError, ValueError):
+        gb = float(getattr(_cfg, "DEFAULT_SHA256_MAX_GB", 1.0) or 1.0)
+    if gb <= 0:
+        gb = float(getattr(_cfg, "DEFAULT_SHA256_MAX_GB", 1.0) or 1.0)
+    return int(gb * (1024 ** 3))
+
+
+def file_sha256_hex(path, max_bytes=None, chunk_size=None):
+    """
+    SHA-256 файла побайтно (чанками).
+    Возвращает hex-строку или u'' (папка / слишком большой / ошибка).
+    """
+    full = _u(path)
+    if not full or not os.path.isfile(full):
+        return u""
+    if max_bytes is None:
+        max_bytes = sha256_max_bytes_from_gb(
+            getattr(_cfg, "DEFAULT_SHA256_MAX_GB", 1.0)
+        )
+    if chunk_size is None:
+        chunk_size = int(getattr(_cfg, "SHA256_READ_CHUNK", 1024 * 1024))
+    try:
+        size = int(os.path.getsize(full))
+    except Exception:
+        return u""
+    if size > int(max_bytes):
+        return u""
+    digest = hashlib.sha256()
+    try:
+        with open(full, "rb") as handle:
+            while True:
+                block = handle.read(int(chunk_size))
+                if not block:
+                    break
+                digest.update(block)
+    except Exception as err:
+        print("SHA256 «%s»: %s" % (full, err))
+        return u""
+    return _u(digest.hexdigest())
+
+
+def collect_entry_sha256_digests(entries, max_bytes=None, progress_cb=None):
+    """
+    Для каждой записи: hex SHA256 или ''.
+    progress_cb(done, total, name) — опционально.
+    Возвращает (digests list, hash_to_entry_indices dict).
+    """
+    if max_bytes is None:
+        max_bytes = sha256_max_bytes_from_gb(
+            getattr(_cfg, "DEFAULT_SHA256_MAX_GB", 1.0)
+        )
+    digests = []
+    hash_map = {}
+    total = len(entries or [])
+    for idx, entry in enumerate(entries or []):
+        dig = u""
+        if entry and entry.get("kind") == "файл":
+            dig = file_sha256_hex(entry.get("full_path") or "", max_bytes=max_bytes)
+        digests.append(dig)
+        if dig:
+            bucket = hash_map.get(dig)
+            if bucket is None:
+                hash_map[dig] = [idx]
+            else:
+                bucket.append(idx)
+        if progress_cb is not None:
+            try:
+                progress_cb(
+                    idx + 1,
+                    total,
+                    _u((entry or {}).get("name") or ""),
+                )
+            except Exception:
+                pass
+    return digests, hash_map
+
+
+def dup_marks_from_sha256_map(digests, hash_map):
+    """
+    По digests и карте hash→indices:
+    для каждой строки (is_dup 'Да'|'', dup_n int|None).
+    Первый в группе дублей — 1, второй — 2, …
+    """
+    out = []
+    for idx, dig in enumerate(digests or []):
+        if not dig:
+            out.append((u"", None))
+            continue
+        group = hash_map.get(dig) or []
+        if len(group) < 2:
+            out.append((u"", None))
+            continue
+        try:
+            order = group.index(idx) + 1
+        except ValueError:
+            order = 1
+        out.append((u"Да", order))
+    return out
