@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.743"
+MACRO_VERSION = "3.10.744"
 import json
 import os
 import sys
@@ -1741,9 +1741,7 @@ def _write_dlp_pattern_sheet_help(sheet):
     if not lines:
         return
     help_col, start_row = _fl_lib.dlp_pattern_sheet_help_placement()
-    font_name = _uno_to_str(
-        getattr(_fl_state, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")
-    ) or u"PT Sans"
+    font_name = _uno_to_str(_fl_lib.dlp_pattern_sheet_font_name()) or u"PT Sans"
     for offset, line in enumerate(lines):
         row = int(start_row) + int(offset)
         try:
@@ -2202,10 +2200,7 @@ def _format_header_row_local(sheet, ncols):
     except Exception:
         pass
     try:
-        font_name = _uno_to_str(
-            getattr(_fl_state, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")
-        ) or u"PT Sans"
-        hdr.CharFontName = font_name
+        hdr.CharFontName = _uno_to_str(_fl_lib.dlp_pattern_sheet_font_name()) or u"PT Sans"
     except Exception:
         pass
     try:
@@ -2223,6 +2218,7 @@ def _format_header_row_local(sheet, ncols):
         pass
     # Цвет шрифта — по ячейкам (на диапазоне CharColor иногда не держится).
     col = 0
+    font_name = _uno_to_str(_fl_lib.dlp_pattern_sheet_font_name()) or u"PT Sans"
     while col <= ec:
         try:
             cell = sheet.getCellByPosition(col, 0)
@@ -2231,9 +2227,7 @@ def _format_header_row_local(sheet, ncols):
             except Exception:
                 cell.CharColor = int(fg)
             try:
-                cell.CharFontName = _uno_to_str(
-                    getattr(_fl_state, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")
-                ) or u"PT Sans"
+                cell.CharFontName = font_name
             except Exception:
                 pass
         except Exception:

@@ -325,6 +325,9 @@ def _prepare_entry_source(entry_src):
     for cfg_name, alias in _CFG_ALIASES:
         text = re.sub(r"\b%s\b" % re.escape(alias), "_C.%s" % cfg_name, text)
     text = text.replace("_fl_state.", "_C.")
+    # getattr(_fl_state, …) / голое _fl_state — иначе NameError в standalone
+    text = re.sub(r"\bgetattr\(_fl_state\b", "getattr(_C", text)
+    text = re.sub(r"\b_fl_state\b", "_C", text)
     text = text.replace("_fl_lib.", "")
     # ui imports inside functions — функции уже в бандле; константы из _Ui
     text = text.replace(
@@ -501,10 +504,8 @@ def _content_xml():
 
     notes = [
         "Кнопка «Сбор файлов» открывает диалог обхода каталога.",
-        "Результат пишется на выбранный лист; при DLP — ещё лист «*_DLP».",
-        "«Справка» открывает вшитый ODT (тот же, что в папке docs/).",
-        "На Windows добавляется колонка Owner. Мини-DLP — вкладка DLP в диалоге.",
-        "Пересборка книги: python3 standalone/file_list_macros/build_file_list_ods.py",
+        "Результат пишется на указанный лист (или лист по умолчанию); при поиске — ещё лист «*_Поиск».",
+        "Кнопка «Справка» открывает встроенный документ справки.",                
     ]
     for note in notes:
         rows.append('<table:table-row table:style-name="roData">')
