@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Вспомогательная логика file_list_macro: Owner (Windows) и поиск по именам/содержимому."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.742"
+MACRO_VERSION = "3.10.743"
 import csv
 import hashlib
 import json
@@ -267,6 +267,34 @@ def default_dlp_pattern_sheet_headers():
         u"описание",
     )
     return tuple(_u(h) for h in headers)
+
+
+def dlp_pattern_sheet_font_name():
+    """Шрифт листа паттернов (standalone-safe: через _cfg, не _fl_state)."""
+    name = _u(getattr(_cfg, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")).strip()
+    return name or u"PT Sans"
+
+
+def default_dlp_pattern_sheet_help_lines():
+    raw = getattr(_cfg, "DLP_PATTERN_SHEET_HELP_LINES", None) or ()
+    return tuple(_u(line) for line in raw)
+
+
+def dlp_pattern_sheet_help_placement():
+    """(col_0based, start_row_0based) для справки на листе паттернов."""
+    try:
+        col = int(getattr(_cfg, "DLP_PATTERN_SHEET_HELP_COL", 4))
+    except (TypeError, ValueError):
+        col = 4
+    try:
+        row = int(getattr(_cfg, "DLP_PATTERN_SHEET_HELP_START_ROW", 1))
+    except (TypeError, ValueError):
+        row = 1
+    if col < 0:
+        col = 4
+    if row < 0:
+        row = 1
+    return col, row
 
 
 def patterns_dict_from_sheet_rows(rows):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние file_list_macro (AlterOffice 2026: модульный код .py-скрипта вырезается)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.742"
+MACRO_VERSION = "3.10.743"
 DEFAULT_MAX_DEPTH = 1
 DEFAULT_SIZE_UNIT = "b"
 DEFAULT_COUNT_PAGES = False
@@ -179,6 +179,28 @@ DEFAULT_DLP_CONTENT_PATTERNS = dict(DEFAULT_DLP_NAME_PATTERNS)
 DEFAULT_DLP_PATTERN_SHEET_NAME = u"поиск_шаблоны"
 # Шрифт заголовка листа паттернов.
 DLP_PATTERN_SHEET_FONT_NAME = u"PT Sans"
+# Справка на сгенерированном листе: колонка E, со строки 2 (по одной фразе в ячейке).
+DLP_PATTERN_SHEET_HELP_COL = 4  # E
+DLP_PATTERN_SHEET_HELP_START_ROW = 1  # строка 2 (0-based)
+DLP_PATTERN_SHEET_HELP_LINES = (
+    u"Как заполнять словарь паттернов",
+    u"",
+    u"Колонки A–C: имя | паттерн | описание (описание только для вас).",
+    u"Поиск смотрит колонку B (паттерн) по имени/пути или содержимому файла.",
+    u"",
+    u"Простое слово — достаточно куска:",
+    u"  конфиденц  → найдёт «конфиденциально», «Конфиденц_…» и т.п. везде",
+    u"  (без учёта регистра; не нужно писать * или (?i) вручную).",
+    u"",
+    u"Сложные случаи — regex Python (как есть):",
+    u"  (?i)trade[\\s_\\-]*secret",
+    u"  (?i)(?:^|[_\\-\\s./\\\\])дсп(?:[_\\-\\s./\\\\]|$)",
+    u"Метасимволы . \\ ^ $ * + ? { } [ ] | ( ) — значит «это regex».",
+    u"",
+    u"Имя (A) — короткий id для лога *_Поиск; паттерн (B) — что искать.",
+    u"Пустые строки и строки без A или B пропускаются.",
+    u"Не называйте этот лист так же, как лист результата списка файлов.",
+)
 # Заголовки и строки по умолчанию — как test/file_list/dlp_name_patterns_example.csv
 DLP_PATTERN_SHEET_HEADERS = (u"имя", u"паттерн", u"описание")
 DEFAULT_DLP_PATTERN_SHEET_ROWS = (

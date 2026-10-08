@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.742"
+MACRO_VERSION = "3.10.743"
 import json
 import os
 import sys
@@ -1667,9 +1667,7 @@ def dlp_dict_sheet_clashes_result(dict_ref, result_sheet_name):
 
 def _apply_dlp_pattern_sheet_font(sheet, ncols, data_rows=0):
     """PT Sans на заголовок и данные листа паттернов."""
-    font_name = _uno_to_str(
-        getattr(_fl_state, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")
-    ) or u"PT Sans"
+    font_name = _uno_to_str(_fl_lib.dlp_pattern_sheet_font_name()) or u"PT Sans"
     ec = max(int(ncols) - 1, 0)
     er = max(int(data_rows), 0)
     try:
@@ -1716,12 +1714,15 @@ def fill_dlp_pattern_sheet(sheet, rows=None, doc=None):
         except Exception as err:
             print("Лист паттернов: строка %s: %s" % (row, err))
             break
+    _write_dlp_pattern_sheet_help(sheet)
     _format_header_row(sheet, ncols)
     _apply_dlp_pattern_sheet_font(sheet, ncols, data_rows=written)
     try:
         columns = sheet.getColumns()
         for col in range(ncols):
             columns.getByIndex(col).OptimalWidth = True
+        help_col, _help_row = _fl_lib.dlp_pattern_sheet_help_placement()
+        columns.getByIndex(int(help_col)).OptimalWidth = True
     except Exception:
         pass
     if doc is not None:
@@ -1730,6 +1731,45 @@ def fill_dlp_pattern_sheet(sheet, rows=None, doc=None):
         except Exception as err:
             print("Лист паттернов: автофильтр: %s" % err)
     return written
+
+
+def _write_dlp_pattern_sheet_help(sheet):
+    """Колонка E со строки 2: краткая справка по заполнению паттернов."""
+    if sheet is None:
+        return
+    lines = _fl_lib.default_dlp_pattern_sheet_help_lines()
+    if not lines:
+        return
+    help_col, start_row = _fl_lib.dlp_pattern_sheet_help_placement()
+    font_name = _uno_to_str(
+        getattr(_fl_state, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")
+    ) or u"PT Sans"
+    for offset, line in enumerate(lines):
+        row = int(start_row) + int(offset)
+        try:
+            cell = sheet.getCellByPosition(int(help_col), row)
+            cell.String = _uno_to_str(line)
+            try:
+                cell.CharFontName = font_name
+            except Exception:
+                pass
+            if offset == 0:
+                try:
+                    cell.CharWeight = 150
+                except Exception:
+                    pass
+                try:
+                    cell.CharHeight = 11.0
+                except Exception:
+                    pass
+            else:
+                try:
+                    cell.CharHeight = 10.0
+                except Exception:
+                    pass
+        except Exception as err:
+            print("Лист паттернов: справка E%s: %s" % (row + 1, err))
+            break
 
 
 def ensure_dlp_pattern_sheet(doc, sheet_name, overwrite=False):
