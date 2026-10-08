@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Вспомогательная логика file_list_macro: Owner (Windows) и поиск по именам/содержимому."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.741"
+MACRO_VERSION = "3.10.742"
 import csv
 import hashlib
 import json
@@ -199,6 +199,42 @@ def is_dlp_dict_sheet_ref(value):
     if len(text) > 31:
         return False
     return True
+
+
+def default_dlp_pattern_sheet_name():
+    name = _u(
+        getattr(_cfg, "DEFAULT_DLP_PATTERN_SHEET_NAME", u"поиск_шаблоны")
+    ).strip()
+    return name or u"поиск_шаблоны"
+
+
+def resolve_dlp_pattern_sheet_name(value, result_sheet_name=u""):
+    """
+    Имя листа для генерации/словаря.
+    Некорректное/пустое → DEFAULT_DLP_PATTERN_SHEET_NAME.
+    Если совпадает с листом результата — суффикс «_шаблоны».
+    Возвращает (name, used_default_bool).
+    """
+    text = _u(value).strip()
+    used_default = False
+    if is_dlp_dict_sheet_ref(text):
+        name = text
+    else:
+        name = default_dlp_pattern_sheet_name()
+        used_default = True
+    result = _u(result_sheet_name).strip()
+    if result and name.casefold() == result.casefold():
+        base = default_dlp_pattern_sheet_name()
+        if base.casefold() == result.casefold():
+            name = u"поиск_шаблоны"
+            if name.casefold() == result.casefold():
+                name = u"поиск_шаблоны_1"
+        else:
+            name = base
+        used_default = True
+    if len(name) > 31:
+        name = name[:31]
+    return name, used_default
 
 
 def default_dlp_pattern_sheet_rows():

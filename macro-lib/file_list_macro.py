@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.741"
+MACRO_VERSION = "3.10.742"
 import json
 import os
 import sys
@@ -1665,12 +1665,37 @@ def dlp_dict_sheet_clashes_result(dict_ref, result_sheet_name):
     return bool(left) and left == right
 
 
-def fill_dlp_pattern_sheet(sheet, rows=None):
-    """Записать заголовок и паттерны по умолчанию (как example.csv)."""
+def _apply_dlp_pattern_sheet_font(sheet, ncols, data_rows=0):
+    """PT Sans на заголовок и данные листа паттернов."""
+    font_name = _uno_to_str(
+        getattr(_fl_state, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")
+    ) or u"PT Sans"
+    ec = max(int(ncols) - 1, 0)
+    er = max(int(data_rows), 0)
+    try:
+        rng = sheet.getCellRangeByPosition(0, 0, ec, er)
+        rng.CharFontName = font_name
+    except Exception:
+        try:
+            for r in range(0, er + 1):
+                for c in range(0, ec + 1):
+                    sheet.getCellByPosition(c, r).CharFontName = font_name
+        except Exception:
+            pass
+    try:
+        hdr = sheet.getCellRangeByPosition(0, 0, ec, 0)
+        hdr.CharFontName = font_name
+    except Exception:
+        pass
+
+
+def fill_dlp_pattern_sheet(sheet, rows=None, doc=None):
+    """Записать заголовок и паттерны по умолчанию; оформить шапку и автофильтр."""
     if sheet is None:
         return 0
     headers = _fl_lib.default_dlp_pattern_sheet_headers()
     data_rows = rows if rows is not None else _fl_lib.default_dlp_pattern_sheet_rows()
+    ncols = max(len(headers), 3)
     try:
         for col, title in enumerate(headers):
             sheet.getCellByPosition(col, 0).String = _uno_to_str(title)
@@ -1691,12 +1716,19 @@ def fill_dlp_pattern_sheet(sheet, rows=None):
         except Exception as err:
             print("Лист паттернов: строка %s: %s" % (row, err))
             break
+    _format_header_row(sheet, ncols)
+    _apply_dlp_pattern_sheet_font(sheet, ncols, data_rows=written)
     try:
         columns = sheet.getColumns()
-        for col in range(min(3, len(headers) or 3)):
+        for col in range(ncols):
             columns.getByIndex(col).OptimalWidth = True
     except Exception:
         pass
+    if doc is not None:
+        try:
+            _apply_result_menu_autofilter(doc, sheet, ncols, written)
+        except Exception as err:
+            print("Лист паттернов: автофильтр: %s" % err)
     return written
 
 
@@ -1707,11 +1739,10 @@ def ensure_dlp_pattern_sheet(doc, sheet_name, overwrite=False):
     """
     name = _uno_to_str(sheet_name).strip()
     if not name:
-        return None, False, 0, u"Не указано имя листа словаря."
+        name = _fl_lib.default_dlp_pattern_sheet_name()
     if not _fl_lib.is_dlp_dict_sheet_ref(name):
         return None, False, 0, (
-            u"Для листа укажите одно слово (имя листа) без пути и расширения.\n"
-            u"Сейчас: «%s»" % name
+            u"Некорректное имя листа словаря «%s»." % name
         )
     sheet = get_sheet_by_name(doc, name)
     created = False
@@ -1720,10 +1751,10 @@ def ensure_dlp_pattern_sheet(doc, sheet_name, overwrite=False):
         created = True
         if sheet is None:
             return None, False, 0, u"Не удалось создать лист «%s»." % name
-        filled = fill_dlp_pattern_sheet(sheet)
+        filled = fill_dlp_pattern_sheet(sheet, doc=doc)
         return sheet, created, filled, u""
     if overwrite:
-        filled = fill_dlp_pattern_sheet(sheet)
+        filled = fill_dlp_pattern_sheet(sheet, doc=doc)
         return sheet, created, filled, u""
     # лист есть — не затираем; паттерны читаются как есть
     return sheet, created, 0, u""
@@ -1794,7 +1825,7 @@ def load_dlp_patterns_resolved( doc, dict_ref, result_sheet_name="", create_miss
         patterns = load_dlp_patterns_from_sheet(sheet)
         if not patterns:
             # пустой лист → заполнить умолчаниями один раз
-            filled = fill_dlp_pattern_sheet(sheet)
+            filled = fill_dlp_pattern_sheet(sheet, doc=doc)
             patterns = load_dlp_patterns_from_sheet(sheet)
             print(
                 "Поиск: лист «%s» был пуст — записано паттернов по умолчанию=%s"
@@ -1808,19 +1839,18 @@ def load_dlp_patterns_resolved( doc, dict_ref, result_sheet_name="", create_miss
 def generate_dlp_pattern_sheet_from_field(doc, dict_field_text, result_sheet_name=""):
     """
     Кнопка диалога: создать/перезаполнить лист по имени из поля словаря.
-    Возвращает сообщение для пользователя.
+    Некорректное/пустое имя → «поиск_шаблоны».
+    Возвращает (message, sheet_name_used).
     """
-    ref = _uno_to_str(dict_field_text).strip()
-    if not _fl_lib.is_dlp_dict_sheet_ref(ref):
-        return (
-            u"Для генерации листа укажите в поле словаря одно слово — имя листа "
-            u"(без пути и расширения).\nСейчас: «%s»" % (ref or u"(пусто)")
-        )
     result_name = effective_result_sheet_name(result_sheet_name)
+    ref, used_default = _fl_lib.resolve_dlp_pattern_sheet_name(
+        dict_field_text, result_sheet_name=result_name
+    )
     if dlp_dict_sheet_clashes_result(ref, result_name):
         return (
             u"Имя листа словаря «%s» совпадает с листом результата «%s».\n"
-            u"Укажите другое имя." % (ref, result_name)
+            u"Укажите другое имя." % (ref, result_name),
+            ref,
         )
     existing = get_sheet_by_name(doc, ref)
     overwrite = False
@@ -1829,18 +1859,27 @@ def generate_dlp_pattern_sheet_from_field(doc, dict_field_text, result_sheet_nam
             u"Лист «%s» уже есть.\nПерезаписать паттернами по умолчанию?" % ref
         )
         if answer != YES:
-            return u"Отменено: лист «%s» не изменён." % ref
+            return u"Отменено: лист «%s» не изменён." % ref, ref
         overwrite = True
     sheet, created, filled, err = ensure_dlp_pattern_sheet(
         doc, ref, overwrite=overwrite or existing is None
     )
     if err:
-        return err
+        return err, ref
     if sheet is None:
-        return u"Не удалось подготовить лист «%s»." % ref
+        return u"Не удалось подготовить лист «%s»." % ref, ref
+    note = u""
+    if used_default:
+        note = u"\n(имя по умолчанию: поле было пустым или некорректным)"
     if created:
-        return u"Создан лист «%s», записано паттернов: %s." % (ref, filled)
-    return u"Лист «%s» перезаполнен, паттернов: %s." % (ref, filled)
+        return (
+            u"Создан лист «%s», записано паттернов: %s.%s" % (ref, filled, note),
+            ref,
+        )
+    return (
+        u"Лист «%s» перезаполнен, паттернов: %s.%s" % (ref, filled, note),
+        ref,
+    )
 
 
 def _ensure_active_sheet(doc, sheet):
@@ -2123,6 +2162,13 @@ def _format_header_row_local(sheet, ncols):
     except Exception:
         pass
     try:
+        font_name = _uno_to_str(
+            getattr(_fl_state, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")
+        ) or u"PT Sans"
+        hdr.CharFontName = font_name
+    except Exception:
+        pass
+    try:
         from com.sun.star.table.CellHoriJustify import CENTER as H_CENTER
 
         hdr.HoriJustify = H_CENTER
@@ -2144,6 +2190,12 @@ def _format_header_row_local(sheet, ncols):
                 cell.CharColor2 = int(fg)
             except Exception:
                 cell.CharColor = int(fg)
+            try:
+                cell.CharFontName = _uno_to_str(
+                    getattr(_fl_state, "DLP_PATTERN_SHEET_FONT_NAME", u"PT Sans")
+                ) or u"PT Sans"
+            except Exception:
+                pass
         except Exception:
             pass
         col += 1
@@ -2982,11 +3034,15 @@ def create_file_analyzer_dialog():
         )
 
         dlg_w = 540
-        dlg_h = 510
-        m = 10
-        gap = 8
+        # −20% к прежним 510
+        dlg_h = 408
+        m = 8
+        gap = 6
         content_w = dlg_w - m * 2
-        field_w = content_w - 100 - gap
+        browse_w = 72
+        sheet_btn_w = 72
+        field_w = content_w - browse_w - gap
+        dlp_field_w = content_w - browse_w - sheet_btn_w - 2 * gap
         dialog_model.PositionX = 100
         dialog_model.PositionY = 40
         dialog_model.Width = dlg_w
@@ -2995,27 +3051,29 @@ def create_file_analyzer_dialog():
 
         y = m
         tab_w = (content_w - gap) // 2
-        _add_button(dialog_model, "TabMainBtn", "Основное", m, y, tab_w, 22)
-        _add_button(dialog_model, "TabDlpBtn", "Поиск", m + tab_w + gap, y, tab_w, 22)
-        y += 28
+        _add_button(dialog_model, "TabMainBtn", "Основное", m, y, tab_w, 18)
+        _add_button(dialog_model, "TabDlpBtn", "Поиск", m + tab_w + gap, y, tab_w, 18)
+        y += 22
         body_top = y
 
         # --- вкладка Основное ---
         y = body_top
-        _add_label(dialog_model, "LabelPath", "Путь к папке:", m, y, 140, 14)
-        y += 18
+        _add_label(dialog_model, "LabelPath", "Путь к папке:", m, y, 140, 12)
+        y += 14
         _add_edit(
             dialog_model,
             "PathField",
             m,
             y,
             field_w,
-            22,
+            18,
             path_from_user_input(saved.get("path", "")),
         )
-        _add_button(dialog_model, "BrowseButton", "Обзор...", m + field_w + gap, y - 2, 100, 26)
+        _add_button(
+            dialog_model, "BrowseButton", "Обзор...", m + field_w + gap, y - 1, browse_w, 20
+        )
 
-        y += 34
+        y += 24
         _add_label(
             dialog_model,
             "LabelSheet",
@@ -3024,35 +3082,35 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            14,
+            12,
         )
-        y += 18
+        y += 14
         _add_edit(
             dialog_model,
             "SheetField",
             m,
             y,
             content_w,
-            22,
+            18,
             str(saved.get("sheet_name", "")),
         )
 
-        y += 34
-        _add_label(dialog_model, "LabelDepth", "Глубина (1 = первый уровень):", m, y, 180, 14)
-        _add_label(dialog_model, "LabelSizeUnit", "Единицы размера:", m + 250, y, 140, 14)
-        y += 18
+        y += 24
+        _add_label(dialog_model, "LabelDepth", "Глубина (1 = первый уровень):", m, y, 180, 12)
+        _add_label(dialog_model, "LabelSizeUnit", "Единицы размера:", m + 250, y, 140, 12)
+        y += 14
         _add_edit(
             dialog_model,
             "DepthField",
             m,
             y,
             80,
-            22,
+            18,
             str(saved.get("max_depth", _DEFAULT_MAX_DEPTH)),
         )
-        _add_combo(dialog_model, "SizeUnitCombo", m + 250, y, 120, 22)
+        _add_combo(dialog_model, "SizeUnitCombo", m + 250, y, 120, 18)
 
-        y += 34
+        y += 24
         _add_label(
             dialog_model,
             "LabelMasks",
@@ -3060,25 +3118,25 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            14,
+            12,
         )
-        y += 18
+        y += 14
         _add_edit(
             dialog_model,
             "MaskField",
             m,
             y,
             content_w,
-            22,
+            18,
             str(saved.get("masks", "")),
         )
 
-        y += 34
-        _add_label(dialog_model, "LabelSort", "Сортировка результата:", m, y, content_w, 14)
-        y += 18
-        _add_combo(dialog_model, "SortCombo", m, y, content_w, 22)
+        y += 24
+        _add_label(dialog_model, "LabelSort", "Сортировка результата:", m, y, content_w, 12)
+        y += 14
+        _add_combo(dialog_model, "SortCombo", m, y, content_w, 18)
 
-        y += 34
+        y += 24
         _add_checkbox(
             dialog_model,
             "CountPagesCheck",
@@ -3086,10 +3144,10 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            16,
+            14,
             normalize_count_pages(saved.get("count_pages", _DEFAULT_COUNT_PAGES)),
         )
-        y += 20
+        y += 16
         _add_checkbox(
             dialog_model,
             "CountSha256Check",
@@ -3097,10 +3155,10 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            16,
+            14,
             normalize_count_pages(saved.get("count_sha256", _DEFAULT_COUNT_SHA256)),
         )
-        y += 18
+        y += 14
         _add_label(
             dialog_model,
             "Sha256MaxLabel",
@@ -3108,7 +3166,7 @@ def create_file_analyzer_dialog():
             m,
             y,
             220,
-            14,
+            12,
         )
         _add_edit(
             dialog_model,
@@ -3116,7 +3174,7 @@ def create_file_analyzer_dialog():
             m + 230,
             y - 2,
             80,
-            20,
+            16,
             str(normalize_sha256_max_gb(saved.get("sha256_max_gb", _DEFAULT_SHA256_MAX_GB))),
         )
 
@@ -3145,18 +3203,18 @@ def create_file_analyzer_dialog():
         _add_label(
             dialog_model,
             "DlpHintLabel",
-            "Поиск: regex по имени/пути и содержимому — подсветка и лист лога (*_Поиск). "
-            "Словарь: файл JSON/CSV или одно слово = лист книги.",
+            "Поиск: regex / лог *_Поиск. Словарь: JSON/CSV или одно слово = лист "
+            "(пусто → «поиск_шаблоны»).",
             m,
             y,
             content_w,
-            28,
+            22,
         )
         try:
             dialog_model.getByName("DlpHintLabel").MultiLine = True
         except Exception:
             pass
-        y += 32
+        y += 24
         _add_checkbox(
             dialog_model,
             "DlpNamesCheck",
@@ -3164,49 +3222,48 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            16,
+            14,
             _DEFAULT_DLP_ANALYZE_NAMES,
         )
-        y += 20
+        y += 16
         _add_label(
             dialog_model,
             "DlpNamesDictLabel",
-            "Словарь имён: путь к JSON/CSV или одно слово = имя листа (≠ лист результата):",
+            "Словарь имён: файл или имя листа (≠ результат); «Лист» — создать шаблоны:",
             m,
             y,
             content_w,
-            12,
+            11,
         )
-        y += 14
+        y += 12
         _add_edit(
             dialog_model,
             "DlpNamesDictField",
             m,
             y,
-            field_w,
-            20,
+            dlp_field_w,
+            18,
             normalize_dlp_dict_ref(saved.get("dlp_names_dict_path", "")),
         )
         _add_button(
             dialog_model,
             "DlpNamesBrowseButton",
             "Обзор...",
-            m + field_w + gap,
-            y - 2,
-            100,
-            24,
+            m + dlp_field_w + gap,
+            y - 1,
+            browse_w,
+            20,
         )
-        y += 24
         _add_button(
             dialog_model,
             "DlpNamesSheetButton",
-            "Создать лист паттернов",
-            m,
-            y,
-            180,
-            22,
+            "Лист",
+            m + dlp_field_w + gap + browse_w + gap,
+            y - 1,
+            sheet_btn_w,
+            20,
         )
-        y += 28
+        y += 24
         _add_checkbox(
             dialog_model,
             "DlpContentCheck",
@@ -3214,10 +3271,10 @@ def create_file_analyzer_dialog():
             m,
             y,
             content_w,
-            16,
+            14,
             _DEFAULT_DLP_ANALYZE_CONTENT,
         )
-        y += 18
+        y += 15
         _add_checkbox(
             dialog_model,
             "DlpContentTextCheck",
@@ -3225,10 +3282,10 @@ def create_file_analyzer_dialog():
             m + 12,
             y,
             content_w - 12,
-            16,
+            13,
             normalize_count_pages(saved.get("dlp_content_text", _DEFAULT_DLP_CONTENT_TEXT)),
         )
-        y += 16
+        y += 14
         _add_checkbox(
             dialog_model,
             "DlpContentWordCheck",
@@ -3236,10 +3293,10 @@ def create_file_analyzer_dialog():
             m + 12,
             y,
             content_w - 12,
-            16,
+            13,
             normalize_count_pages(saved.get("dlp_content_word", _DEFAULT_DLP_CONTENT_WORD)),
         )
-        y += 16
+        y += 14
         _add_checkbox(
             dialog_model,
             "DlpContentExcelCheck",
@@ -3247,49 +3304,48 @@ def create_file_analyzer_dialog():
             m + 12,
             y,
             content_w - 12,
-            16,
+            13,
             normalize_count_pages(
                 saved.get("dlp_content_excel", _DEFAULT_DLP_CONTENT_EXCEL)
             ),
         )
-        y += 20
+        y += 15
         _add_label(
             dialog_model,
             "DlpContentDictLabel",
-            "Словарь содержимого: путь к JSON/CSV или одно слово = имя листа:",
+            "Словарь содержимого: файл или имя листа; «Лист» — создать шаблоны:",
             m,
             y,
             content_w,
-            12,
+            11,
         )
-        y += 14
+        y += 12
         _add_edit(
             dialog_model,
             "DlpContentDictField",
             m,
             y,
-            field_w,
-            20,
+            dlp_field_w,
+            18,
             normalize_dlp_dict_ref(saved.get("dlp_content_dict_path", "")),
         )
         _add_button(
             dialog_model,
             "DlpContentBrowseButton",
             "Обзор...",
-            m + field_w + gap,
-            y - 2,
-            100,
-            24,
+            m + dlp_field_w + gap,
+            y - 1,
+            browse_w,
+            20,
         )
-        y += 24
         _add_button(
             dialog_model,
             "DlpContentSheetButton",
-            "Создать лист паттернов",
-            m,
-            y,
-            180,
-            22,
+            "Лист",
+            m + dlp_field_w + gap + browse_w + gap,
+            y - 1,
+            sheet_btn_w,
+            20,
         )
 
         dlp_names = (
@@ -3309,10 +3365,10 @@ def create_file_analyzer_dialog():
             "DlpContentSheetButton",
         )
 
-        btn_y = dlg_h - 42
-        _add_button(dialog_model, "RunButton", "Запуск", m, btn_y, 100, 28)
-        _add_button(dialog_model, "ClearButton", "Очистить", m + 110, btn_y, 100, 28)
-        _add_button(dialog_model, "CancelButton", "Отмена", m + 220, btn_y, 100, 28)
+        btn_y = dlg_h - 34
+        _add_button(dialog_model, "RunButton", "Запуск", m, btn_y, 90, 24)
+        _add_button(dialog_model, "ClearButton", "Очистить", m + 100, btn_y, 90, 24)
+        _add_button(dialog_model, "CancelButton", "Отмена", m + 200, btn_y, 90, 24)
 
         try:
             _apply_file_list_theme(dialog_model, title_text=dialog_model.Title)
@@ -3392,11 +3448,13 @@ def create_file_analyzer_dialog():
                 if button_name == "DlpNamesSheetButton":
                     try:
                         doc = XSCRIPTCONTEXT.getDocument()
-                        msg = generate_dlp_pattern_sheet_from_field(
+                        msg, used_name = generate_dlp_pattern_sheet_from_field(
                             doc,
                             _control_get_text(self.dlp_names_dict_field),
                             result_sheet_name=_control_get_text(self.sheet_field),
                         )
+                        if used_name:
+                            _control_set_text(self.dlp_names_dict_field, used_name)
                         show_message(msg)
                     except Exception as err:
                         show_message(u"Не удалось создать лист паттернов: %s" % err)
@@ -3405,11 +3463,13 @@ def create_file_analyzer_dialog():
                 if button_name == "DlpContentSheetButton":
                     try:
                         doc = XSCRIPTCONTEXT.getDocument()
-                        msg = generate_dlp_pattern_sheet_from_field(
+                        msg, used_name = generate_dlp_pattern_sheet_from_field(
                             doc,
                             _control_get_text(self.dlp_content_dict_field),
                             result_sheet_name=_control_get_text(self.sheet_field),
                         )
+                        if used_name:
+                            _control_set_text(self.dlp_content_dict_field, used_name)
                         show_message(msg)
                     except Exception as err:
                         show_message(u"Не удалось создать лист паттернов: %s" % err)

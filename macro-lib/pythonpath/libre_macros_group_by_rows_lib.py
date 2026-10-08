@@ -6,7 +6,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.741"
+MACRO_VERSION = "3.10.742"
 try:
     unicode
 except NameError:
