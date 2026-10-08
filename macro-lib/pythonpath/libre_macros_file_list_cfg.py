@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние file_list_macro (AlterOffice 2026: модульный код .py-скрипта вырезается)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.740"
+MACRO_VERSION = "3.10.741"
 DEFAULT_MAX_DEPTH = 1
 DEFAULT_SIZE_UNIT = "b"
 DEFAULT_COUNT_PAGES = False
@@ -173,6 +173,45 @@ DEFAULT_DLP_NAME_PATTERNS = {
     "password_hint": r"(?i)(?:парол|password|passwd|pwd)[_\-\s.]*(?:list|файл|file|баз)?",
 }
 DEFAULT_DLP_CONTENT_PATTERNS = dict(DEFAULT_DLP_NAME_PATTERNS)
+
+# Лист книги как словарь паттернов: одно слово в поле пути → имя листа.
+# Заголовки и строки по умолчанию — как test/file_list/dlp_name_patterns_example.csv
+DLP_PATTERN_SHEET_HEADERS = (u"имя", u"паттерн", u"описание")
+DEFAULT_DLP_PATTERN_SHEET_ROWS = (
+    (u"confidential", u"конфиденц", u"простое слово → (?i)конфиденц (подфраза, без регистра)"),
+    (u"confidential_en", u"confidential", u"EN: confidential"),
+    (u"trade_secret", u"(?i)коммерческ\\w*[\\s_\\-]*тайн", u"regex: коммерческая тайна / коммерческой_тайны"),
+    (u"trade_secret_en", u"(?i)trade[\\s_\\-]*secret", u"EN: trade secret"),
+    (u"dsp", u"(?i)(?:^|[_\\-\\s./\\\\])дсп(?:[_\\-\\s./\\\\]|$)", u"ДСП как отдельный токен в имени/пути"),
+    (u"secret", u"секретн", u"секретный / секретные / …"),
+    (u"secret_en", u"secret", u"EN: секретный / секретные / …"),
+    (u"secret_strict", u"(?i)(?:^|[_\\-\\s./\\\\])строго[\\s_\\-]*секретн", u"строго секретно"),
+    (u"personal_data", u"(?i)персональн\\w*[\\s_\\-]*данн", u"персональные данные"),
+    (u"personal_data_en", u"(?i)personal[\\s_\\-]*data|PII|GDPR", u"EN/аббревиатуры ПДн"),
+    (u"restricted", u"для служебн", u"простое слово / начало фразы «для служебного…»"),
+    (u"restricted_full", u"(?i)для[\\s_\\-]*служебн\\w*[\\s_\\-]*пользован", u"для служебного пользования"),
+    (u"internal_only", u"только для внутренн", u"только для внутреннего…"),
+    (u"internal_en", u"(?i)internal[\\s_\\-]*(?:use|only)|for[\\s_\\-]*internal", u"EN: internal use / for internal"),
+    (u"password_hint", u"(?i)(?:парол|password|passwd|pwd)[_\\-\\s.]*(?:list|файл|file|баз)?", u"пароли / password_list"),
+    (u"passwords_plain", u"парол", u"простое слово «парол» (пароль/паролей…)"),
+    (u"nda", u"nda", u"NDA / nda в имени"),
+    (u"гриф", u"гриф", u"гриф секретности в имени"),
+    (u"ограниченного_распространения", u"ограниченн", u"ограниченного распространения"),
+    (u"банковская_тайна", u"(?i)банковск\\w*[\\s_\\-]*тайн", u"банковская тайна"),
+    (u"врачебная_тайна", u"(?i)врачебн\\w*[\\s_\\-]*тайн", u"врачебная тайна"),
+    (u"ноу_хау", u"(?i)ноу[\\s_\\-]*хау|know[\\s_\\-]*how", u"ноу-хау / know-how"),
+    (u"инсайд", u"инсайдер", u"инсайдерская информация"),
+    (u"гостайна", u"(?i)гос(?:ударственн\\w*)?[\\s_\\-]*тайн", u"гостайна / государственная тайна"),
+    (u"шифр", u"шифр", u"шифр / шифрование в имени"),
+    (u"keystore", u"keystore|key[\\s_\\-]*store|\\.pem$|\\.p12$", u"ключи / pem / p12 (regex)"),
+    (u"credentials", u"credential|secret[\\s_\\-]*key|api[\\s_\\-]*key", u"credentials / api key"),
+    (u"backup_secrets", u"(?i)backup.*(парол|password|secret)|(парол|password|secret).*backup", u"бэкапы с секретами"),
+    (u"пдн", u"пдн", u"аббревиатура ПДн"),
+    (u"ппдн", u"ппдн", u"персональные / персональные производные"),
+    (u"тк", u"тк[\\s_\\-]*рф|трудов\\w*[\\s_\\-]*кодекс", u"осторожно: короткое «тк» — лучше уточнять regex"),
+    (u"договор_нда", u"(?i)договор[\\s_\\-]*(?:нда|nda)|nda[\\s_\\-]*agreement", u"договор NDA"),
+    (u"черновик_секретно", u"(?i)черновик[\\s_\\-].*(секрет|конфиденц)|(секрет|конфиденц).*черновик", u"черновик + секрет/конфиденц"),
+)
 
 # Мутабельное состояние UI (живёт в pythonpath — не проходит через AO-фильтр скрипта)
 status_indicator = None

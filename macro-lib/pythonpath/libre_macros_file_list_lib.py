@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Вспомогательная логика file_list_macro: Owner (Windows) и поиск по именам/содержимому."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.740"
+MACRO_VERSION = "3.10.741"
 import csv
 import hashlib
 import json
@@ -175,6 +175,82 @@ def default_dlp_name_dict_path(settings_dir):
 def default_dlp_content_dict_path(settings_dir):
     name = getattr(_cfg, "DLP_CONTENT_DICT_FILENAME", "dlp_content_patterns.json")
     return os.path.join(_u(settings_dir), name)
+
+
+def is_dlp_dict_sheet_ref(value):
+    """
+    Одно слово в поле словаря → имя листа текущей книги (не путь к файлу).
+    Путь: слэши, диск «:», пробелы, расширения .json/.csv/…
+    """
+    text = _u(value).strip()
+    if not text:
+        return False
+    if any(ch in text for ch in (u"/", u"\\", u":")):
+        return False
+    if u" " in text or u"\t" in text:
+        return False
+    if any(ch in text for ch in (u"[", u"]", u"*", u"?", u"'")):
+        return False
+    low = text.casefold()
+    for ext in (u".json", u".jsn", u".csv", u".txt", u".tsv"):
+        if low.endswith(ext):
+            return False
+    # Calc: имя листа ≤ 31 символ
+    if len(text) > 31:
+        return False
+    return True
+
+
+def default_dlp_pattern_sheet_rows():
+    """Строки листа-словаря по умолчанию: (имя, паттерн, описание)."""
+    raw = getattr(_cfg, "DEFAULT_DLP_PATTERN_SHEET_ROWS", None) or ()
+    out = []
+    for item in raw:
+        if not item or len(item) < 2:
+            continue
+        name = _u(item[0]).strip()
+        pattern = _u(item[1]).strip()
+        desc = _u(item[2]).strip() if len(item) > 2 else u""
+        if name and pattern:
+            out.append((name, pattern, desc))
+    if out:
+        return out
+    # fallback: компактный DEFAULT_DLP_NAME_PATTERNS
+    for key, pattern in (getattr(_cfg, "DEFAULT_DLP_NAME_PATTERNS", None) or {}).items():
+        k = _u(key).strip()
+        p = _u(pattern).strip()
+        if k and p:
+            out.append((k, p, u""))
+    return out
+
+
+def default_dlp_pattern_sheet_headers():
+    headers = getattr(_cfg, "DLP_PATTERN_SHEET_HEADERS", None) or (
+        u"имя",
+        u"паттерн",
+        u"описание",
+    )
+    return tuple(_u(h) for h in headers)
+
+
+def patterns_dict_from_sheet_rows(rows):
+    """Список (имя, паттерн[, описание]) или ячеек → dict id→regex (через coerce)."""
+    out = {}
+    first = True
+    for row in rows or ():
+        if not row or len(row) < 2:
+            continue
+        pid = _u(row[0]).strip()
+        preg = _u(row[1]).strip()
+        if not pid and not preg:
+            continue
+        if first:
+            first = False
+            if _csv_header_row(pid, preg):
+                continue
+        if pid and preg:
+            out[pid] = coerce_dlp_pattern(preg)
+    return out
 
 
 def default_dlp_name_patterns():
