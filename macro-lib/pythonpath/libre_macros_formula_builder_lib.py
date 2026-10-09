@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.748"
+MACRO_VERSION = "3.10.749"
 """
 Субвизард «конструктор_формулы» для «применить_формулу».
 
@@ -434,18 +434,26 @@ def show_formula_builder_dialog( parent_dialog, initial_formula=u"", doc=None, s
     _dlg_add_edit(dm, u"ExprEd", m, y, dw - 2 * m, expr_h, multiline=True)
     y += expr_h + 6
 
-    _dlg_add_fixed(dm, u"StatusLbl", u"", m, y, dw - 2 * m - 200, 16)
-    btn_h = 18
-    _dlg_add_button(dm, u"OkButton", u"OK", dw - m - 90 * 3 - 8, y, 90, btn_h)
-    _dlg_add_button(dm, u"CancelButton", u"Отмена", dw - m - 90 * 2 - 4, y, 90, btn_h)
-    _dlg_add_button(dm, u"HelpButton", u"Справка", dw - m - 90, y, 90, btn_h)
+    # Статус и кнопки на РАЗНЫХ рядах — иначе FixedText перекрывает OK/Отмена.
+    _dlg_add_fixed(dm, u"StatusLbl", u"", m, y, dw - 2 * m, 14)
+    y += 18
+    btn_h = 22
+    btn_w = 90
+    btn_gap = 6
+    ok_x = dw - m - btn_w * 3 - btn_gap * 2
+    _dlg_add_button(dm, u"OkButton", u"OK", ok_x, y, btn_w, btn_h)
+    _dlg_add_button(
+        dm, u"CancelButton", u"Отмена", ok_x + btn_w + btn_gap, y, btn_w, btn_h
+    )
+    _dlg_add_button(
+        dm, u"HelpButton", u"Справка", ok_x + (btn_w + btn_gap) * 2, y, btn_w, btn_h
+    )
     try:
         dm.getByName(u"OkButton").DefaultButton = True
-        dm.getByName(u"OkButton").PushButtonType = 1
-        dm.getByName(u"CancelButton").PushButtonType = 2
+        # Без PushButtonType: закрытие только из обработчика (иначе гонка с overlay/peer).
     except Exception:
         pass
-    dm.Height = y + btn_h + m
+    dm.Height = y + btn_h + m + 4
 
     try:
         from libre_macros_ui_theme import apply_soft_gray_theme

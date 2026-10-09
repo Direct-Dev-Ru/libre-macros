@@ -4,7 +4,7 @@
 """
 
 from __future__ import print_function
-MACRO_VERSION = "3.10.748"
+MACRO_VERSION = "3.10.749"
 import os
 
 try:

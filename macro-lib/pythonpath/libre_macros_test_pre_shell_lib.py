@@ -7,7 +7,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.748"
+MACRO_VERSION = "3.10.749"
 import libre_macros_pre_shell_cfg as _ps_cfg
 import libre_macros_test_pre_shell_cfg as _cfg
 from libre_macros_pre_shell_lib import (
