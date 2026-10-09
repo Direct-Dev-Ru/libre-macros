@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.744"
+MACRO_VERSION = "3.10.745"
 import ast
 import glob
 import json
@@ -9808,6 +9808,22 @@ def _block_field_to_text(block, field_id, fn_key=None):
     if field_id == 'keep':
         raw = unicode(block.get('keep') or u'first').strip().casefold()
         return _pw_cfg.DEDUP_KEEP_LABEL.get(raw, unicode(block.get('keep') or u'first'))
+    if unicode(fn_key or u'').casefold() == u'разделить_по_столбцам'.casefold():
+        if field_id == 'source_policy':
+            raw = unicode(block.get('source_policy') or u'replace').strip().casefold()
+            return _pw_cfg.SPLIT_SOURCE_POLICY_LABEL.get(
+                raw, unicode(block.get('source_policy') or u'replace')
+            )
+        if field_id == 'split_mode':
+            raw = unicode(block.get('split_mode') or u'each').strip().casefold()
+            return _pw_cfg.SPLIT_MODE_LABEL.get(
+                raw, unicode(block.get('split_mode') or u'each')
+            )
+        if field_id == 'non_text':
+            raw = unicode(block.get('non_text') or u'skip').strip().casefold()
+            return _pw_cfg.SPLIT_NON_TEXT_LABEL.get(
+                raw, unicode(block.get('non_text') or u'skip')
+            )
     if _is_send_mail_wizard_fn(fn_key):
         if field_id in (u'to', u'cc', u'bcc'):
             val = block.get(field_id) or []
@@ -10363,6 +10379,19 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
         t = unicode(text or u'').strip().casefold()
         code = _pw_cfg.DEDUP_KEEP_CODE.get(t, t)
         return code if code in (u'first', u'last') else u'first'
+    if unicode(fn_key or u'').casefold() == u'разделить_по_столбцам'.casefold():
+        if field_id == 'source_policy':
+            t = unicode(text or u'').strip().casefold()
+            code = _pw_cfg.SPLIT_SOURCE_POLICY_CODE.get(t, t)
+            return code if code in (u'replace', u'keep') else u'replace'
+        if field_id == 'split_mode':
+            t = unicode(text or u'').strip().casefold()
+            code = _pw_cfg.SPLIT_MODE_CODE.get(t, t)
+            return code if code in (u'each', u'leftmost') else u'each'
+        if field_id == 'non_text':
+            t = unicode(text or u'').strip().casefold()
+            code = _pw_cfg.SPLIT_NON_TEXT_CODE.get(t, t)
+            return code if code in (u'skip', u'empty', u'text', u'fail') else u'skip'
     if _is_send_mail_wizard_fn(fn_key):
         if field_id in (u'to', u'cc', u'bcc'):
             text = unicode(text or u'').strip()
@@ -10637,6 +10666,7 @@ def _sheet_block_field_row_height(fld, fn_key=None):
         u'почта'.casefold(),
         u'анкета_в_таблицу'.casefold(),
         u'form_to_table'.casefold(),
+        u'разделить_по_столбцам'.casefold(),
     ):
         gap = min(int(gap), 2)
     if ftype == 'bool':

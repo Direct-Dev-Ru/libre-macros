@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.744"
+MACRO_VERSION = "3.10.745"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -11860,7 +11860,22 @@ def lm_pp_range_split_by_columns(doc, sheet, data_range, header_row_range, *extr
         if len(parts) > max_parts:
             max_parts = len(parts)
         r = r + 1
+    new_names = block.get("new_names")
+    names = []
+    if isinstance(new_names, (list, tuple)):
+        names = [str(x).strip() for x in new_names if str(x).strip() != ""]
+    create_missing = False
+    try:
+        create_missing = bool(
+            lm_parse_bool_param(block.get("create_missing_columns"), default=False)
+        )
+    except Exception:
+        create_missing = bool(block.get("create_missing_columns", False))
     n_new = max(0, max_parts - 1) if source_policy == "replace" else max_parts
+    padded_empty = 0
+    if create_missing and len(names) > n_new:
+        padded_empty = len(names) - n_new
+        n_new = len(names)
     if n_new > 0:
         sheet.getColumns().insertByIndex(insert_at, n_new)
     if insert_at <= src_col:
@@ -11919,10 +11934,6 @@ def lm_pp_range_split_by_columns(doc, sheet, data_range, header_row_range, *extr
                 i = i + 1
         r = r + 1
     out_rng.setDataArray(tuple(tuple(row) for row in out_data))
-    new_names = block.get("new_names")
-    names = []
-    if isinstance(new_names, (list, tuple)):
-        names = [str(x).strip() for x in new_names if str(x).strip() != ""]
     base_header = cell_text(sheet.getCellByPosition(src_col, h_sr))
     if base_header == "":
         base_header = "Столбец"
@@ -11936,6 +11947,11 @@ def lm_pp_range_split_by_columns(doc, sheet, data_range, header_row_range, *extr
         i = i + 1
     status = "ok" if n_new > 0 else "пропуск"
     status_note = "вставка=0 (delimiter не расколол или header/data не совпали)" if n_new == 0 else ""
+    if padded_empty > 0:
+        status_note = (
+            (status_note + " " if status_note else "")
+            + "create_missing_columns=+%d пустых" % padded_empty
+        ).strip()
     _lm_log_postprocess(
         doc,
         sheet_name,

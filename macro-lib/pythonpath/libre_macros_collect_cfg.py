@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.744"
+MACRO_VERSION = "3.10.745"
 import re
 
 try:
@@ -663,8 +663,8 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         "Полный_Код,|,1,3,5",
     ),
     "разделить_по_столбцам": (
-        "JSON: column, delimiter, position, relative_column, source_policy, split_mode, max_columns",
-        '[{"v":1,"fn":"разделить_по_столбцам","column":"ФИО","delimiter":",","position":"_после_","source_policy":"replace"}]',
+        "JSON: column, delimiter, position, source_policy, split_mode, max_columns, new_names, create_missing_columns",
+        '[{"v":1,"fn":"разделить_по_столбцам","column":"ФИО","delimiter":",","position":"_после_","source_policy":"replace","new_names":["Имя","Фамилия"],"create_missing_columns":true}]',
     ),
     "условный_столбец": (
         "JSON: new_column + rules[] + otherwise; value/value_column и then/then_column; otherwise может содержать вложенный rules[]",

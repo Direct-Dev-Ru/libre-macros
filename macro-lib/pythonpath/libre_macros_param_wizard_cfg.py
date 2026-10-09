@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.744"
+MACRO_VERSION = "3.10.745"
 import re
 
 try:
@@ -373,8 +373,8 @@ _FALLBACK_FINAL_REST_HINTS = {
         u"Полный_Код,|,1,3,5",
     ),
     u"разделить_по_столбцам": (
-        u"JSON: column, delimiter, position, relative_column, source_policy; кнопка «Параметры…»",
-        u'[{"v":1,"fn":"разделить_по_столбцам","column":"ФИО","delimiter":",","position":"_после_"}]',
+        u"JSON: column, delimiter, position, source_policy, new_names, create_missing_columns; «Параметры…»",
+        u'[{"v":1,"fn":"разделить_по_столбцам","column":"ФИО","delimiter":",","position":"_после_","create_missing_columns":true}]',
     ),
     u"условный_столбец": (
         u"JSON: new_column + rules[] + otherwise; кнопка «Параметры…» (конструктор правил/ELSE)",
@@ -513,8 +513,8 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u"Полный_Код,|,1,3,5",
     ),
     u"разделить_по_столбцам": (
-        u"JSON: column, delimiter, position, relative_column, source_policy; кнопка «Параметры…»",
-        u'[{"v":1,"fn":"разделить_по_столбцам","column":"ФИО","delimiter":",","position":"_после_"}]',
+        u"JSON: column, delimiter, position, source_policy, new_names, create_missing_columns; «Параметры…»",
+        u'[{"v":1,"fn":"разделить_по_столбцам","column":"ФИО","delimiter":",","position":"_после_","create_missing_columns":true}]',
     ),
     u"условный_столбец": (
         u"JSON: new_column + rules[] + otherwise; кнопка «Параметры…» (конструктор правил/ELSE)",
@@ -1648,6 +1648,38 @@ DEDUP_KEEP_CODE = {label.casefold(): code for code, label in DEDUP_KEEP_CHOICES}
 for _dedup_keep_code, _dedup_keep_label in DEDUP_KEEP_CHOICES:
     DEDUP_KEEP_CODE[_dedup_keep_code.casefold()] = _dedup_keep_code
 
+# разделить_по_столбцам
+SPLIT_SOURCE_POLICY_CHOICES = (
+    (u"replace", u"Заменить (1-я часть в исходном)"),
+    (u"keep", u"Оставить исходный"),
+)
+SPLIT_SOURCE_POLICY_LABEL = {code: label for code, label in SPLIT_SOURCE_POLICY_CHOICES}
+SPLIT_SOURCE_POLICY_CODE = {
+    label.casefold(): code for code, label in SPLIT_SOURCE_POLICY_CHOICES
+}
+for _ssp_code, _ssp_label in SPLIT_SOURCE_POLICY_CHOICES:
+    SPLIT_SOURCE_POLICY_CODE[_ssp_code.casefold()] = _ssp_code
+
+SPLIT_MODE_CHOICES = (
+    (u"each", u"Каждый разделитель"),
+    (u"leftmost", u"Только первый"),
+)
+SPLIT_MODE_LABEL = {code: label for code, label in SPLIT_MODE_CHOICES}
+SPLIT_MODE_CODE = {label.casefold(): code for code, label in SPLIT_MODE_CHOICES}
+for _sm_code, _sm_label in SPLIT_MODE_CHOICES:
+    SPLIT_MODE_CODE[_sm_code.casefold()] = _sm_code
+
+SPLIT_NON_TEXT_CHOICES = (
+    (u"skip", u"Пропуск"),
+    (u"empty", u"Пусто"),
+    (u"text", u"Как текст"),
+    (u"fail", u"Ошибка"),
+)
+SPLIT_NON_TEXT_LABEL = {code: label for code, label in SPLIT_NON_TEXT_CHOICES}
+SPLIT_NON_TEXT_CODE = {label.casefold(): code for code, label in SPLIT_NON_TEXT_CHOICES}
+for _snt_code, _snt_label in SPLIT_NON_TEXT_CHOICES:
+    SPLIT_NON_TEXT_CODE[_snt_code.casefold()] = _snt_code
+
 # замена_значений: отбор среди совпавших строк столбца (odd/even — 1-based).
 REPLACE_MATCH_PICK_CHOICES = (
     (u"all", u"Все совпадения"),
@@ -2610,11 +2642,11 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"разделить_по_столбцам": {
         "title": u"Разделить столбец",
         "hint": (
-            u"Аналог Power Query «Разделить столбец по разделителю».\n"
-            u"Выберите исходный столбец, разделитель и место вставки новых столбцов.\n"
-            u"В режиме «Заменить» первая часть остаётся в исходном столбце."
+            u"Столбец → части по разделителю. «Заменить» — 1-я часть в исходном.\n"
+            u"Подробности, режимы и примеры — кнопка «Справка»."
         ),
-        "hint_lines": 3,
+        "hint_lines": 2,
+        "compact_fields": True,
         "dialog_fit_content": True,
         "fields": (
             {
@@ -2643,25 +2675,59 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "id": "source_policy",
                 "label": u"Исходный столбец",
                 "type": "combo",
-                "choices": (u"replace", u"keep"),
+                "choices": tuple(lab for _c, lab in SPLIT_SOURCE_POLICY_CHOICES),
                 "default": u"replace",
+                "row_group": u"src_split",
+                "row_group_slot": 0,
+                "row_group_frac": 0.55,
             },
             {
                 "id": "split_mode",
                 "label": u"Режим split",
                 "type": "combo",
-                "choices": (u"each", u"leftmost"),
+                "choices": tuple(lab for _c, lab in SPLIT_MODE_CHOICES),
                 "default": u"each",
+                "row_group": u"src_split",
+                "row_group_slot": 1,
             },
-            {"id": "max_columns", "label": u"Макс. частей (0=авто)", "default": u"0"},
-            {"id": "new_names", "label": u"Имена новых столбцов", "default": u""},
-            {"id": "trim_parts", "label": u"Обрезать пробелы", "type": "bool", "default": True},
+            {
+                "id": "max_columns",
+                "label": u"Макс. частей (0=авто)",
+                "default": u"0",
+                "row_group": u"max_nontext",
+                "row_group_slot": 0,
+                "row_group_frac": 0.45,
+            },
             {
                 "id": "non_text",
                 "label": u"Нетекст",
                 "type": "combo",
-                "choices": (u"skip", u"empty", u"text", u"fail"),
+                "choices": tuple(lab for _c, lab in SPLIT_NON_TEXT_CHOICES),
                 "default": u"skip",
+                "row_group": u"max_nontext",
+                "row_group_slot": 1,
+            },
+            {
+                "id": "new_names",
+                "label": u"Имена новых столбцов",
+                "default": u"",
+                "hint": u"Через «,» или «;». При нехватке частей — см. опцию ниже.",
+            },
+            {
+                "id": "trim_parts",
+                "label": u"Обрезать пробелы",
+                "type": "bool",
+                "default": True,
+                "row_group": u"split_flags",
+                "row_group_slot": 0,
+            },
+            {
+                "id": "create_missing_columns",
+                "label": u"Создать недостающие пустые столбцы",
+                "type": "bool",
+                "default": False,
+                "row_group": u"split_flags",
+                "row_group_slot": 1,
             },
         ),
     },

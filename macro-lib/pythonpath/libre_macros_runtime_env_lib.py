@@ -6,7 +6,7 @@ Seed runtime-карты переменных: окружение (__ENV_*) и с
 (_merge_seed_globals / merge_run_context_begin).
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.744"
+MACRO_VERSION = "3.10.745"
 try:
     unicode
 except NameError:

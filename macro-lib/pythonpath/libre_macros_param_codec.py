@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.744"
+MACRO_VERSION = "3.10.745"
 import json
 import re
 
@@ -1621,6 +1621,14 @@ def _normalize_split_by_columns_block(block):
     if out["max_columns"] < 0:
         out["max_columns"] = 0
     out["trim_parts"] = bool(out.get("trim_parts", True))
+    try:
+        from libre_macros_lib import lm_parse_bool_param
+
+        out["create_missing_columns"] = bool(
+            lm_parse_bool_param(out.get("create_missing_columns"), default=False)
+        )
+    except Exception:
+        out["create_missing_columns"] = bool(out.get("create_missing_columns", False))
     raw_names = out.get("new_names")
     names = []
     if isinstance(raw_names, (list, tuple)):

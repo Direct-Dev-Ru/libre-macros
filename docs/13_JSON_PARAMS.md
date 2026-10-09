@@ -608,7 +608,11 @@
 | `delimiter` | Разделитель текста |
 | `position` | `_начало_`, `_конец_`, `_перед_`, `_после_` + `relative_column` |
 | `source_policy` | `replace` — первая часть в исходном; `keep` — исходный без изменений |
-| `split_mode` | `each` / `leftmost`; `max_columns`, `new_names`, `trim_parts`, `non_text` |
+| `split_mode` | `each` / `leftmost` |
+| `max_columns` | Макс. частей (`0` = авто); хвост склеивается в последнюю |
+| `new_names` | Имена **новых** столбцов (массив или строка через `,`/`;`) |
+| `create_missing_columns` | `false` по умолчанию; если имён больше, чем столбцов с данными после split — создать недостающие пустые с оставшимися именами |
+| `trim_parts` / `non_text` | Обрезка пробелов; политика для нетекста (`skip`/`empty`/`text`/`fail`) |
 
 ---
 
