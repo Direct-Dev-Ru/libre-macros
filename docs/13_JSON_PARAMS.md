@@ -660,30 +660,29 @@ Lib: `lm_pp_range_add_column` / `lm_final_add_column` (шимы `merge_*`).
 
 ```json
 [
-  {"v":1,"fn":"добавить_столбец","new_column":"Статус","data_type":"text","choices":["Активен","Архив"]},
+  {"v":1,"fn":"добавить_столбец","new_column":"Статус","position":"_конец_","data_type":"text","choices":["Активен","Архив"]},
+  {"v":1,"fn":"добавить_столбец","new_column":"№","position":"_перед_","relative_column":"'Сумма'","data_type":"index","index_style":"number"},
   {"v":1,"fn":"добавить_столбец","sheet":"Сводка","new_column":"Сумма","data_type":"number",
    "format":"# ##0,00","data_validation":true,"min":"0","max":"1000000"},
-  {"v":1,"fn":"добавить_столбец","new_column":"Дата_отчета","data_type":"date",
-   "format":"DD.MM.YYYY","data_validation":true,"min":"01.01.2020","max":"31.12.2030"},
-  {"v":1,"fn":"добавить_столбец","new_column":"№","data_type":"index","index_style":"number"},
-  {"v":1,"fn":"добавить_столбец","new_column":"Код","data_type":"index","index_style":"letters"},
-  {"v":1,"fn":"добавить_столбец","new_column":"Рим","data_type":"index","index_style":"roman"}
+  {"v":1,"fn":"добавить_столбец","new_column":"Код","position":"_после_","relative_column":"A","data_type":"index","index_style":"letters"}
 ]
 ```
 
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `new_column` | string | Имя столбца |
+| `position` | string | `_начало_` / `_конец_` / `_перед_` / `_после_` (по умолчанию `_конец_`) |
+| `relative_column` | string | Для `_перед_`/`_после_`: заголовок, индекс 1-based или буква `A`/`AA` |
 | `data_type` | string | `text` \| `number` \| `date` \| `index` |
 | `index_style` | string | Для `index`: `number` (1,2,3…), `letters` (A,B,C…AA…), `roman` (I,II,III…) |
-| `format` | string | NumberFormat; пусто — по типу (`@` / глобальный числовой / дата); для индекса не используется |
-| `choices` | list | Для `text`: допустимые значения → LIST-валидация на диапазоне данных |
+| `format` | string | NumberFormat; пусто — по типу; для индекса не используется |
+| `choices` | list | Для `text`: LIST-валидация |
 | `data_validation` | bool | Для `number`/`date`: контроль мин/макс |
 | `min` / `max` | string | Границы числа или даты |
 | `sheet` | string | Лист; пусто — все листы шага |
 
-Столбец в конец used-области; при существующем заголовке — формат/контроль (и заполнение индекса при `data_type=index`).
-В визарде: тип данных и вид индекса в одном ряду; минимум и максимум — тоже.
+При существующем заголовке — без повторной вставки (формат/контроль/индекс).
+В визарде: имя+куда+опорный в одном ряду; тип+вид индекса; мин/макс.
 
 ---
 

@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.755"
+MACRO_VERSION = "3.10.756"
 import json
 import re
 
@@ -1906,6 +1906,44 @@ def _normalize_add_column_block(block):
     out["new_column"] = unicode(out.get("new_column") or out.get("name") or "").strip()
     if out["new_column"] == u"":
         out.pop("new_column", None)
+
+    pos_raw = unicode(out.get("position") or out.get("place") or out.get("where") or u"").strip()
+    pos_cf = pos_raw.casefold()
+    pos_map = {
+        u"_начало_": u"_начало_",
+        u"начало": u"_начало_",
+        u"первый": u"_начало_",
+        u"start": u"_начало_",
+        u"first": u"_начало_",
+        u"_конец_": u"_конец_",
+        u"конец": u"_конец_",
+        u"последний": u"_конец_",
+        u"end": u"_конец_",
+        u"last": u"_конец_",
+        u"_перед_": u"_перед_",
+        u"перед": u"_перед_",
+        u"before": u"_перед_",
+        u"_после_": u"_после_",
+        u"после": u"_после_",
+        u"after": u"_после_",
+    }
+    try:
+        from libre_macros_param_wizard_cfg import ADD_COLUMN_POSITION_CODE
+
+        cfg_pos = ADD_COLUMN_POSITION_CODE.get(pos_raw) or ADD_COLUMN_POSITION_CODE.get(pos_cf)
+        if cfg_pos:
+            pos_map[pos_cf] = cfg_pos
+    except Exception:
+        pass
+    out["position"] = pos_map.get(pos_cf, u"_конец_")
+
+    rel = unicode(out.get("relative_column") or out.get("relative") or out.get("anchor") or u"").strip()
+    if out["position"] in (u"_перед_", u"_после_") and rel != u"":
+        out["relative_column"] = rel
+    else:
+        out.pop("relative_column", None)
+        out.pop("relative", None)
+        out.pop("anchor", None)
 
     dt = unicode(out.get("data_type") or out.get("type") or u"text").strip().casefold()
     dt_map = {

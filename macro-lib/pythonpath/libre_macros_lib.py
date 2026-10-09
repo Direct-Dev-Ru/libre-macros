@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.755"
+MACRO_VERSION = "3.10.756"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -13640,6 +13640,29 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
     )
     min_raw = str(block.get("min") or block.get("min_value") or "").strip()
     max_raw = str(block.get("max") or block.get("max_value") or "").strip()
+    pos_raw = str(block.get("position") or block.get("place") or "_конец_").strip().casefold()
+    pos_map = {
+        "_начало_": "start",
+        "начало": "start",
+        "первый": "start",
+        "start": "start",
+        "first": "start",
+        "_конец_": "end",
+        "конец": "end",
+        "последний": "end",
+        "end": "end",
+        "last": "end",
+        "_перед_": "before",
+        "перед": "before",
+        "before": "before",
+        "_после_": "after",
+        "после": "after",
+        "after": "after",
+    }
+    position = pos_map.get(pos_raw, "end")
+    rel_token = str(
+        block.get("relative_column") or block.get("relative") or block.get("anchor") or ""
+    ).strip()
 
     h_sr = sr
     try:
@@ -13648,55 +13671,82 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
     except Exception:
         h_sr = max(0, int(sr) - 1)
 
-    existing = _lm_pp_find_or_append_header_column(sheet, new_column, h_sr)
-    if existing < 0:
-        _lm_log_postprocess(
-            doc, sheet_name, "диапазон", fn_key, "ошибка", "не удалось найти место столбца"
-        )
-        return
-    # Уже есть заголовок с этим именем?
-    existed = False
+    # Уже есть заголовок с этим именем в диапазоне данных?
+    target_col = None
     try:
-        existed = (
-            lm_identity_key(cell_text(sheet.getCellByPosition(existing, h_sr)).strip())
-            == lm_identity_key(new_column)
-        )
+        hkey = lm_identity_key(new_column)
+        c = int(sc)
+        while c <= int(ec):
+            try:
+                cur_h = cell_text(sheet.getCellByPosition(c, h_sr)).strip()
+            except Exception:
+                cur_h = ""
+            if cur_h != "" and lm_identity_key(cur_h) == hkey:
+                target_col = c
+                break
+            c = c + 1
     except Exception:
-        existed = False
-    target_col = existing
+        target_col = None
+    existed = target_col is not None
     inserted = False
     if not existed:
-        # Пустая ячейка справа — пишем заголовок; иначе вставка в конец used.
-        try:
-            cur = cell_text(sheet.getCellByPosition(existing, h_sr)).strip()
-        except Exception:
-            cur = ""
-        if cur == "":
-            target_col = existing
-            try:
-                sheet.getCellByPosition(target_col, h_sr).String = new_column
-            except Exception:
-                pass
-            inserted = True
-        else:
+        insert_at = int(ec) + 1
+        if position == "start":
+            insert_at = int(sc)
+        elif position == "end":
             insert_at = int(ec) + 1
-            try:
-                sheet.getColumns().insertByIndex(insert_at, 1)
-                target_col = insert_at
-                sheet.getCellByPosition(target_col, h_sr).String = new_column
-                inserted = True
-            except Exception as err:
-                _lm_log_postprocess(
-                    doc,
-                    sheet_name,
-                    "диапазон",
-                    fn_key,
-                    "ошибка",
-                    "вставка столбца: %s" % err,
+        elif position in ("before", "after"):
+            if rel_token == "":
+                rel_col = int(sc)
+            else:
+                rel_col, rel_err = _lm_pp_resolve_column_token_unique(
+                    rel_token, sheet, header_row_range, sc, ec
                 )
-                return
-    else:
-        target_col = existing
+                if rel_col is None:
+                    _lm_log_postprocess(
+                        doc,
+                        sheet_name,
+                        "диапазон",
+                        fn_key,
+                        "ошибка",
+                        "relative_column не найден: %s" % (rel_err or rel_token),
+                    )
+                    return
+            insert_at = int(rel_col) if position == "before" else int(rel_col) + 1
+        if insert_at < int(sc):
+            insert_at = int(sc)
+        try:
+            # Если справа уже пустая ячейка заголовка и вставка в конец —
+            # можно просто записать имя без физической вставки.
+            write_only = False
+            if position == "end":
+                try:
+                    empty_at = _lm_pp_find_or_append_header_column(sheet, new_column, h_sr)
+                except Exception:
+                    empty_at = -1
+                if empty_at >= 0:
+                    try:
+                        cur_e = cell_text(sheet.getCellByPosition(empty_at, h_sr)).strip()
+                    except Exception:
+                        cur_e = "x"
+                    if cur_e == "" and empty_at >= int(ec):
+                        insert_at = empty_at
+                        write_only = True
+            if not write_only:
+                sheet.getColumns().insertByIndex(int(insert_at), 1)
+            target_col = int(insert_at)
+            sheet.getCellByPosition(target_col, h_sr).String = new_column
+            inserted = True
+        except Exception as err:
+            _lm_log_postprocess(
+                doc,
+                sheet_name,
+                "диапазон",
+                fn_key,
+                "ошибка",
+                "вставка столбца: %s" % err,
+            )
+            return
 
     ref_col = max(0, int(sc))
     try:
@@ -13763,15 +13813,18 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
             sheet, target_col, sr, er if er >= sr else sr, dmin, dmax
         )
 
-    note = "new_column=%s type=%s col=%d inserted=%s validation=%s" % (
+    note = "new_column=%s type=%s col=%d inserted=%s position=%s validation=%s" % (
         new_column,
         data_type,
         int(target_col),
         str(inserted),
+        position,
         str(dv_ok),
     )
     if data_type == "index":
         note = note + " index_style=%s filled=%d" % (index_style, int(index_filled))
+    if position in ("before", "after") and rel_token:
+        note = note + " relative=%s" % rel_token
     _lm_log_postprocess(
         doc,
         sheet_name,

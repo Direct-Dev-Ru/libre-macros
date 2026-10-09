@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.755"
+MACRO_VERSION = "3.10.756"
 import re
 
 try:
@@ -382,9 +382,8 @@ _FALLBACK_FINAL_REST_HINTS = {
         u'[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     u"добавить_столбец": (
-        u"JSON: new_column, data_type (text|number|date|index); index→index_style; "
-        u"text→choices[]; number/date→data_validation+min/max",
-        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","data_type":"index","index_style":"number"}]',
+        u"JSON: new_column, position+_relative_column; data_type text|number|date|index",
+        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_конец_","data_type":"index","index_style":"number"}]',
     ),
     u"применить_формулу": (
         u"имя_столбца=формула Calc; {row_id} — первая строка данных",
@@ -523,8 +522,8 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u'[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     u"добавить_столбец": (
-        u"JSON: new_column, data_type (text|number|date|index); index→index_style number|letters|roman",
-        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","data_type":"index","index_style":"letters"}]',
+        u"JSON: new_column, position+_relative_column; data_type+index_style",
+        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_перед_","relative_column":"Сумма","data_type":"index","index_style":"letters"}]',
     ),
     u"применить_формулу": (
         u"имя_столбца=формула Calc; {row_id} — первая строка данных (1-based); "
@@ -1593,6 +1592,28 @@ ADD_COLUMN_INDEX_STYLE_CODE[u"abc".casefold()] = u"letters"
 ADD_COLUMN_INDEX_STYLE_CODE[u"римская".casefold()] = u"roman"
 ADD_COLUMN_INDEX_STYLE_CODE[u"римские".casefold()] = u"roman"
 ADD_COLUMN_INDEX_STYLE_CODE[u"roman_numerals".casefold()] = u"roman"
+
+# Куда вставить новый столбец.
+ADD_COLUMN_POSITION_CHOICES = (
+    (u"_начало_", u"Первый"),
+    (u"_конец_", u"Последний"),
+    (u"_перед_", u"Перед"),
+    (u"_после_", u"После"),
+)
+ADD_COLUMN_POSITION_LABEL = {c: l for c, l in ADD_COLUMN_POSITION_CHOICES}
+ADD_COLUMN_POSITION_CODE = {l.casefold(): c for c, l in ADD_COLUMN_POSITION_CHOICES}
+for _ap_code, _ap_lab in ADD_COLUMN_POSITION_CHOICES:
+    ADD_COLUMN_POSITION_CODE[_ap_code.casefold()] = _ap_code
+ADD_COLUMN_POSITION_CODE[u"первый".casefold()] = u"_начало_"
+ADD_COLUMN_POSITION_CODE[u"начало".casefold()] = u"_начало_"
+ADD_COLUMN_POSITION_CODE[u"start".casefold()] = u"_начало_"
+ADD_COLUMN_POSITION_CODE[u"последний".casefold()] = u"_конец_"
+ADD_COLUMN_POSITION_CODE[u"конец".casefold()] = u"_конец_"
+ADD_COLUMN_POSITION_CODE[u"end".casefold()] = u"_конец_"
+ADD_COLUMN_POSITION_CODE[u"перед".casefold()] = u"_перед_"
+ADD_COLUMN_POSITION_CODE[u"before".casefold()] = u"_перед_"
+ADD_COLUMN_POSITION_CODE[u"после".casefold()] = u"_после_"
+ADD_COLUMN_POSITION_CODE[u"after".casefold()] = u"_после_"
 _PARAM_COL_WIDTHS = (8500, 9500, 9500, 9500, 9500, 9500)
 _DESC_GENERAL_INFO_SEPARATOR = u"---------Общая информация ---------"
 _PICK_SOURCE = None
@@ -3113,16 +3134,41 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"добавить_столбец": {
         "title": u"Добавить столбец",
         "hint": (
-            u"Столбец в конец таблицы (или на всех — «Одинаково…»).\n"
-            u"Тип: Текст / Число / Дата / Индекс. При «Индекс» — вид: 1,2,3 / A,B,C / I,II,III.\n"
-            u"Текст — список значений; Число/Дата — формат и опционально мин/макс.\n"
-            u"Индекс заполняет строки данных; существующий столбец с тем же именем обновляется."
+            u"Имя + куда вставить (Первый/Последний/Перед/После). Перед/После — опорный столбец.\n"
+            u"Тип: Текст / Число / Дата / Индекс (вид: 1,2,3 / A,B,C / I,II,III).\n"
+            u"Текст — список значений; Число/Дата — формат и мин/макс. Существующее имя — без вставки."
         ),
-        "hint_lines": 4,
+        "hint_lines": 3,
         "compact_fields": True,
         "dialog_fit_content": True,
         "fields": (
-            {"id": "new_column", "label": u"Имя нового столбца", "default": u"Новый"},
+            {
+                "id": "new_column",
+                "label": u"Имя столбца",
+                "default": u"Новый",
+                "row_group": u"name_pos",
+                "row_group_slot": 0,
+                "row_group_frac": 0.40,
+                "row_group_fracs": (0.40, 0.28, 0.32),
+            },
+            {
+                "id": "position",
+                "label": u"Куда",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in ADD_COLUMN_POSITION_CHOICES),
+                "default": u"Последний",
+                "row_group": u"name_pos",
+                "row_group_slot": 1,
+            },
+            {
+                "id": "relative_column",
+                "label": u"Опорный столбец",
+                "type": "combo",
+                "choices_from_headers": True,
+                "default": u"",
+                "row_group": u"name_pos",
+                "row_group_slot": 2,
+            },
             {
                 "id": "data_type",
                 "label": u"Тип данных",

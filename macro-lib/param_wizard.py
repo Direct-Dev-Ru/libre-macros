@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.755"
+MACRO_VERSION = "3.10.756"
 import ast
 import glob
 import json
@@ -9916,6 +9916,15 @@ def _block_field_to_text(block, field_id, fn_key=None):
         return getattr(_pw_cfg, 'ADD_COLUMN_INDEX_STYLE_LABEL', {}).get(
             raw, unicode(block.get('index_style') or u'1, 2, 3…')
         )
+    if field_id == 'position' and unicode(fn_key or u'').casefold() in (
+        u'добавить_столбец'.casefold(),
+        u'add_column'.casefold(),
+        u'новый_столбец'.casefold(),
+    ):
+        raw = unicode(block.get('position') or u'_конец_').strip().casefold()
+        return getattr(_pw_cfg, 'ADD_COLUMN_POSITION_LABEL', {}).get(
+            raw, unicode(block.get('position') or u'Последний')
+        )
     if field_id == 'required' and unicode(fn_key or u'').casefold() in (
         u'ручной_ввод_в_карту_переменных'.casefold(),
         u'ручной_ввод'.casefold(),
@@ -10325,6 +10334,29 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
                     out.append({'old': old, 'new': new})
             return out
     if field_id == 'position':
+        if unicode(fn_key or u'').casefold() in (
+            u'добавить_столбец'.casefold(),
+            u'add_column'.casefold(),
+            u'новый_столбец'.casefold(),
+        ):
+            t = unicode(text or u'').strip()
+            code = getattr(_pw_cfg, 'ADD_COLUMN_POSITION_CODE', {}).get(t, None)
+            if code is None:
+                code = getattr(_pw_cfg, 'ADD_COLUMN_POSITION_CODE', {}).get(t.casefold(), None)
+            if code is None:
+                tc = t.casefold()
+                pos_map = {
+                    u'_начало_': u'_начало_', u'начало': u'_начало_', u'первый': u'_начало_',
+                    u'start': u'_начало_', u'first': u'_начало_',
+                    u'_конец_': u'_конец_', u'конец': u'_конец_', u'последний': u'_конец_',
+                    u'end': u'_конец_', u'last': u'_конец_',
+                    u'_перед_': u'_перед_', u'перед': u'_перед_', u'before': u'_перед_',
+                    u'_после_': u'_после_', u'после': u'_после_', u'after': u'_после_',
+                }
+                code = pos_map.get(tc, u'_конец_')
+            if code not in (u'_начало_', u'_конец_', u'_перед_', u'_после_'):
+                code = u'_конец_'
+            return code
         t = unicode(text or u'').strip().casefold()
         rev = {
             u'_перед_': u'before',
@@ -11393,23 +11425,44 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             rg_slot = int(fld.get('row_group_slot') or 0)
             if rg_slot > 0:
                 continue
-            peer = None
+            peers = []
             for other in fields:
-                if other.get('row_group') == fld.get('row_group') and int(other.get('row_group_slot') or 0) == 1:
-                    peer = other
-                    break
-            rg_gap = 8
-            try:
-                frac = float(fld.get('row_group_frac'))
-            except (TypeError, ValueError):
-                frac = 0.5
-            if frac <= 0.0 or frac >= 1.0:
-                frac = 0.5
-            w0 = max(48, int((right_w - rg_gap) * frac))
-            w1 = max(60, right_w - rg_gap - w0)
-            # если min сдвинул доли — ужать первый, сохранив долю «по возможности»
-            if w0 + rg_gap + w1 > right_w:
-                w0 = max(48, right_w - rg_gap - w1)
+                if other.get('row_group') == fld.get('row_group'):
+                    peers.append(other)
+            peers.sort(key=lambda f: int(f.get('row_group_slot') or 0))
+            if not peers:
+                peers = [fld]
+            n_peers = len(peers)
+            rg_gap = 6 if n_peers >= 3 else 8
+            avail = max(60, right_w - rg_gap * max(0, n_peers - 1))
+            widths = []
+            fracs_raw = fld.get('row_group_fracs')
+            if isinstance(fracs_raw, (list, tuple)) and len(fracs_raw) == n_peers:
+                try:
+                    fracs = [max(0.05, float(x)) for x in fracs_raw]
+                except (TypeError, ValueError):
+                    fracs = []
+                s = sum(fracs) if fracs else 0.0
+                if s > 0:
+                    widths = [max(36, int(avail * (f / s))) for f in fracs]
+            if not widths:
+                try:
+                    frac0 = float(fld.get('row_group_frac'))
+                except (TypeError, ValueError):
+                    frac0 = 1.0 / float(n_peers)
+                if frac0 <= 0.0 or frac0 >= 1.0:
+                    frac0 = 1.0 / float(n_peers)
+                if n_peers == 1:
+                    widths = [avail]
+                else:
+                    w0 = max(48, int(avail * frac0))
+                    rest = max(40, avail - w0)
+                    wi = max(40, rest // (n_peers - 1))
+                    widths = [w0] + [wi] * (n_peers - 1)
+            # подогнать сумму к avail (лишнее/недостаток — в последнюю ячейку)
+            used = sum(widths)
+            if used != avail and widths:
+                widths[-1] = max(36, widths[-1] + (avail - used))
 
             def _row_group_add_cell(cell_fld, x, w):
                 cfid = cell_fld['id']
@@ -11433,9 +11486,12 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                     _wizard_dlg_add_edit(dm, cfid + 'Ed', x, fy + 12, w, 18)
                     field_edits[cfid] = cfid + 'Ed'
 
-            _row_group_add_cell(fld, rx, w0)
-            if peer is not None:
-                _row_group_add_cell(peer, rx + w0 + rg_gap, w1)
+            cx = rx
+            pi = 0
+            while pi < n_peers:
+                _row_group_add_cell(peers[pi], cx, widths[pi])
+                cx = cx + widths[pi] + rg_gap
+                pi = pi + 1
             fy += row_h
             continue
         if ftype == 'bool':
@@ -11913,7 +11969,33 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             raw = _combo_control_text(ctl)
         except Exception:
             raw = u''
-        return _text_to_block_field(u'data_type', raw, u'combo') or u'text'
+        return _text_to_block_field(u'data_type', raw, u'combo', fn_key=fn_key) or u'text'
+
+    def _add_column_position_code_from_ui():
+        ctl = combos.get(u'position')
+        if ctl is None:
+            return u'_конец_'
+        try:
+            raw = _combo_control_text(ctl)
+        except Exception:
+            raw = u''
+        return _text_to_block_field(u'position', raw, u'combo', fn_key=fn_key) or u'_конец_'
+
+    def _sync_add_column_position_ui():
+        if unicode(fn_key or u'').casefold() not in (
+            u'добавить_столбец'.casefold(),
+            u'add_column'.casefold(),
+            u'новый_столбец'.casefold(),
+        ):
+            return
+        pos = unicode(_add_column_position_code_from_ui() or u'_конец_').casefold()
+        need_rel = pos in (u'_перед_', u'_после_', u'before', u'after')
+        for name in (u'relative_columnCb', u'relative_columnLbl'):
+            try:
+                _set_form_ctl_enabled(dlg.getControl(name), need_rel)
+            except Exception:
+                pass
+        _set_form_ctl_enabled(combos.get(u'relative_column'), need_rel)
 
     def _sync_add_column_type_ui():
         if unicode(fn_key or u'').casefold() not in (
@@ -11922,6 +12004,7 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             u'новый_столбец'.casefold(),
         ):
             return
+        _sync_add_column_position_ui()
         dt = unicode(_add_column_data_type_code_from_ui() or u'text').casefold()
         is_text = dt == u'text'
         is_num = dt == u'number'
@@ -13293,6 +13376,15 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                     return
                 if src is combos.get(u'data_type') or src_name == u'data_typeCb':
                     _sync_add_column_type_ui()
+                    self._sync_params_to_block()
+                    return
+                if src is combos.get(u'position') or src_name == u'positionCb':
+                    if unicode(fn_key or u'').casefold() in (
+                        u'добавить_столбец'.casefold(),
+                        u'add_column'.casefold(),
+                        u'новый_столбец'.casefold(),
+                    ):
+                        _sync_add_column_position_ui()
                     self._sync_params_to_block()
                     return
                 if src is combos.get(u'name_mode') or src_name == u'name_modeCb':
