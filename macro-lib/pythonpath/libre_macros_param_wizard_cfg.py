@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.746"
+MACRO_VERSION = "3.10.747"
 import re
 
 try:
@@ -2545,12 +2545,12 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"заголовок_плюс_высота": {
         "title": u"Заголовок + высота",
         "hint": (
-            u"Высота заголовка в мм (по умолчанию ставится как указано; мин. 7 мм). "
-            u"Галочка «Плюсовать» — прибавить к текущей высоте. "
-            u"Гориз.: left/center/right; верт.: top/center/bottom. "
-            u"Цвета — имя или #hex. «Автоматически» для цвета шрифта — контраст к заливке."
+            u"Высота заголовка в мм (мин. 7; «Плюсовать» — прибавить к текущей).\n"
+            u"Цвета — имя или #hex; «Авто» для шрифта — контраст к заливке."
         ),
-        "hint_lines": 5,
+        "hint_lines": 2,
+        "compact_fields": True,
+        "dialog_fit_content": True,
         "fields": (
             {
                 "id": "height_mm",
@@ -2572,6 +2572,8 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "combo",
                 "choices": _HEADER_PLUS_HEIGHT_HORI_CHOICES,
                 "default": u"center",
+                "row_group": u"align",
+                "row_group_slot": 0,
             },
             {
                 "id": "v_align",
@@ -2579,15 +2581,32 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "combo",
                 "choices": _HEADER_PLUS_HEIGHT_VERT_CHOICES,
                 "default": u"center",
+                "row_group": u"align",
+                "row_group_slot": 1,
             },
-            {"id": "font_name", "label": u"Шрифт", "default": u""},
-            {"id": "font_size", "label": u"Размер, pt", "default": u""},
+            {
+                "id": "font_name",
+                "label": u"Шрифт",
+                "default": u"",
+                "row_group": u"font",
+                "row_group_slot": 0,
+                "row_group_frac": 0.62,
+            },
+            {
+                "id": "font_size",
+                "label": u"Размер, pt",
+                "default": u"",
+                "row_group": u"font",
+                "row_group_slot": 1,
+            },
             {
                 "id": "fill_color",
                 "label": u"Заливка",
                 "type": "combo",
                 "choices": _header_plus_height_color_choices(),
                 "default": u"",
+                "row_group": u"colors",
+                "row_group_slot": 0,
             },
             {
                 "id": "font_color",
@@ -2595,18 +2614,24 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "combo",
                 "choices": _header_plus_height_color_choices(),
                 "default": u"",
+                "row_group": u"colors",
+                "row_group_slot": 1,
             },
             {
                 "id": "font_color_auto",
-                "label": u"Автоматически (цвет шрифта)",
+                "label": u"Авто цвет шрифта",
                 "type": "bool",
                 "default": True,
+                "row_group": u"flags",
+                "row_group_slot": 0,
             },
             {
                 "id": "bold",
-                "label": u"Жирный шрифт",
+                "label": u"Жирный",
                 "type": "bool",
                 "default": False,
+                "row_group": u"flags",
+                "row_group_slot": 1,
             },
         ),
     },

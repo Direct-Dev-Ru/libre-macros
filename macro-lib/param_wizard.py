@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.746"
+MACRO_VERSION = "3.10.747"
 import ast
 import glob
 import json
@@ -10667,6 +10667,7 @@ def _sheet_block_field_row_height(fld, fn_key=None):
         u'анкета_в_таблицу'.casefold(),
         u'form_to_table'.casefold(),
         u'разделить_по_столбцам'.casefold(),
+        u'заголовок_плюс_высота'.casefold(),
     ):
         gap = min(int(gap), 2)
     if ftype == 'bool':
