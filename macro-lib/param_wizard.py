@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.747"
+MACRO_VERSION = "3.10.748"
 import ast
 import glob
 import json
@@ -10682,6 +10682,8 @@ def _sheet_block_field_row_height(fld, fn_key=None):
         return 12 + 2 + 18 + gap
     if ftype == 'lambda_pick':
         return 12 + 2 + 18 + gap
+    if ftype == 'formula_pick':
+        return 12 + 2 + 18 + gap
     return 12 + 2 + 18 + gap
 
 def _wp_saved_lambda_pick_labels(saved_lambdas):
@@ -10728,6 +10730,26 @@ def _wp_lambda_builder_kind_for_field(fid, fn_key=u''):
     if fk == u'столбец_по_лямбде' and f == u'expr':
         return u'rows_value'
     return u'rows_value'
+
+def _show_formula_builder_dialog( parent_dialog, initial_formula=u'', doc=None, sheet_name=u'', headers=None, title=None):
+    """Обёртка → libre_macros_formula_builder_lib.show_formula_builder_dialog."""
+    try:
+        from libre_macros_formula_builder_lib import show_formula_builder_dialog as _impl
+
+        return _impl(
+            parent_dialog,
+            initial_formula=initial_formula,
+            doc=doc,
+            sheet_name=sheet_name,
+            headers=headers,
+            title=title,
+        )
+    except Exception as err:
+        try:
+            _pw_dbg(u'formula_builder: %s' % err)
+        except Exception:
+            pass
+        return False, unicode(initial_formula or u'')
 
 def _show_lambda_builder_dialog( parent_dialog, kind=u'rows_value', initial_expr=u'', doc=None, sheet_name=u'', headers=None, saved_lambdas=None, title=None, lock_kind=True):
     """Обёртка → libre_macros_lambda_builder_lib.show_lambda_builder_dialog."""
@@ -11231,6 +11253,7 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
     field_lambda_pick_combos = set()
     field_lambda_save_btns = {}
     field_lambda_builder_btns = {}
+    field_formula_builder_btns = {}
     fields_by_id = {}
     saved_lambdas_state = [[]]
     try:
@@ -11359,6 +11382,18 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             field_lambda_save_btns[fid] = fid + 'SaveBtn'
             field_lambda_builder_btns[fid] = fid + 'BuildBtn'
             field_choices[fid] = _wp_saved_lambda_pick_labels(saved_lambdas_state[0])
+        elif ftype == 'formula_pick':
+            build_w = 22
+            gap = 3
+            edit_w = max(80, right_w - build_w - gap)
+            _wizard_dlg_add_fixed(dm, fid + 'Lbl', lbl, rx, fy, right_w, 12)
+            _wizard_dlg_add_edit(dm, fid + 'Ed', rx, fy + 12, edit_w, 18)
+            _wizard_dlg_add_button(
+                dm, fid + 'BuildBtn', u'…',
+                rx + edit_w + gap, fy + 12, build_w, 16,
+            )
+            field_edits[fid] = fid + 'Ed'
+            field_formula_builder_btns[fid] = fid + 'BuildBtn'
         elif ftype == 'combo':
             if fn_key == u'градиент' and fid == 'sort_dir':
                 field_choices[fid] = tuple(fld.get('choices') or ())
@@ -13111,6 +13146,39 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                     return
             if cmd.endswith(u'BuildBtn'):
                 fid = cmd[:-len(u'BuildBtn')]
+                if fid in field_formula_builder_btns:
+                    edit_ctl = edits.get(fid)
+                    cur = u''
+                    try:
+                        cur = unicode(edit_ctl.getText() or u'')
+                    except Exception:
+                        pass
+                    sheet_nm = u''
+                    try:
+                        sheet_nm = _inner_dialog_sheet_text(sheet_ed) if sheet_ed is not None else u''
+                    except Exception:
+                        sheet_nm = u''
+                    hdrs = []
+                    try:
+                        hdrs = list(_wp_list_sheet_header_columns(doc, sheet_nm) or [])
+                    except Exception:
+                        hdrs = []
+                    ok_f, formula_f = _show_formula_builder_dialog(
+                        dlg,
+                        initial_formula=cur,
+                        doc=doc,
+                        sheet_name=sheet_nm,
+                        headers=hdrs,
+                        title=u'Конструктор формулы',
+                    )
+                    if ok_f:
+                        if edit_ctl is not None:
+                            try:
+                                edit_ctl.setText(unicode(formula_f or u''))
+                            except Exception:
+                                pass
+                        self._sync_params_to_block()
+                    return
                 if fid in field_lambda_builder_btns:
                     edit_ctl = edits.get(fid)
                     cur = u''
@@ -13211,6 +13279,13 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
         except Exception:
             pass
     for fid, btn_name in field_lambda_builder_btns.items():
+        try:
+            ctl = dlg.getControl(btn_name)
+            ctl.addActionListener(h)
+            ctl.setActionCommand(btn_name)
+        except Exception:
+            pass
+    for fid, btn_name in field_formula_builder_btns.items():
         try:
             ctl = dlg.getControl(btn_name)
             ctl.addActionListener(h)
