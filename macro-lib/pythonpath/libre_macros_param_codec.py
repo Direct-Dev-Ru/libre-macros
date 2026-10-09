@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.753"
+MACRO_VERSION = "3.10.754"
 import json
 import re
 
@@ -1585,20 +1585,52 @@ def _zebra_role_labels():
 def _normalize_zebra_block(block):
     out = _normalize_block("зебра_диапазон", block)
     roles = out.get("roles")
+    norm_roles = {}
     if isinstance(roles, dict):
-        norm_roles = {}
         for role_key, label in _zebra_role_labels():
             spec = roles.get(role_key) or roles.get(label)
             if not isinstance(spec, dict):
-                continue
-            fill = unicode(spec.get("fill") or "").strip()
-            font = unicode(spec.get("font") or "").strip()
+                # Legacy UI: «заливка/шрифт» одной строкой в roles.header и т.п.
+                raw = unicode(spec or "").strip()
+                if raw == u"":
+                    continue
+                if u"/" in raw:
+                    fill, _, font = raw.partition(u"/")
+                else:
+                    fill, font = raw, u""
+                fill = fill.strip()
+                font = font.strip()
+            else:
+                fill = unicode(spec.get("fill") or "").strip()
+                font = unicode(spec.get("font") or "").strip()
             if fill or font:
                 norm_roles[role_key] = {"fill": fill, "font": font}
-        if norm_roles:
-            out["roles"] = norm_roles
-        else:
-            out.pop("roles", None)
+    # Плоские поля визарда header_fill / even_font / …
+    if not norm_roles:
+        for role_key, _label in _zebra_role_labels():
+            fill = unicode(out.get("%s_fill" % role_key) or u"").strip()
+            font = unicode(out.get("%s_font" % role_key) or u"").strip()
+            # Старый визард: одно поле header/even/odd = «заливка/шрифт»
+            if not fill and not font:
+                raw = unicode(out.get(role_key) or u"").strip()
+                if raw:
+                    if u"/" in raw:
+                        fill, _, font = raw.partition(u"/")
+                    else:
+                        fill, font = raw, u""
+                    fill = fill.strip()
+                    font = font.strip()
+            if fill or font:
+                norm_roles[role_key] = {"fill": fill, "font": font}
+    if norm_roles:
+        out["roles"] = norm_roles
+    else:
+        out.pop("roles", None)
+    for role_key, _label in _zebra_role_labels():
+        out.pop(role_key, None)
+        out.pop("%s_fill" % role_key, None)
+        out.pop("%s_font" % role_key, None)
+    out.pop("scheme", None)
     return _attach_sheet(out, out.get("sheet"))
 def _normalize_int_list(value):
     if value is None:

@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.753"
+MACRO_VERSION = "3.10.754"
 import ast
 import glob
 import json
@@ -9692,6 +9692,29 @@ def _sheet_block_form_label(block, schema):
                 if len(tail) > 28:
                     tail = tail[:28] + u'…'
                 return _inner_block_list_label(sheet, tail)
+    if u'scheme' in field_ids and isinstance(block.get('roles'), dict):
+        try:
+            tail = unicode(_pw_cfg._zebra_scheme_label_for_roles(block.get('roles')) or u'')
+        except Exception:
+            tail = u''
+        if tail and tail != _pw_cfg.ZEBRA_SCHEME_CUSTOM_LABEL:
+            if len(tail) > 28:
+                tail = tail[:28] + u'…'
+            return _inner_block_list_label(sheet, tail)
+        roles = block.get('roles') or {}
+        bits = []
+        for role in (u'header', u'even', u'odd'):
+            spec = roles.get(role) or {}
+            if not isinstance(spec, dict):
+                continue
+            fill = unicode(spec.get(u'fill') or u'').strip()
+            if fill:
+                bits.append(fill)
+        if bits:
+            tail = u'+'.join(bits)
+            if len(tail) > 28:
+                tail = tail[:28] + u'…'
+            return _inner_block_list_label(sheet, tail)
     tail = u''
     if len(fields) > 0:
         fid = fields[0].get('id')
@@ -10101,14 +10124,31 @@ def _block_field_to_text(block, field_id, fn_key=None):
         if isinstance(aggs, (list, tuple)) and len(aggs) > 0 and isinstance(aggs[0], dict):
             return unicode(aggs[0].get('as') or aggs[0].get('name') or u'').strip()
         return unicode(block.get('agg_as') or block.get('as') or u'').strip()
-    if fn_key == u'зебра_диапазон' and field_id in ('header', 'even', 'odd'):
-        roles = block.get('roles') or {}
-        spec = roles.get(field_id) or {}
-        fill = unicode(spec.get('fill') or u'').strip()
-        font = unicode(spec.get('font') or u'').strip()
-        if fill and font:
-            return u'%s/%s' % (fill, font)
-        return fill or font
+    if unicode(fn_key or u'').casefold() == u'зебра_диапазон'.casefold():
+        roles = block.get('roles') if isinstance(block.get('roles'), dict) else {}
+        if field_id == u'scheme':
+            try:
+                return _pw_cfg._zebra_scheme_label_for_roles(roles)
+            except Exception:
+                return _pw_cfg.ZEBRA_SCHEME_CUSTOM_LABEL
+        if field_id in (
+            u'header_fill', u'header_font', u'even_fill', u'even_font',
+            u'odd_fill', u'odd_font',
+        ):
+            role, kind = field_id.rsplit(u'_', 1)
+            spec = roles.get(role) if isinstance(roles.get(role), dict) else {}
+            val = unicode((spec or {}).get(kind) or u'').strip()
+            if val == u'':
+                val = unicode(block.get(field_id) or u'').strip()
+            return val
+        # Legacy: одно поле header/even/odd = «заливка/шрифт»
+        if field_id in ('header', 'even', 'odd'):
+            spec = roles.get(field_id) or {}
+            fill = unicode(spec.get('fill') or u'').strip()
+            font = unicode(spec.get('font') or u'').strip()
+            if fill and font:
+                return u'%s/%s' % (fill, font)
+            return fill or font
     if field_id in ('wrap', 'include_header', 'whole_sheet', 'whole_row', 'sort', 'bold', 'italic', 'font_color_auto', 'as_values', 'copy'):
         return u'1' if block.get(field_id) else u'0'
     val = block.get(field_id)
@@ -10657,6 +10697,18 @@ def _zebra_role_from_field_text(text):
         fill, _, font = text.partition(u'/')
     return {'fill': fill.strip(), 'font': font.strip()}
 
+
+def _zebra_normalize_wizard_block(block):
+    """Собрать roles из плоских полей визарда / legacy."""
+    if not isinstance(block, dict):
+        return block
+    try:
+        from libre_macros_param_codec import _normalize_zebra_block
+
+        return _normalize_zebra_block(block)
+    except Exception:
+        return block
+
 def _sheet_block_field_row_height(fld, fn_key=None):
     ftype = fld.get('type')
     if unicode(fn_key or u'').casefold() == u'градиент'.casefold():
@@ -11137,6 +11189,18 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
     no_sheet_blocks = bool(schema.get('blocks_without_sheet'))
     single_form = bool(schema.get('single_form'))
     is_manual_var_wizard = _is_manual_var_wizard_fn(fn_key)
+    is_zebra_fn = unicode(fn_key or u'').casefold() == u'зебра_диапазон'.casefold()
+
+    def _seed_block_from_schema_defaults():
+        seeded = {'v': 1, 'fn': fn_key}
+        for fld in schema.get('fields') or ():
+            seeded[fld['id']] = _text_to_block_field(
+                fld['id'], fld.get('default'), fld.get('type'), fn_key=fn_key
+            )
+        if is_zebra_fn:
+            seeded = _zebra_normalize_wizard_block(seeded)
+        return seeded
+
     if single_form:
         # Один блок без листа: несколько блоков → один (иначе N диалогов при сборе).
         kept = None
@@ -11145,9 +11209,7 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                 kept = dict(b)
                 break
         if kept is None:
-            kept = {'v': 1, 'fn': fn_key}
-            for fld in schema.get('fields') or ():
-                kept[fld['id']] = _text_to_block_field(fld['id'], fld.get('default'), fld.get('type'))
+            kept = _seed_block_from_schema_defaults()
         _strip_block_sheet_targeting(kept, schema)
         if forbid_as_values:
             kept.pop(u'as_values', None)
@@ -11156,9 +11218,7 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
         for b in norm_blocks:
             _strip_block_sheet_targeting(b, schema)
     if len(norm_blocks) == 0:
-        empty = {'v': 1, 'fn': fn_key}
-        for fld in schema.get('fields') or ():
-            empty[fld['id']] = _text_to_block_field(fld['id'], fld.get('default'), fld.get('type'))
+        empty = _seed_block_from_schema_defaults()
         if forbid_as_values:
             empty.pop(u'as_values', None)
         if no_sheet_blocks:
@@ -12698,7 +12758,11 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             except Exception:
                 raw = u''
             val = _text_to_block_field(fid, raw, field_types.get(fid), fn_key=fn_key)
-            if fn_key == u'зебра_диапазон' and fid in ('header', 'even', 'odd'):
+            if unicode(fn_key or u'').casefold() == u'зебра_диапазон'.casefold() and fid in (
+                u'header', u'even', u'odd', u'scheme',
+                u'header_fill', u'header_font', u'even_fill', u'even_font',
+                u'odd_fill', u'odd_font',
+            ):
                 continue
             b[fid] = val
         for fid, ctl in combos.items():
@@ -12721,6 +12785,12 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                         raw = _block_field_to_text(b, fid, fn_key=fn_key)
             except Exception:
                 raw = u''
+            if unicode(fn_key or u'').casefold() == u'зебра_диапазон'.casefold() and fid in (
+                u'scheme',
+                u'header_fill', u'header_font', u'even_fill', u'even_font',
+                u'odd_fill', u'odd_font',
+            ):
+                continue
             val = _text_to_block_field(fid, raw, field_types.get(fid), fn_key=fn_key)
             b[fid] = val
         if u'match_expr' in field_lambda_pick_combos and _match_pick_code_from_ui() != u'lambda':
@@ -12790,25 +12860,56 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                 b.pop('mappings', None)
             b.pop('old', None)
             b.pop('new', None)
-        if fn_key == u'зебра_диапазон':
+        if unicode(fn_key or u'').casefold() == u'зебра_диапазон'.casefold():
             roles = {}
-            for role_id in ('header', 'even', 'odd'):
-                raw = u''
-                if role_id in edits:
-                    try:
-                        raw = unicode(edits[role_id].getText() or u'')
-                    except Exception:
-                        pass
-                spec = _zebra_role_from_field_text(raw)
-                if spec:
-                    roles[role_id] = spec
+            color_fids = (
+                u'header_fill', u'header_font', u'even_fill', u'even_font',
+                u'odd_fill', u'odd_font',
+            )
+            has_color_combos = any((fid in combos for fid in color_fids))
+            if has_color_combos:
+                for role_id in (u'header', u'even', u'odd'):
+                    fill = u''
+                    font = u''
+                    fill_ctl = combos.get(role_id + u'_fill')
+                    font_ctl = combos.get(role_id + u'_font')
+                    if fill_ctl is not None:
+                        try:
+                            fill = unicode(
+                                _combo_resolved_text(fill_ctl, prefer_edit=False) or u''
+                            ).strip()
+                        except Exception:
+                            fill = u''
+                    if font_ctl is not None:
+                        try:
+                            font = unicode(
+                                _combo_resolved_text(font_ctl, prefer_edit=False) or u''
+                            ).strip()
+                        except Exception:
+                            font = u''
+                    if fill or font:
+                        roles[role_id] = {u'fill': fill, u'font': font}
+            else:
+                for role_id in (u'header', u'even', u'odd'):
+                    raw = u''
+                    if role_id in edits:
+                        try:
+                            raw = unicode(edits[role_id].getText() or u'')
+                        except Exception:
+                            pass
+                    spec = _zebra_role_from_field_text(raw)
+                    if spec:
+                        roles[role_id] = spec
             _pw_dbg(u'_apply_form roles=%s' % repr(roles))
             if roles:
                 b['roles'] = roles
             else:
                 b.pop('roles', None)
-            for role_id in ('header', 'even', 'odd'):
+            for role_id in (u'header', u'even', u'odd'):
                 b.pop(role_id, None)
+                b.pop(role_id + u'_fill', None)
+                b.pop(role_id + u'_font', None)
+            b.pop(u'scheme', None)
         for fid, ctl in checks.items():
             try:
                 b[fid] = bool(ctl.getState())
@@ -12906,7 +13007,11 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             _inner_dialog_update_blocks_list_label(blocks_lb, prev, _sheet_block_form_label(norm_blocks[prev], schema))
         new_block = {'v': 1, 'fn': fn_key}
         for fld in fields:
-            new_block[fld['id']] = _text_to_block_field(fld['id'], fld.get('default'), fld.get('type'))
+            new_block[fld['id']] = _text_to_block_field(
+                fld['id'], fld.get('default'), fld.get('type'), fn_key=fn_key
+            )
+        if is_zebra_fn:
+            new_block = _zebra_normalize_wizard_block(new_block)
         norm_blocks.append(new_block)
         new_idx = len(norm_blocks) - 1
         _refresh_blocks(selected_index=new_idx)
@@ -12977,6 +13082,27 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                         elif (fn_key == u'заголовок_плюс_высота' or _threshold_fn()) and fid == u'font_color':
                             _sync_header_height_font_color_ui(disable_auto=True)
                             self._sync_params_to_block()
+                        elif (
+                            unicode(fn_key or u'').casefold() == u'зебра_диапазон'.casefold()
+                            and fid in (
+                                u'header_fill', u'header_font',
+                                u'even_fill', u'even_font',
+                                u'odd_fill', u'odd_font',
+                            )
+                            and not form_loading[0]
+                        ):
+                            scheme_ctl = combos.get(u'scheme')
+                            if scheme_ctl is not None:
+                                form_loading[0] = True
+                                try:
+                                    _apply_combo_selection(
+                                        scheme_ctl,
+                                        field_choices.get(u'scheme') or (),
+                                        select_name=_pw_cfg.ZEBRA_SCHEME_CUSTOM_LABEL,
+                                    )
+                                finally:
+                                    form_loading[0] = False
+                            self._sync_params_to_block()
                         else:
                             self._sync_params_to_block()
                         return
@@ -13017,6 +13143,49 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                         combos['sort_dir'].Model.Enabled = bool(sort_on)
                     except Exception:
                         pass
+                self._sync_params_to_block()
+            elif unicode(fn_key or u'').casefold() == u'зебра_диапазон'.casefold() and (
+                src is combos.get(u'scheme') or src_name == u'schemeCb'
+            ):
+                if form_loading[0]:
+                    return
+                try:
+                    scheme_text = _combo_resolved_text(combos.get(u'scheme'), prefer_edit=False)
+                except Exception:
+                    scheme_text = u''
+                code = u''
+                try:
+                    code = _pw_cfg._zebra_scheme_code_from_label(scheme_text)
+                except Exception:
+                    code = u''
+                roles = None
+                try:
+                    roles = _pw_cfg._zebra_roles_for_scheme_code(code)
+                except Exception:
+                    roles = None
+                if roles is not None:
+                    form_loading[0] = True
+                    try:
+                        for role_id in (u'header', u'even', u'odd'):
+                            spec = roles.get(role_id) or {}
+                            fill = unicode(spec.get(u'fill') or u'')
+                            font = unicode(spec.get(u'font') or u'')
+                            fill_ctl = combos.get(role_id + u'_fill')
+                            font_ctl = combos.get(role_id + u'_font')
+                            if fill_ctl is not None:
+                                _apply_combo_selection(
+                                    fill_ctl,
+                                    field_choices.get(role_id + u'_fill') or (),
+                                    select_name=fill,
+                                )
+                            if font_ctl is not None:
+                                _apply_combo_selection(
+                                    font_ctl,
+                                    field_choices.get(role_id + u'_font') or (),
+                                    select_name=font,
+                                )
+                    finally:
+                        form_loading[0] = False
                 self._sync_params_to_block()
             elif unicode(fn_key or u'').casefold() in (u'удаление_строк'.casefold(), u'пропуск_пустых_строк'.casefold()) and (
                 src is combos.get('mode') or src_name == u'modeCb'
@@ -13101,6 +13270,26 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                         return
                 for fid, ctl in combos.items():
                     if src is ctl or src == ctl or src_name == fid + u'Cb':
+                        if (
+                            unicode(fn_key or u'').casefold() == u'зебра_диапазон'.casefold()
+                            and fid in (
+                                u'header_fill', u'header_font',
+                                u'even_fill', u'even_font',
+                                u'odd_fill', u'odd_font',
+                            )
+                            and not form_loading[0]
+                        ):
+                            scheme_ctl = combos.get(u'scheme')
+                            if scheme_ctl is not None:
+                                form_loading[0] = True
+                                try:
+                                    _apply_combo_selection(
+                                        scheme_ctl,
+                                        field_choices.get(u'scheme') or (),
+                                        select_name=_pw_cfg.ZEBRA_SCHEME_CUSTOM_LABEL,
+                                    )
+                                finally:
+                                    form_loading[0] = False
                         self._sync_params_to_block()
                         return
 

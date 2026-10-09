@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.753"
+MACRO_VERSION = "3.10.754"
 import re
 
 try:
@@ -276,8 +276,9 @@ _FALLBACK_FINAL_REST_HINTS = {
         u"Сводная_1",
     ),
     u"зебра_диапазон": (
-        u"имя листа (или несколько через , или ;) | роль:заливка/шрифт — как у постобработки «зебра_диапазон»",
-        u"Итог|header:excel_header/белый; even:голубой/синий; odd:белый/синий",
+        u"JSON: roles header/even/odd с fill/font (как у постобработки «зебра_диапазон»)",
+        u'[{"v":1,"fn":"зебра_диапазон","sheet":"Итог","roles":{"header":{"fill":"excel_header","font":"белый"},'
+        u'"even":{"fill":"голубой"}}}]',
     ),
     u"сортировка": (
         u"«лист | ключи» или «лист: ключи»; задания через ; (как в постобработке)",
@@ -461,8 +462,9 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u"Arial;11;12",
     ),
     u"зебра_диапазон": (
-        u"роль:заливка/шрифт через «;» или «,» — header/заголовок, even/четные, odd/нечетные",
-        u"header:excel_header/белый, even:голубой/синий, odd:белый/синий",
+        u"JSON: roles header/even/odd с fill/font; в визарде — типовые схемы и пресеты цветов",
+        u'[{"v":1,"fn":"зебра_диапазон","roles":{"header":{"fill":"excel_header","font":"белый"},'
+        u'"even":{"fill":"голубой"}}}]',
     ),
     u"сортировка": (
         u"«лист | ключи» или «лист: ключи»; задания через ;. "
@@ -1639,6 +1641,167 @@ def _header_plus_height_color_choices():
             out.append(hx)
     return tuple(out)
 
+
+def _zebra_color_choices():
+    """Пресеты цветов для зебры: сначала русские имена, затем остальные."""
+    preferred = (
+        u"",
+        u"белый",
+        u"черный",
+        u"серый",
+        u"синий",
+        u"голубой",
+        u"excel_header",
+        u"красный",
+        u"желтый",
+        u"зеленый",
+        u"оранжевый",
+        u"фиолетовый",
+        u"бежевый",
+        u"кремовый",
+        u"#FFFFFF",
+        u"#F2F2F2",
+        u"#1F4E79",
+        u"#4472C4",
+        u"#D9EAF7",
+        u"#E2EFDA",
+        u"#FFF2CC",
+        u"#FCE4D6",
+    )
+    out = list(preferred)
+    seen = set(out)
+    for key in _header_plus_height_color_choices():
+        k = unicode(key or u"")
+        if k not in seen:
+            seen.add(k)
+            out.append(k)
+    return tuple(out)
+
+
+# Типовые схемы зебры: (code, label_ru) + roles fill/font.
+ZEBRA_SCHEME_CUSTOM_LABEL = u"(своя / вручную)"
+ZEBRA_SCHEME_CHOICES = (
+    (u"", ZEBRA_SCHEME_CUSTOM_LABEL),
+    (u"excel_blue", u"Excel: синий заголовок + голубые чётные"),
+    (u"excel_full", u"Excel: заголовок + голубой/белый + синий шрифт"),
+    (u"gray", u"Серая зебра (чётные)"),
+    (u"green", u"Зелёная зебра"),
+    (u"yellow", u"Жёлтая зебра"),
+    (u"beige", u"Бежевая зебра"),
+    (u"orange", u"Оранжевая зебра"),
+    (u"header_only", u"Только заголовок Excel"),
+    (u"soft_no_header", u"Голубые чётные (без заголовка)"),
+)
+ZEBRA_SCHEME_LABEL = {code: label for code, label in ZEBRA_SCHEME_CHOICES}
+ZEBRA_SCHEME_CODE = {label.casefold(): code for code, label in ZEBRA_SCHEME_CHOICES}
+for _zs_code, _zs_label in ZEBRA_SCHEME_CHOICES:
+    ZEBRA_SCHEME_CODE[_zs_code.casefold()] = _zs_code
+
+ZEBRA_SCHEME_ROLES = {
+    u"excel_blue": {
+        u"header": {u"fill": u"excel_header", u"font": u"белый"},
+        u"even": {u"fill": u"голубой", u"font": u""},
+        u"odd": {u"fill": u"", u"font": u""},
+    },
+    u"excel_full": {
+        u"header": {u"fill": u"excel_header", u"font": u"белый"},
+        u"even": {u"fill": u"голубой", u"font": u"синий"},
+        u"odd": {u"fill": u"белый", u"font": u"синий"},
+    },
+    u"gray": {
+        u"header": {u"fill": u"excel_header", u"font": u"белый"},
+        u"even": {u"fill": u"серый", u"font": u""},
+        u"odd": {u"fill": u"белый", u"font": u""},
+    },
+    u"green": {
+        u"header": {u"fill": u"excel_header", u"font": u"белый"},
+        u"even": {u"fill": u"зеленый", u"font": u""},
+        u"odd": {u"fill": u"белый", u"font": u""},
+    },
+    u"yellow": {
+        u"header": {u"fill": u"excel_header", u"font": u"белый"},
+        u"even": {u"fill": u"желтый", u"font": u""},
+        u"odd": {u"fill": u"белый", u"font": u""},
+    },
+    u"beige": {
+        u"header": {u"fill": u"excel_header", u"font": u"белый"},
+        u"even": {u"fill": u"бежевый", u"font": u""},
+        u"odd": {u"fill": u"белый", u"font": u""},
+    },
+    u"orange": {
+        u"header": {u"fill": u"excel_header", u"font": u"белый"},
+        u"even": {u"fill": u"оранжевый", u"font": u""},
+        u"odd": {u"fill": u"белый", u"font": u""},
+    },
+    u"header_only": {
+        u"header": {u"fill": u"excel_header", u"font": u"белый"},
+        u"even": {u"fill": u"", u"font": u""},
+        u"odd": {u"fill": u"", u"font": u""},
+    },
+    u"soft_no_header": {
+        u"header": {u"fill": u"", u"font": u""},
+        u"even": {u"fill": u"голубой", u"font": u""},
+        u"odd": {u"fill": u"белый", u"font": u""},
+    },
+}
+
+
+def _zebra_scheme_labels():
+    return tuple(label for _c, label in ZEBRA_SCHEME_CHOICES)
+
+
+def _zebra_scheme_code_from_label(text):
+    raw = unicode(text or u"").strip()
+    if raw == u"":
+        return u""
+    return ZEBRA_SCHEME_CODE.get(raw.casefold(), u"")
+
+
+def _zebra_roles_for_scheme_code(code):
+    key = unicode(code or u"").strip()
+    if key == u"":
+        return None
+    roles = ZEBRA_SCHEME_ROLES.get(key)
+    if not isinstance(roles, dict):
+        return None
+    out = {}
+    for role in (u"header", u"even", u"odd"):
+        spec = roles.get(role) or {}
+        fill = unicode(spec.get(u"fill") or u"").strip()
+        font = unicode(spec.get(u"font") or u"").strip()
+        out[role] = {u"fill": fill, u"font": font}
+    return out
+
+
+def _zebra_scheme_label_for_roles(roles):
+    """Подпись типовой схемы по roles; иначе «своя»."""
+    cur = {}
+    src = roles if isinstance(roles, dict) else {}
+    for role in (u"header", u"even", u"odd"):
+        spec = src.get(role) or {}
+        if not isinstance(spec, dict):
+            fill, font = u"", u""
+        else:
+            fill = unicode(spec.get(u"fill") or u"").strip().casefold()
+            font = unicode(spec.get(u"font") or u"").strip().casefold()
+        cur[role] = (fill, font)
+    for code, label in ZEBRA_SCHEME_CHOICES:
+        if not code:
+            continue
+        preset = _zebra_roles_for_scheme_code(code) or {}
+        ok = True
+        for role in (u"header", u"even", u"odd"):
+            ps = preset.get(role) or {}
+            pf = unicode(ps.get(u"fill") or u"").strip().casefold()
+            pn = unicode(ps.get(u"font") or u"").strip().casefold()
+            if cur.get(role) != (pf, pn):
+                ok = False
+                break
+        if ok:
+            return label
+    return ZEBRA_SCHEME_CUSTOM_LABEL
+
+
 DEDUP_KEEP_CHOICES = (
     (u"first", u"Первую"),
     (u"last", u"Последнюю"),
@@ -2636,11 +2799,75 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     },
     u"зебра_диапазон": {
         "title": u"Зебра диапазон",
-        "hint": u"Роли header/even/odd — заливка/шрифт (как в C: header:excel_header/белый).",
+        "hint": (
+            u"Типовая схема — готовые сочетания; ниже — заливка/шрифт из пресетов.\n"
+            u"Пустой цвет — не менять. Чётные = строки 2,4,6…; нечётные = 1,3,5…"
+        ),
+        "hint_lines": 2,
+        "compact_fields": True,
+        "dialog_fit_content": True,
         "fields": (
-            {"id": "header", "label": u"Заголовок (заливка/шрифт)", "default": u""},
-            {"id": "even", "label": u"Чётные", "default": u""},
-            {"id": "odd", "label": u"Нечётные", "default": u""},
+            {
+                "id": "scheme",
+                "label": u"Типовая схема",
+                "type": "combo",
+                "choices": _zebra_scheme_labels(),
+                "default": u"Excel: синий заголовок + голубые чётные",
+            },
+            {
+                "id": "header_fill",
+                "label": u"Заголовок — заливка",
+                "type": "combo",
+                "choices": _zebra_color_choices(),
+                "default": u"excel_header",
+                "row_group": u"zebra_header",
+                "row_group_slot": 0,
+            },
+            {
+                "id": "header_font",
+                "label": u"шрифт",
+                "type": "combo",
+                "choices": _zebra_color_choices(),
+                "default": u"белый",
+                "row_group": u"zebra_header",
+                "row_group_slot": 1,
+            },
+            {
+                "id": "even_fill",
+                "label": u"Чётные — заливка",
+                "type": "combo",
+                "choices": _zebra_color_choices(),
+                "default": u"голубой",
+                "row_group": u"zebra_even",
+                "row_group_slot": 0,
+            },
+            {
+                "id": "even_font",
+                "label": u"шрифт",
+                "type": "combo",
+                "choices": _zebra_color_choices(),
+                "default": u"",
+                "row_group": u"zebra_even",
+                "row_group_slot": 1,
+            },
+            {
+                "id": "odd_fill",
+                "label": u"Нечётные — заливка",
+                "type": "combo",
+                "choices": _zebra_color_choices(),
+                "default": u"",
+                "row_group": u"zebra_odd",
+                "row_group_slot": 0,
+            },
+            {
+                "id": "odd_font",
+                "label": u"шрифт",
+                "type": "combo",
+                "choices": _zebra_color_choices(),
+                "default": u"",
+                "row_group": u"zebra_odd",
+                "row_group_slot": 1,
+            },
         ),
     },
     u"конкатенация_столбцов": {
