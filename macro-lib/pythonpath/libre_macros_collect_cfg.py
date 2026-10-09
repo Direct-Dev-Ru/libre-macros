@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.752"
+MACRO_VERSION = "3.10.753"
 import re
 
 try:
@@ -690,10 +690,9 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
     ),
     "сброс_стрипов": ("не используется", ""),
     "группировка_по_столбцу": (
-        "JSON: marker + agg_fn/agg_columns (или aggs[]); подряд два шага с одним marker "
-        "склеиваются в уровни итогов + grand_total; кнопка «Параметры…»",
-        '[{"v":1,"fn":"группировка_по_столбцу","marker":"\'Отдел\'","agg_fn":"count","agg_columns":["\'Сумма_руб\'"]},'
-        '{"v":1,"fn":"группировка_по_столбцу","marker":"\'Отдел\'","agg_fn":"sum","agg_columns":["\'Сумма_руб\'"]}]',
+        "JSON: marker + agg_fn/agg_columns (или aggs[]); color_totals+total_color — заливка итогов; «Параметры…»",
+        '[{"v":1,"fn":"группировка_по_столбцу","marker":"\'Отдел\'","agg_fn":"sum","agg_columns":["\'Сумма_руб\'"],'
+        '"color_totals":true,"total_color":"голубой"}]',
     ),
     "закрепить_заголовок": (
         "JSON: sheets — список листов; без sheets — все листы результата",

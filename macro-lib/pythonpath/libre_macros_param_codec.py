@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.752"
+MACRO_VERSION = "3.10.753"
 import json
 import re
 
@@ -2167,12 +2167,23 @@ def _normalize_group_by_column_block(block):
         out["grand_total"] = bool(
             lm_parse_bool_param(out.get("grand_total"), default=True)
         )
+        out["color_totals"] = bool(
+            lm_parse_bool_param(out.get("color_totals"), default=False)
+        )
     except Exception:
         out["sort"] = True if out.get("sort") is None else bool(out.get("sort"))
         out["outline"] = True if out.get("outline") is None else bool(out.get("outline"))
         out["grand_total"] = (
             True if out.get("grand_total") is None else bool(out.get("grand_total"))
         )
+        out["color_totals"] = bool(out.get("color_totals", False))
+    color_tok = unicode(out.get("total_color") or u"").strip()
+    if color_tok == u"":
+        color_tok = u"голубой"
+    out["total_color"] = color_tok
+    if not out.get("color_totals"):
+        # Флаг выкл. — цвет оставляем в блоке для UI, на исполнение не влияет.
+        pass
     return _attach_sheet(out, out.get("sheet"))
 
 
@@ -2192,10 +2203,17 @@ def merge_group_by_column_blocks(blocks):
     sort_any = False
     outline_any = False
     grand_any = False
+    color_any = False
+    total_color = unicode(base.get("total_color") or u"голубой").strip() or u"голубой"
     for b in items:
         sort_any = sort_any or bool(b.get("sort", True))
         outline_any = outline_any or bool(b.get("outline", True))
         grand_any = grand_any or bool(b.get("grand_total", True))
+        if bool(b.get("color_totals", False)):
+            color_any = True
+            tok = unicode(b.get("total_color") or u"").strip()
+            if tok:
+                total_color = tok
         for a in b.get("aggs") or []:
             if isinstance(a, dict) and a.get("columns"):
                 aggs.append(
@@ -2211,6 +2229,8 @@ def merge_group_by_column_blocks(blocks):
     base["sort"] = sort_any
     base["outline"] = outline_any
     base["grand_total"] = grand_any
+    base["color_totals"] = color_any
+    base["total_color"] = total_color
     return _normalize_group_by_column_block(base)
 def _normalize_convert_numeric_block(block):
     out = _normalize_block("преобразовать_числа", block)

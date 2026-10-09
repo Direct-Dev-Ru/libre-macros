@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.752"
+MACRO_VERSION = "3.10.753"
 import re
 
 try:
@@ -535,9 +535,9 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
     ),
     u"сброс_стрипов": (u"не используется", u""),
     u"группировка_по_столбцу": (
-        u"JSON: marker (столбец группировки), agg_fn + agg_columns (промежуточные итоги), "
-        u"sort/outline; кнопка «Параметры…»",
-        u'[{"v":1,"fn":"группировка_по_столбцу","marker":"\'Отдел\'","agg_fn":"sum","agg_columns":["\'Сумма\'"],"sort":true,"outline":true,"sheet":"МСУЗ"}]',
+        u"JSON: marker + agg_fn/agg_columns; color_totals+total_color — заливка итогов; «Параметры…»",
+        u'[{"v":1,"fn":"группировка_по_столбцу","marker":"\'Отдел\'","agg_fn":"sum","agg_columns":["\'Сумма\'"],'
+        u'"color_totals":true,"total_color":"голубой","sort":true,"outline":true}]',
     ),
     u"закрепить_заголовок": (u"не используется", u""),
     u"ширина_столбцов": (
@@ -2975,12 +2975,12 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
         "title": u"Группировка / промежуточные итоги",
         "hint": (
             u"Столбец группировки — из заголовков ('кавычки').\n"
-            u"Промежуточные итоги: функция + столбцы (строка «Отдел Количество» / «Отдел Сумма»).\n"
-            u"Несколько функций по одному столбцу — подряд две строки группировка_по_столбцу "
-            u"(склеиваются в один проход: count+sum и общие итоги внизу).\n"
-            u"«Сортировка» / «Outline» — как у Data→Subtotals."
+            u"Промежуточные итоги: функция + столбцы. Несколько функций — две строки подряд.\n"
+            u"«Окраска строк итогов» — заливка промежуточных и общих итогов (цвет из списка)."
         ),
-        "hint_lines": 6,
+        "hint_lines": 3,
+        "compact_fields": True,
+        "dialog_fit_content": True,
         "fields": (
             {
                 "id": "marker",
@@ -3008,12 +3008,34 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "label": u"Сортировка",
                 "type": "bool",
                 "default": True,
+                "row_group": u"sort_outline",
+                "row_group_slot": 0,
             },
             {
                 "id": "outline",
                 "label": u"Outline (свернуть)",
                 "type": "bool",
                 "default": True,
+                "row_group": u"sort_outline",
+                "row_group_slot": 1,
+            },
+            {
+                "id": "color_totals",
+                "label": u"Окраска строк итогов",
+                "type": "bool",
+                "default": False,
+                "row_group": u"total_fill",
+                "row_group_slot": 0,
+                "row_group_frac": 0.42,
+            },
+            {
+                "id": "total_color",
+                "label": u"Цвет итогов",
+                "type": "combo",
+                "choices": _header_plus_height_color_choices(),
+                "default": u"голубой",
+                "row_group": u"total_fill",
+                "row_group_slot": 1,
             },
         ),
     },

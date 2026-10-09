@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.752"
+MACRO_VERSION = "3.10.753"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -14394,8 +14394,8 @@ def _lm_pp_group_is_total_row_label(text):
     return False
 
 
-def _lm_pp_group_style_total_row(sheet, sc, ec, row):
-    """Жирный + подчёркнутый для строки промежуточного/общего итога."""
+def _lm_pp_group_style_total_row(sheet, sc, ec, row, fill_color=None):
+    """Жирный + подчёркнутый (+ опциональная заливка) для строки итога."""
     try:
         rng = sheet.getCellRangeByPosition(int(sc), int(row), int(ec), int(row))
         rng.CharWeight = _LM_FMT_CHAR_WEIGHT_BOLD
@@ -14403,6 +14403,11 @@ def _lm_pp_group_style_total_row(sheet, sc, ec, row):
             rng.CharUnderline = 1  # SINGLE
         except Exception:
             pass
+        if fill_color is not None:
+            try:
+                rng.CellBackColor = int(fill_color)
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -14514,6 +14519,13 @@ def lm_pp_range_group_by_column(doc, sheet, data_range, header_row_range, *extra
     do_sort = bool(block.get("sort", True))
     do_outline = bool(block.get("outline", True))
     do_grand = bool(block.get("grand_total", True))
+    color_totals = bool(block.get("color_totals", False))
+    total_fill = None
+    if color_totals:
+        color_tok = str(block.get("total_color") or "голубой").strip() or "голубой"
+        total_fill = _lm_pp_zebra_resolve_color_token(color_tok)
+        if total_fill is None:
+            total_fill = _lm_pp_zebra_resolve_color_token("голубой")
     levels = _lm_pp_group_resolve_agg_levels(
         block, sheet, header_row_range, sc, ec
     )
@@ -14665,7 +14677,9 @@ def lm_pp_range_group_by_column(doc, sheet, data_range, header_row_range, *extra
                         formula_ok = formula_ok + 1
                     else:
                         formula_fail = formula_fail + 1
-                _lm_pp_group_style_total_row(sheet, sc, ec, row)
+                _lm_pp_group_style_total_row(
+                    sheet, sc, ec, row, fill_color=total_fill
+                )
                 li = li + 1
 
         if do_outline and g_end >= g_start:
@@ -14720,7 +14734,9 @@ def lm_pp_range_group_by_column(doc, sheet, data_range, header_row_range, *extra
                     formula_ok = formula_ok + 1
                 else:
                     formula_fail = formula_fail + 1
-            _lm_pp_group_style_total_row(sheet, sc, ec, row)
+            _lm_pp_group_style_total_row(
+                sheet, sc, ec, row, fill_color=total_fill
+            )
             li = li + 1
 
     if do_outline and do_subtotals and inserted > 0:
@@ -14749,6 +14765,10 @@ def lm_pp_range_group_by_column(doc, sheet, data_range, header_row_range, *extra
         note_parts.append("outline_err=%s" % outline_err[:80])
     if not do_subtotals:
         note_parts.append("без_итогов (пустые agg_columns)")
+    if color_totals and total_fill is not None:
+        note_parts.append(
+            "заливка_итогов=%s" % str(block.get("total_color") or "голубой")
+        )
     _lm_log_postprocess(
         doc,
         sheet_name,

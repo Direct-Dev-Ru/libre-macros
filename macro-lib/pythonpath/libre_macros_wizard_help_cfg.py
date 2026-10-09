@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.752"
+MACRO_VERSION = "3.10.753"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -105,7 +105,16 @@ _FN_HELP_TEXTS = {
         u"ГРУППИРОВКА ПО СТОЛБЦУ\n"
         u"══════════════════════════════════════\n"
         u"\n"
-        u"Свернуть/развернуть группы по marker-столбцу (outline).\n"
+        u"Промежуточные итоги по смене значения в marker + outline.\n"
+        u"aggs[] / agg_fn + agg_columns — SUBTOTAL в строки итогов.\n"
+        u"sort / outline / grand_total — как Data→Subtotals.\n"
+        u"color_totals — заливка строк промежуточных и общих итогов;\n"
+        u"total_color — пресет (голубой, серый, …) или #RRGGBB.\n"
+        u"\n"
+        u"Пример:\n"
+        u"[{\"v\":1,\"fn\":\"группировка_по_столбцу\",\"marker\":\"'Отдел'\","
+        u"\"agg_fn\":\"sum\",\"agg_columns\":[\"'Сумма'\"],\"color_totals\":true,"
+        u"\"total_color\":\"голубой\"}]\n"
         u"\n"
     ),
     u"Добавить_в_карту_переменных": (

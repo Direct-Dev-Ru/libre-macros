@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.752"
+MACRO_VERSION = "3.10.753"
 """Константы диалога оркестратора collect_pack."""
 
 try:
