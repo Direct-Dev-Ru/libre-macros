@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.745"
+MACRO_VERSION = "3.10.746"
 import json
 import os
 import sys
@@ -406,13 +406,18 @@ def load_dialog_settings():
     settings["dlp_content_excel"] = normalize_count_pages(
         settings.get("dlp_content_excel", _DEFAULT_DLP_CONTENT_EXCEL)
     )
-    names_path = _uno_to_str(settings.get("dlp_names_dict_path", "")).strip()
+    settings_dir = _settings_dir()
+    names_path = _fl_lib.coerce_saved_dlp_dict_ref(
+        settings.get("dlp_names_dict_path", ""), settings_dir, kind=u"name"
+    )
     if names_path == "":
-        names_path = _fl_lib.default_dlp_name_dict_path(_settings_dir())
+        names_path = _fl_lib.default_dlp_name_dict_path(settings_dir)
     settings["dlp_names_dict_path"] = names_path
-    content_path = _uno_to_str(settings.get("dlp_content_dict_path", "")).strip()
+    content_path = _fl_lib.coerce_saved_dlp_dict_ref(
+        settings.get("dlp_content_dict_path", ""), settings_dir, kind=u"content"
+    )
     if content_path == "":
-        content_path = _fl_lib.default_dlp_content_dict_path(_settings_dir())
+        content_path = _fl_lib.default_dlp_content_dict_path(settings_dir)
     settings["dlp_content_dict_path"] = content_path
     try:
         _fl_lib.ensure_default_dlp_name_dict(_settings_dir())

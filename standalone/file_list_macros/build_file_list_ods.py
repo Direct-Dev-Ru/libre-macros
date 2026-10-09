@@ -5,6 +5,7 @@
 - Один Scripts/python/file_list_macro.py (cfg+lib+help вшиты) —
   document-pythonpath в AlterOffice/LO для tdoc: не работает.
 - лист «Старт» с кнопками «Сбор файлов» и «Справка»
+- лист «поиск_шаблоны» с паттернами по умолчанию (поля словарей диалога = это имя)
 - docs/file_list_user_guide.odt вшивается as-is (править вручную в Writer)
 
 Запуск:
@@ -35,6 +36,13 @@ SCRIPT_NAME = "file_list_macro.py"
 START_SHEET = "Старт"
 MANIFEST_NS = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
 
+# cfg для листа паттернов и флага словаря-листа
+if PYTHONPATH_SRC not in sys.path:
+    sys.path.insert(0, PYTHONPATH_SRC)
+import libre_macros_file_list_cfg as _fl_cfg  # noqa: E402
+
+PATTERN_SHEET = getattr(_fl_cfg, "DEFAULT_DLP_PATTERN_SHEET_NAME", u"поиск_шаблоны")
+
 RUN_HREF = (
     "vnd.sun.star.script:file_list_macro.py$analyze_files_dialog"
     "?language=Python&amp;location=document"
@@ -54,6 +62,8 @@ _CFG_ALIASES = (
     ("DEFAULT_DLP_CONTENT_EXCEL", "_DEFAULT_DLP_CONTENT_EXCEL"),
     ("DEFAULT_DLP_CONTENT_TEXT", "_DEFAULT_DLP_CONTENT_TEXT"),
     ("DEFAULT_DLP_CONTENT_WORD", "_DEFAULT_DLP_CONTENT_WORD"),
+    ("DEFAULT_DLP_DICT_USE_SHEET", "_DEFAULT_DLP_DICT_USE_SHEET"),
+    ("DEFAULT_DLP_PATTERN_SHEET_NAME", "_DEFAULT_DLP_PATTERN_SHEET_NAME"),
     ("DEFAULT_MAX_DEPTH", "_DEFAULT_MAX_DEPTH"),
     ("DEFAULT_RESULT_SHEET_NAME", "_DEFAULT_RESULT_SHEET_NAME"),
     ("DEFAULT_SHA256_MAX_GB", "_DEFAULT_SHA256_MAX_GB"),
@@ -161,6 +171,8 @@ def _build_cfg_class(cfg_src, odt_bytes):
         "class _C(object):\n"
         "    # --- из libre_macros_file_list_cfg (AO: только тело class/def живёт) ---\n"
         "%s\n"
+        "    # standalone: словари поиска по умолчанию = лист книги\n"
+        "    DEFAULT_DLP_DICT_USE_SHEET = True\n"
         "    HELP_ODT_B64 = (\n"
         "%s\n"
         "    )\n"
@@ -480,6 +492,64 @@ def _empty_cell(style=None):
     return "<table:table-cell/>"
 
 
+def _pattern_sheet_table_xml():
+    """Лист словаря паттернов: A–C данные, E — справка со строки 2."""
+    headers = getattr(_fl_cfg, "DLP_PATTERN_SHEET_HEADERS", (u"имя", u"паттерн", u"описание"))
+    data_rows = getattr(_fl_cfg, "DEFAULT_DLP_PATTERN_SHEET_ROWS", ()) or ()
+    help_lines = getattr(_fl_cfg, "DLP_PATTERN_SHEET_HELP_LINES", ()) or ()
+    help_start = int(getattr(_fl_cfg, "DLP_PATTERN_SHEET_HELP_START_ROW", 1) or 1)
+
+    body = []
+    body.append('<table:table-column table:style-name="coPatA"/>')
+    body.append('<table:table-column table:style-name="coPatB"/>')
+    body.append('<table:table-column table:style-name="coPatC"/>')
+    body.append('<table:table-column table:style-name="coPatD"/>')
+    body.append('<table:table-column table:style-name="coPatE"/>')
+
+    # row 1 — заголовок
+    body.append('<table:table-row table:style-name="roPatHead">')
+    for title in headers:
+        body.append(_str_cell("cePatHead", title))
+    body.append(_empty_cell())
+    body.append(_empty_cell("cePatHelp"))
+    body.append("</table:table-row>")
+
+    n_data = len(data_rows)
+    n_help = len(help_lines)
+    # help на строке 2 → индекс 1; выравниваем с данными
+    total = max(n_data, help_start + n_help)
+    for i in range(total):
+        body.append('<table:table-row table:style-name="roPatData">')
+        if i < n_data:
+            item = data_rows[i]
+            name = item[0] if item else u""
+            pattern = item[1] if item and len(item) > 1 else u""
+            desc = item[2] if item and len(item) > 2 else u""
+            body.append(_str_cell("cePatData", name))
+            body.append(_str_cell("cePatData", pattern))
+            body.append(_str_cell("cePatData", desc))
+        else:
+            body.append(_empty_cell("cePatData"))
+            body.append(_empty_cell("cePatData"))
+            body.append(_empty_cell("cePatData"))
+        body.append(_empty_cell())
+        help_idx = i - help_start
+        if 0 <= help_idx < n_help:
+            line = help_lines[help_idx]
+            style = "cePatHelpTitle" if help_idx == 0 else "cePatHelp"
+            body.append(_str_cell(style, line))
+        else:
+            body.append(_empty_cell("cePatHelp"))
+        body.append("</table:table-row>")
+
+    return (
+        '<table:table table:name="%s" table:style-name="ta1">'
+        "%s"
+        "</table:table>"
+        % (_esc(PATTERN_SHEET), "".join(body))
+    )
+
+
 def _content_xml():
     rows = []
     rows.append('<table:table-row table:style-name="roHead">')
@@ -505,7 +575,9 @@ def _content_xml():
     notes = [
         "Кнопка «Сбор файлов» открывает диалог обхода каталога.",
         "Результат пишется на указанный лист (или лист по умолчанию); при поиске — ещё лист «*_Поиск».",
-        "Кнопка «Справка» открывает встроенный документ справки.",                
+        "Лист «%s» — словарь паттернов (поля поиска по умолчанию указывают на него)."
+        % PATTERN_SHEET,
+        "Кнопка «Справка» открывает встроенный документ справки.",
     ]
     for note in notes:
         rows.append('<table:table-row table:style-name="roData">')
@@ -563,11 +635,32 @@ def _content_xml():
   <style:style style:name="coC" style:family="table-column">
     <style:table-column-properties fo:break-before="auto" style:column-width="38mm"/>
   </style:style>
+  <style:style style:name="coPatA" style:family="table-column">
+    <style:table-column-properties fo:break-before="auto" style:column-width="45mm"/>
+  </style:style>
+  <style:style style:name="coPatB" style:family="table-column">
+    <style:table-column-properties fo:break-before="auto" style:column-width="70mm"/>
+  </style:style>
+  <style:style style:name="coPatC" style:family="table-column">
+    <style:table-column-properties fo:break-before="auto" style:column-width="55mm"/>
+  </style:style>
+  <style:style style:name="coPatD" style:family="table-column">
+    <style:table-column-properties fo:break-before="auto" style:column-width="8mm"/>
+  </style:style>
+  <style:style style:name="coPatE" style:family="table-column">
+    <style:table-column-properties fo:break-before="auto" style:column-width="95mm"/>
+  </style:style>
   <style:style style:name="roHead" style:family="table-row">
     <style:table-row-properties style:row-height="12mm" fo:break-before="auto" style:use-optimal-row-height="false"/>
   </style:style>
   <style:style style:name="roData" style:family="table-row">
     <style:table-row-properties style:row-height="8mm" fo:break-before="auto" style:use-optimal-row-height="false"/>
+  </style:style>
+  <style:style style:name="roPatHead" style:family="table-row">
+    <style:table-row-properties style:row-height="8mm" fo:break-before="auto" style:use-optimal-row-height="false"/>
+  </style:style>
+  <style:style style:name="roPatData" style:family="table-row">
+    <style:table-row-properties style:row-height="6mm" fo:break-before="auto" style:use-optimal-row-height="true"/>
   </style:style>
   <style:style style:name="ta1" style:family="table" style:master-page-name="Default">
     <style:table-properties table:display="true" style:writing-mode="lr-tb"/>
@@ -576,6 +669,26 @@ def _content_xml():
     <style:table-cell-properties fo:background-color="#2E7D32" style:text-align-source="fix" fo:wrap-option="wrap" style:vertical-align="middle"/>
     <style:paragraph-properties fo:text-align="left"/>
     <style:text-properties fo:color="#ffffff" fo:font-size="14pt" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="cePatHead" style:family="table-cell" style:parent-style-name="Default">
+    <style:table-cell-properties fo:background-color="#1F4E79" style:text-align-source="fix" fo:wrap-option="wrap" style:vertical-align="middle"/>
+    <style:paragraph-properties fo:text-align="center"/>
+    <style:text-properties style:font-name="PT Sans" fo:color="#ffffff" fo:font-size="11pt" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="cePatData" style:family="table-cell" style:parent-style-name="Default">
+    <style:table-cell-properties style:text-align-source="fix" fo:wrap-option="wrap" style:vertical-align="top"/>
+    <style:paragraph-properties fo:text-align="left"/>
+    <style:text-properties style:font-name="PT Sans" fo:font-size="10pt"/>
+  </style:style>
+  <style:style style:name="cePatHelpTitle" style:family="table-cell" style:parent-style-name="Default">
+    <style:table-cell-properties style:text-align-source="fix" fo:wrap-option="wrap" style:vertical-align="top"/>
+    <style:paragraph-properties fo:text-align="left"/>
+    <style:text-properties style:font-name="PT Sans" fo:font-size="11pt" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="cePatHelp" style:family="table-cell" style:parent-style-name="Default">
+    <style:table-cell-properties style:text-align-source="fix" fo:wrap-option="wrap" style:vertical-align="top"/>
+    <style:paragraph-properties fo:text-align="left"/>
+    <style:text-properties style:font-name="PT Sans" fo:font-size="10pt"/>
   </style:style>
   <style:style style:name="ceBtn" style:family="table-cell" style:parent-style-name="Default">
     <style:table-cell-properties style:vertical-align="middle"/>
@@ -661,9 +774,10 @@ def _content_xml():
         '<table:table-column table:style-name="coC"/>'
         "%s"
         "</table:table>"
+        "%s"
         "<table:named-expressions/>"
         "</office:spreadsheet></office:body></office:document-content>"
-        % (ns, styles, START_SHEET, form, "".join(rows))
+        % (ns, styles, START_SHEET, form, "".join(rows), _pattern_sheet_table_xml())
     )
 
 

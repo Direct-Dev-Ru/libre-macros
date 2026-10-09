@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Вспомогательная логика file_list_macro: Owner (Windows) и поиск по именам/содержимому."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.745"
+MACRO_VERSION = "3.10.746"
 import csv
 import hashlib
 import json
@@ -167,12 +167,61 @@ def get_file_owner(path):
         return u""
 
 
+def default_dlp_dict_uses_sheet():
+    return bool(getattr(_cfg, "DEFAULT_DLP_DICT_USE_SHEET", False))
+
+
+def coerce_saved_dlp_dict_ref(value, settings_dir, kind=u"name"):
+    """
+    Для standalone (DEFAULT_DLP_DICT_USE_SHEET): пустое или дефолтный JSON
+    → имя листа; иначе как сохранено (файл или лист).
+    kind: 'name' | 'content'.
+    """
+    text = _u(value).strip()
+    if not default_dlp_dict_uses_sheet():
+        return text
+    if is_dlp_dict_sheet_ref(text):
+        return text
+    if text == "":
+        return default_dlp_pattern_sheet_name()
+    base = os.path.basename(text).casefold()
+    if kind == u"content":
+        default_name = _u(
+            getattr(_cfg, "DLP_CONTENT_DICT_FILENAME", "search_content_patterns.json")
+        )
+    else:
+        default_name = _u(
+            getattr(_cfg, "DLP_NAME_DICT_FILENAME", "search_name_patterns.json")
+        )
+    legacy = (
+        default_name.casefold(),
+        u"dlp_name_patterns.json",
+        u"dlp_content_patterns.json",
+        u"search_name_patterns.json",
+        u"search_content_patterns.json",
+    )
+    if base in legacy:
+        return default_dlp_pattern_sheet_name()
+    # полный путь к дефолтному файлу в settings_dir
+    try:
+        expected = os.path.normpath(os.path.join(_u(settings_dir), default_name))
+        if os.path.normpath(text) == expected:
+            return default_dlp_pattern_sheet_name()
+    except Exception:
+        pass
+    return text
+
+
 def default_dlp_name_dict_path(settings_dir):
+    if default_dlp_dict_uses_sheet():
+        return default_dlp_pattern_sheet_name()
     name = getattr(_cfg, "DLP_NAME_DICT_FILENAME", "dlp_name_patterns.json")
     return os.path.join(_u(settings_dir), name)
 
 
 def default_dlp_content_dict_path(settings_dir):
+    if default_dlp_dict_uses_sheet():
+        return default_dlp_pattern_sheet_name()
     name = getattr(_cfg, "DLP_CONTENT_DICT_FILENAME", "dlp_content_patterns.json")
     return os.path.join(_u(settings_dir), name)
 
@@ -331,6 +380,8 @@ def default_dlp_name_patterns():
 def ensure_default_dlp_name_dict(settings_dir):
     """Создать JSON-словарь имён по умолчанию, если файла ещё нет."""
     path = default_dlp_name_dict_path(settings_dir)
+    if is_dlp_dict_sheet_ref(path):
+        return path
     try:
         folder = os.path.dirname(path)
         if folder and not os.path.isdir(folder):
@@ -681,6 +732,8 @@ def read_text_file_for_dlp(path, max_bytes=None, max_chars=None):
 def ensure_default_dlp_content_dict(settings_dir):
     """Создать JSON-словарь содержимого по умолчанию, если файла ещё нет."""
     path = default_dlp_content_dict_path(settings_dir)
+    if is_dlp_dict_sheet_ref(path):
+        return path
     try:
         folder = os.path.dirname(path)
         if folder and not os.path.isdir(folder):

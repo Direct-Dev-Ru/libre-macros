@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние file_list_macro (AlterOffice 2026: модульный код .py-скрипта вырезается)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.745"
+MACRO_VERSION = "3.10.746"
 DEFAULT_MAX_DEPTH = 1
 DEFAULT_SIZE_UNIT = "b"
 DEFAULT_COUNT_PAGES = False
@@ -177,6 +177,8 @@ DEFAULT_DLP_CONTENT_PATTERNS = dict(DEFAULT_DLP_NAME_PATTERNS)
 # Лист книги как словарь паттернов: одно слово в поле пути → имя листа.
 # Если при генерации имя некорректно/пусто — это имя по умолчанию.
 DEFAULT_DLP_PATTERN_SHEET_NAME = u"поиск_шаблоны"
+# True (standalone ODS): поля словарей по умолчанию = имя листа, не JSON-файл.
+DEFAULT_DLP_DICT_USE_SHEET = False
 # Шрифт заголовка листа паттернов.
 DLP_PATTERN_SHEET_FONT_NAME = u"PT Sans"
 # Справка на сгенерированном листе: колонка E, со строки 2 (по одной фразе в ячейке).
