@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.751"
+MACRO_VERSION = "3.10.752"
 import ast
 import glob
 import json
@@ -10057,8 +10057,12 @@ def _block_field_to_text(block, field_id, fn_key=None):
             from libre_macros_param_codec import (
                 canonicalize_column_token_list_for_store,
                 join_column_name_tokens,
+                _coerce_gradient_marker_tokens,
             )
-            parts = canonicalize_column_token_list_for_store(val)
+            if field_id == 'marker' and unicode(fn_key or u'').casefold() == u'градиент'.casefold():
+                parts = _coerce_gradient_marker_tokens(val)
+            else:
+                parts = canonicalize_column_token_list_for_store(val)
             if not parts:
                 return u''
             sep = u';' if any((u',' in unicode(p) or u';' in unicode(p)) for p in parts) else u','
@@ -10287,19 +10291,32 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
     if field_id in ('old', 'new'):
         return unicode(text or u'').strip()
     text = unicode(text or u'').strip()
-    if field_type == 'columns_pick' or field_id in ('key_columns', 'exclude_columns', 'unpivot_columns', 'body_columns', 'skip_columns', 'sheet_preamble_columns', 'block_preamble_columns', 'style_columns'):
+    if field_type == 'columns_pick' or field_id in ('key_columns', 'exclude_columns', 'unpivot_columns', 'body_columns', 'skip_columns', 'sheet_preamble_columns', 'block_preamble_columns', 'style_columns', 'marker'):
         text = unicode(text or u'').strip()
         if text == u'':
-            return []
+            # градиент.marker в JSON — строка, не список
+            return u'' if field_id == 'marker' else []
         try:
-            from libre_macros_param_codec import canonicalize_column_token_list_for_store
-            return canonicalize_column_token_list_for_store(text)
+            from libre_macros_param_codec import (
+                canonicalize_column_token_list_for_store,
+                join_column_name_tokens,
+                _coerce_gradient_marker_tokens,
+            )
+            if field_id == 'marker':
+                parts = _coerce_gradient_marker_tokens(text)
+            else:
+                parts = canonicalize_column_token_list_for_store(text)
+            if field_id == 'marker':
+                return join_column_name_tokens(parts) if parts else u''
+            return parts
         except Exception:
             pass
         try:
-            from libre_macros_param_codec import split_column_name_tokens
+            from libre_macros_param_codec import split_column_name_tokens, join_column_name_tokens
             parts = split_column_name_tokens(text)
             if parts:
+                if field_id == 'marker':
+                    return join_column_name_tokens(parts)
                 return parts
         except Exception:
             pass
@@ -10308,6 +10325,8 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
             p = p.strip()
             if p != u'':
                 out.append(p)
+        if field_id == 'marker':
+            return u','.join(out) if out else u''
         return out
     if field_id == 'choices':
         text = unicode(text or u'').strip()

@@ -8,7 +8,7 @@
 """
 
 from __future__ import print_function
-MACRO_VERSION = "3.10.751"
+MACRO_VERSION = "3.10.752"
 import datetime
 import json
 import os

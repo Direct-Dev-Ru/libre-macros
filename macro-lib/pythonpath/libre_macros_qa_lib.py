@@ -2,7 +2,7 @@
 """Headless-прогон collect_workbooks: job JSON → тихий сбор → storeAsURL."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.751"
+MACRO_VERSION = "3.10.752"
 import json
 import os
 import sys

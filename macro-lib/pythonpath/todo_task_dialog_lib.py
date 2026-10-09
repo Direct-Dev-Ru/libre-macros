@@ -2,7 +2,7 @@
 """Диалог редактирования строки задачи (todo_task_edit)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.751"
+MACRO_VERSION = "3.10.752"
 import re
 import uno
 import unohelper

@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.751"
+MACRO_VERSION = "3.10.752"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -10210,29 +10210,59 @@ def _lm_pp_color_scale_block_params(block):
 
 
 def _lm_pp_gradient_marker_tokens(marker_raw):
-    """Список подстрок-маркеров из поля marker (через , или ;)."""
-    raw = str(marker_raw or "").strip()
-    if raw == "":
-        return ["сумм"]
-    parts = []
-    for chunk in raw.replace(";", ",").split(","):
-        token = chunk.strip()
-        if token:
-            parts.append(token)
+    """Список токенов маркеров из поля marker (кавычки / , / ;)."""
+    try:
+        from libre_macros_param_codec import _coerce_gradient_marker_tokens
+
+        parts = _coerce_gradient_marker_tokens(marker_raw)
+    except Exception:
+        parts = []
+    if not parts:
+        raw = str(marker_raw or "").strip()
+        if raw == "":
+            return ["сумм"]
+        for chunk in raw.replace(";", ",").split(","):
+            token = chunk.strip()
+            if token:
+                parts.append(token)
     return parts if parts else ["сумм"]
 
 
 def _lm_pp_gradient_find_column(titles, sc, ec, marker_raw):
     """(col_index, matched_marker) или (None, None)."""
     markers = _lm_pp_gradient_marker_tokens(marker_raw)
+    try:
+        from libre_macros_param_codec import column_header_matches_token
+    except Exception:
+        column_header_matches_token = None
     mi = 0
     while mi < len(markers):
-        needle = markers[mi].lower()
+        token = markers[mi]
         c = sc
         while c <= ec:
             idx = c - sc
-            title = titles[idx].lower() if idx < len(titles) else ""
-            if needle in title:
+            title = titles[idx] if idx < len(titles) else ""
+            matched = False
+            if column_header_matches_token is not None:
+                try:
+                    matched = bool(column_header_matches_token(title, token))
+                except Exception:
+                    matched = False
+            if not matched:
+                # fallback: подстрока по голому имени без кавычек
+                try:
+                    from libre_macros_param_codec import unwrap_column_name_token
+
+                    bare, _q = unwrap_column_name_token(token)
+                except Exception:
+                    bare = str(token or "").strip()
+                    if len(bare) >= 2 and bare[0] == bare[-1] == "'":
+                        bare = bare[1:-1]
+                needle = str(bare or "").strip().lower()
+                title_l = str(title or "").strip().lower()
+                if needle and needle in title_l:
+                    matched = True
+            if matched:
                 return c, markers[mi]
             c = c + 1
         mi = mi + 1

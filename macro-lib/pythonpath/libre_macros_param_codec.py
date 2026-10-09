@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.751"
+MACRO_VERSION = "3.10.752"
 import json
 import re
 
@@ -1074,9 +1074,60 @@ def _attach_sheet(block, sheet_name):
 def _normalize_markers_list(value):
     """Маркеры/столбцы: split с учётом '…'; в JSON имена в кавычках."""
     return canonicalize_column_token_list_for_store(value)
+
+
+def _coerce_gradient_marker_tokens(value):
+    """
+    marker градиента → список токенов столбцов.
+
+    Чинит искажение от unicode(list) / repr вроде \"['\\'Менеджер\\'']\".
+    """
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        out = []
+        for item in value:
+            out.extend(_coerce_gradient_marker_tokens(item))
+        return canonicalize_column_token_list_for_store(out)
+    s = unicode(value).strip()
+    if s == u"":
+        return []
+    # Несколько проходов: "['\\'X\\'']" → ["'X'"] → ["'X'"]
+    cur = s
+    for _i in range(6):
+        if not (cur.startswith(u"[") and cur.endswith(u"]")):
+            break
+        parsed = None
+        try:
+            import ast
+
+            parsed = ast.literal_eval(cur)
+        except Exception:
+            parsed = None
+        if parsed is None:
+            try:
+                import json
+
+                parsed = json.loads(cur)
+            except Exception:
+                parsed = None
+        if isinstance(parsed, (list, tuple)):
+            return _coerce_gradient_marker_tokens(parsed)
+        if isinstance(parsed, (unicode, str)):
+            cur = unicode(parsed).strip()
+            continue
+        break
+    return canonicalize_column_token_list_for_store(cur)
+
+
 def _normalize_gradient_block(block):
     out = _normalize_block("градиент", block)
-    out["marker"] = unicode(out.get("marker") or "сумм").strip() or "сумм"
+    # columns_pick в визарде может отдать list — нельзя unicode(list).
+    toks = _coerce_gradient_marker_tokens(out.get("marker"))
+    if toks:
+        out["marker"] = join_column_name_tokens(toks)
+    else:
+        out["marker"] = u"сумм"
     out["color_min"] = unicode(out.get("color_min") or "зеленый").strip() or "зеленый"
     out["color_max"] = unicode(out.get("color_max") or "красный").strip() or "красный"
     wr = block.get("whole_row")
