@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.749"
+MACRO_VERSION = "3.10.750"
 """
 Субвизард «конструктор_формулы» для «применить_формулу».
 
@@ -430,8 +430,15 @@ def show_formula_builder_dialog( parent_dialog, initial_formula=u"", doc=None, s
 
     _dlg_add_fixed(dm, u"ExprLbl", u"Формула:", m, y, dw - 2 * m, 14)
     y += 14
-    expr_h = 72
+    expr_h = 84
     _dlg_add_edit(dm, u"ExprEd", m, y, dw - 2 * m, expr_h, multiline=True)
+    try:
+        from libre_macros_ui_theme import apply_edit_font
+
+        # Крупнее обычного edit визарда — удобнее править длинные формулы.
+        apply_edit_font(dm.getByName(u"ExprEd"), height=13)
+    except Exception:
+        pass
     y += expr_h + 6
 
     # Статус и кнопки на РАЗНЫХ рядах — иначе FixedText перекрывает OK/Отмена.
@@ -461,6 +468,13 @@ def show_formula_builder_dialog( parent_dialog, initial_formula=u"", doc=None, s
         apply_soft_gray_theme(dm, title_text=win_title)
     except Exception:
         pass
+    # Тема могла пересоздать FontDescriptor — вернуть крупный шрифт формулы.
+    try:
+        from libre_macros_ui_theme import apply_edit_font
+
+        apply_edit_font(dm.getByName(u"ExprEd"), height=13)
+    except Exception:
+        pass
 
     dlg = sm.createInstanceWithContext(u"com.sun.star.awt.UnoControlDialog", ctx)
     dlg.setModel(dm)
@@ -472,6 +486,12 @@ def show_formula_builder_dialog( parent_dialog, initial_formula=u"", doc=None, s
     col2_cb = dlg.getControl(u"Col2Cb")
     expr_ed = dlg.getControl(u"ExprEd")
     status_lbl = dlg.getControl(u"StatusLbl")
+    try:
+        from libre_macros_ui_theme import apply_edit_font
+
+        apply_edit_font(expr_ed.Model, height=13)
+    except Exception:
+        pass
 
     state = {u"presets": presets, u"result": None, u"applying": False}
 
@@ -496,12 +516,36 @@ def show_formula_builder_dialog( parent_dialog, initial_formula=u"", doc=None, s
         except Exception:
             return u""
 
-    def _expr_set(text, caret=None):
+    def _focus_expr_end():
+        """Фокус в поле формулы, курсор в конец текста."""
+        try:
+            expr_ed.setFocus()
+        except Exception:
+            pass
+        end = len(_expr_get())
+        try:
+            from com.sun.star.awt import Selection
+
+            sel = Selection()
+            sel.Min = int(end)
+            sel.Max = int(end)
+            expr_ed.setSelection(sel)
+        except Exception:
+            pass
+
+    def _expr_set(text, caret=None, focus_end=False):
         try:
             expr_ed.setText(_u(text))
         except Exception:
             pass
+        if focus_end:
+            _focus_expr_end()
+            return
         if caret is not None:
+            try:
+                expr_ed.setFocus()
+            except Exception:
+                pass
             try:
                 from com.sun.star.awt import Selection
 
@@ -515,8 +559,8 @@ def show_formula_builder_dialog( parent_dialog, initial_formula=u"", doc=None, s
     def _insert(snippet):
         cur = _expr_get()
         a, b = _edit_selection(expr_ed)
-        new_text, caret = insert_into_text(cur, snippet, a, b)
-        _expr_set(new_text, caret)
+        new_text, _caret = insert_into_text(cur, snippet, a, b)
+        _expr_set(new_text, focus_end=True)
 
     def _apply_preset_index(idx):
         if idx < 0 or idx >= len(state[u"presets"]):
@@ -526,7 +570,7 @@ def show_formula_builder_dialog( parent_dialog, initial_formula=u"", doc=None, s
         if filled and not filled.startswith(u"=") and not filled.startswith(u"{"):
             # шаблоны без = — оставить как есть (условия удаления и т.п.)
             pass
-        _expr_set(filled)
+        _expr_set(filled, focus_end=True)
         _set_status(u"Шаблон: %s" % _lab)
 
     # init
