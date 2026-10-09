@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.750"
+MACRO_VERSION = "3.10.751"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -10076,6 +10076,80 @@ def _lm_pp_gradient_log(doc, sheet_name, note):
     _lm_log_postprocess(doc, sheet_name or "", "диапазон", "градиент", "дебаг", msg)
 
 
+def _lm_pp_gradient_text_to_sort_key(text):
+    """
+    Числовое представление текста для градиента по кодам первых 3 символов.
+
+    key = ord(c1)*100000 + ord(c2)*1000 + ord(c3)
+    (Unicode code point; для латиницы совпадает с ASCII).
+    Недостающие символы → 0. Пустая строка → None.
+    """
+    s = str(text or "").strip()
+    if s == "":
+        return None
+    c1 = ord(s[0]) if len(s) >= 1 else 0
+    c2 = ord(s[1]) if len(s) >= 2 else 0
+    c3 = ord(s[2]) if len(s) >= 3 else 0
+    return int(c1) * 100000 + int(c2) * 1000 + int(c3)
+
+
+def _lm_pp_gradient_try_parse_number(text):
+    """Разобрать текст как число (запятая/пробелы) или None."""
+    s = str(text or "").strip()
+    if s == "":
+        return None
+    s = s.replace("\u00a0", " ").replace(" ", "").replace(",", ".")
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def _lm_pp_gradient_cell_metric(cell):
+    """
+    Число для шкалы градиента: Value ячейки либо ключ по 3 первым символам текста.
+
+    Возвращает (value, kind) где kind — «number» | «text», либо (None, None).
+    CellContentType: EMPTY=0, VALUE=1, TEXT=2, FORMULA=3.
+    """
+    if cell is None:
+        return None, None
+    try:
+        ctype = int(cell.getType())
+    except Exception:
+        ctype = -1
+    if ctype == 0:
+        return None, None
+    if ctype == 1:
+        try:
+            return float(cell.Value), "number"
+        except (TypeError, ValueError):
+            return None, None
+    # TEXT / FORMULA / неизвестный тип — сначала число из строки, иначе ключ текста.
+    try:
+        if hasattr(cell, "getString"):
+            raw = cell.getString()
+        else:
+            raw = cell.String
+    except Exception:
+        raw = ""
+    s = str(raw or "").strip()
+    if s == "":
+        if ctype == 3:
+            try:
+                return float(cell.Value), "number"
+            except (TypeError, ValueError):
+                return None, None
+        return None, None
+    num = _lm_pp_gradient_try_parse_number(s)
+    if num is not None:
+        return num, "number"
+    key = _lm_pp_gradient_text_to_sort_key(s)
+    if key is None:
+        return None, None
+    return float(key), "text"
+
+
 def _lm_pp_read_bool_field(block, key, default=False):
     if not isinstance(block, dict):
         return default
@@ -13778,7 +13852,10 @@ def lm_pp_range_apply_formula(doc, sheet, data_range, header_row_range, *extra_a
 
 def lm_pp_range_color_scale_simple(doc, sheet, data_range, header_row_range, *extra_args):
     """
-    Градиент фона числового столбца от min к max (карта: «градиент»).
+    Градиент фона столбца от min к max (карта: «градиент»).
+
+    Числовые ячейки — по Value. Текстовые — по ключу первых 3 символов:
+    ord(c1)*100000 + ord(c2)*1000 + ord(c3) (Unicode/ASCII code point).
 
     Колонка C — маркер столбца, цвет min, цвет max:
       «сумм, зеленый, красный»;
@@ -13879,15 +13956,16 @@ def lm_pp_range_color_scale_simple(doc, sheet, data_range, header_row_range, *ex
         _lm_pp_gradient_dbg("sort", "ok")
 
     values = []
+    text_keys = 0
     r = sr
     n = 0
     while r <= er:
         cell = sheet.getCellByPosition(target_col, r)
-        try:
-            val = float(cell.Value)
-            values.append((r, val))
-        except (ValueError, TypeError):
-            pass
+        val, kind = _lm_pp_gradient_cell_metric(cell)
+        if val is not None:
+            values.append((r, float(val)))
+            if kind == "text":
+                text_keys = text_keys + 1
         n = n + 1
         if _lm_ui_should_update_status(n, is_last=(r == er)):
             _lm_ui_status_set(
@@ -13904,7 +13982,7 @@ def lm_pp_range_color_scale_simple(doc, sheet, data_range, header_row_range, *ex
             "диапазон",
             "градиент",
             "инфо",
-            "нет числовых значений в столбце «%s»" % matched_marker,
+            "нет значений для градиента в столбце «%s»" % matched_marker,
         )
         return
 
@@ -13948,6 +14026,8 @@ def lm_pp_range_color_scale_simple(doc, sheet, data_range, header_row_range, *ex
         extras.append("вся строка")
     if sort_enabled:
         extras.append("сорт. %s" % ("возр" if sort_ascending else "убыв"))
+    if text_keys > 0:
+        extras.append("текст→ключ ×%d" % text_keys)
     extra_note = (", " + ", ".join(extras)) if extras else ""
     _lm_log_postprocess(
         doc,
