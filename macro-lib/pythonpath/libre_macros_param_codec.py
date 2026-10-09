@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.754"
+MACRO_VERSION = "3.10.755"
 import json
 import re
 
@@ -1919,11 +1919,55 @@ def _normalize_add_column_block(block):
         u"число": u"number",
         u"date": u"date",
         u"дата": u"date",
+        u"index": u"index",
+        u"индекс": u"index",
+        u"idx": u"index",
+        u"row_index": u"index",
+        u"нумерация": u"index",
     }
     out["data_type"] = dt_map.get(dt, u"text")
 
+    idx_raw = unicode(
+        out.get("index_style") or out.get("index_kind") or out.get("index_type") or u""
+    ).strip()
+    idx_style = idx_raw.casefold()
+    idx_map = {
+        u"number": u"number",
+        u"num": u"number",
+        u"numeric": u"number",
+        u"число": u"number",
+        u"цифры": u"number",
+        u"1": u"number",
+        u"123": u"number",
+        u"letters": u"letters",
+        u"letter": u"letters",
+        u"alpha": u"letters",
+        u"abc": u"letters",
+        u"буквы": u"letters",
+        u"roman": u"roman",
+        u"римская": u"roman",
+        u"римские": u"roman",
+        u"roman_numerals": u"roman",
+    }
+    try:
+        from libre_macros_param_wizard_cfg import ADD_COLUMN_INDEX_STYLE_CODE
+
+        cfg_code = ADD_COLUMN_INDEX_STYLE_CODE.get(idx_raw) or ADD_COLUMN_INDEX_STYLE_CODE.get(
+            idx_style
+        )
+        if cfg_code:
+            idx_map[idx_style] = cfg_code
+    except Exception:
+        pass
+    if out["data_type"] == u"index":
+        out["index_style"] = idx_map.get(idx_style, u"number")
+    else:
+        out.pop("index_style", None)
+        out.pop("index_kind", None)
+        out.pop("index_type", None)
+
     fmt = unicode(out.get("format") or "").strip()
-    if fmt == u"" or fmt.casefold() == u"(глобальный)".casefold():
+    if out["data_type"] == u"index" or fmt == u"" or fmt.casefold() == u"(глобальный)".casefold():
         out.pop("format", None)
     else:
         out["format"] = fmt

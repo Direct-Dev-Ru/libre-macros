@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.754"
+MACRO_VERSION = "3.10.755"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -13510,12 +13510,86 @@ def _lm_pp_set_column_date_validation(sheet, col, sr, er, min_d, max_d):
     return _lm_pp_apply_range_validation(sheet, col, sr, er, _make)
 
 
+def _lm_pp_int_to_roman(n):
+    """Положительное целое → римская запись (I…MMMCMXCIX); иначе str(n)."""
+    try:
+        v = int(n)
+    except Exception:
+        return str(n)
+    if v <= 0:
+        return str(v)
+    if v > 3999:
+        return str(v)
+    parts = (
+        (1000, "M"),
+        (900, "CM"),
+        (500, "D"),
+        (400, "CD"),
+        (100, "C"),
+        (90, "XC"),
+        (50, "L"),
+        (40, "XL"),
+        (10, "X"),
+        (9, "IX"),
+        (5, "V"),
+        (4, "IV"),
+        (1, "I"),
+    )
+    out = []
+    rest = v
+    for val, sym in parts:
+        while rest >= val:
+            out.append(sym)
+            rest = rest - val
+    return "".join(out)
+
+
+def _lm_pp_add_column_index_token(n, style):
+    """1-based индекс строки → значение ячейки по стилю number|letters|roman."""
+    try:
+        i = int(n)
+    except Exception:
+        i = 1
+    if i < 1:
+        i = 1
+    key = str(style or "number").strip().casefold()
+    if key in ("letters", "letter", "abc", "буквы", "alpha"):
+        return col_index_to_letters(i - 1)
+    if key in ("roman", "римская", "римские", "roman_numerals"):
+        return _lm_pp_int_to_roman(i)
+    return i
+
+
+def _lm_pp_fill_column_index_values(sheet, col, row_top, row_bot, style):
+    """Заполнить столбец индексами 1..N (буквы / римские / числа)."""
+    top = int(row_top)
+    bot = int(row_bot)
+    if bot < top:
+        return 0
+    filled = 0
+    r = top
+    while r <= bot:
+        token = _lm_pp_add_column_index_token(r - top + 1, style)
+        try:
+            cell = sheet.getCellByPosition(int(col), int(r))
+            if isinstance(token, int):
+                cell.Value = float(token)
+            else:
+                cell.String = str(token)
+            filled = filled + 1
+        except Exception:
+            pass
+        r = r + 1
+    return filled
+
+
 def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args):
     """
-    Добавить пустой столбец: имя, тип (text/number/date), формат, список/мин–макс.
+    Добавить столбец: имя, тип (text/number/date/index), формат, список/мин–макс / индекс.
 
     JSON: [{"v":1,"fn":"добавить_столбец","new_column":"Статус","data_type":"text",
             "choices":["А","Б"],"format":"@"}]
+    Индекс: {"data_type":"index","index_style":"number|letters|roman"} — заполняет строки данных.
     """
     fn_key = "добавить_столбец"
     sc, sr, ec, er = _lm_pp_range_address(data_range)
@@ -13535,8 +13609,21 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
         )
         return
     data_type = str(block.get("data_type") or "text").strip().casefold()
-    if data_type not in ("text", "number", "date"):
+    if data_type in ("индекс", "idx", "row_index", "нумерация"):
+        data_type = "index"
+    if data_type not in ("text", "number", "date", "index"):
         data_type = "text"
+    index_style = str(
+        block.get("index_style") or block.get("index_kind") or "number"
+    ).strip().casefold() or "number"
+    if index_style in ("буквы", "letter", "abc", "alpha"):
+        index_style = "letters"
+    elif index_style in ("римская", "римские", "roman_numerals"):
+        index_style = "roman"
+    elif index_style in ("число", "цифры", "num", "numeric", "1", "123"):
+        index_style = "number"
+    if index_style not in ("number", "letters", "roman"):
+        index_style = "number"
     fmt = str(block.get("format") or "").strip()
     choices = block.get("choices") or block.get("values") or []
     if not isinstance(choices, (list, tuple)):
@@ -13619,6 +13706,9 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
     except Exception:
         pass
 
+    data_top = int(sr)
+    data_bot = int(er) if int(er) >= data_top else data_top
+
     # NumberFormat по типу / format
     if doc is not None:
         try:
@@ -13636,17 +13726,23 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
                         fmt = _lm_vlookup_default_date_format_string()
                     except Exception:
                         fmt = "DD.MM.YYYY"
+                elif data_type == "index" and index_style == "number":
+                    fmt = "0"
                 else:
                     fmt = "@"
             fmt_key = _lm_pp_number_format_key(doc, fmt)
-            data_top = int(sr)
-            data_bot = int(er) if int(er) >= data_top else data_top
             # заголовок тоже форматируем для даты/числа? обычно только данные
             _lm_pp_apply_column_number_format_chunked(
                 sheet, int(target_col), data_top, data_bot, fmt_key, status_prefix=fn_key
             )
         except Exception:
             pass
+
+    index_filled = 0
+    if data_type == "index":
+        index_filled = _lm_pp_fill_column_index_values(
+            sheet, target_col, data_top, data_bot, index_style
+        )
 
     # Контроль данных
     dv_ok = False
@@ -13667,14 +13763,22 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
             sheet, target_col, sr, er if er >= sr else sr, dmin, dmax
         )
 
+    note = "new_column=%s type=%s col=%d inserted=%s validation=%s" % (
+        new_column,
+        data_type,
+        int(target_col),
+        str(inserted),
+        str(dv_ok),
+    )
+    if data_type == "index":
+        note = note + " index_style=%s filled=%d" % (index_style, int(index_filled))
     _lm_log_postprocess(
         doc,
         sheet_name,
         "диапазон",
         fn_key,
         "ok",
-        "new_column=%s type=%s col=%d inserted=%s validation=%s"
-        % (new_column, data_type, int(target_col), str(inserted), str(dv_ok)),
+        note,
     )
 
 

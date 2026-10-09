@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.754"
+MACRO_VERSION = "3.10.755"
 import ast
 import glob
 import json
@@ -9907,6 +9907,15 @@ def _block_field_to_text(block, field_id, fn_key=None):
         return getattr(_pw_cfg, 'MANUAL_VAR_DATA_TYPE_LABEL', {}).get(
             raw, unicode(block.get('data_type') or u'text')
         )
+    if field_id == 'index_style' and unicode(fn_key or u'').casefold() in (
+        u'добавить_столбец'.casefold(),
+        u'add_column'.casefold(),
+        u'новый_столбец'.casefold(),
+    ):
+        raw = unicode(block.get('index_style') or u'number').strip().casefold()
+        return getattr(_pw_cfg, 'ADD_COLUMN_INDEX_STYLE_LABEL', {}).get(
+            raw, unicode(block.get('index_style') or u'1, 2, 3…')
+        )
     if field_id == 'required' and unicode(fn_key or u'').casefold() in (
         u'ручной_ввод_в_карту_переменных'.casefold(),
         u'ручной_ввод'.casefold(),
@@ -10422,10 +10431,30 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
                 u'date': u'date', u'дата': u'date',
                 u'datetime': u'datetime', u'дата_время': u'datetime', u'дата-время': u'datetime',
                 u'bool': u'bool', u'boolean': u'bool', u'логическое': u'bool',
+                u'index': u'index', u'индекс': u'index', u'idx': u'index',
+                u'нумерация': u'index',
             }
             code = dt_map.get(tc, u'text')
-        if code not in (u'text', u'number', u'date', u'datetime', u'bool'):
+        if code not in (u'text', u'number', u'date', u'datetime', u'bool', u'index'):
             code = u'text'
+        return code
+    if field_id == 'index_style':
+        t = unicode(text or u'').strip()
+        code = getattr(_pw_cfg, 'ADD_COLUMN_INDEX_STYLE_CODE', {}).get(t, None)
+        if code is None:
+            code = getattr(_pw_cfg, 'ADD_COLUMN_INDEX_STYLE_CODE', {}).get(t.casefold(), None)
+        if code is None:
+            tc = t.casefold()
+            idx_map = {
+                u'number': u'number', u'num': u'number', u'число': u'number',
+                u'цифры': u'number', u'1': u'number',
+                u'letters': u'letters', u'letter': u'letters', u'буквы': u'letters',
+                u'abc': u'letters',
+                u'roman': u'roman', u'римская': u'roman', u'римские': u'roman',
+            }
+            code = idx_map.get(tc, u'number')
+        if code not in (u'number', u'letters', u'roman'):
+            code = u'number'
         return code
     if field_id == 'required':
         t = unicode(text or u'').strip().casefold()
@@ -11897,6 +11926,14 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
         is_text = dt == u'text'
         is_num = dt == u'number'
         is_date = dt == u'date'
+        is_index = dt == u'index'
+        # вид индекса — только при типе «Индекс»
+        for name in (u'index_styleCb', u'index_styleLbl'):
+            try:
+                _set_form_ctl_enabled(dlg.getControl(name), is_index)
+            except Exception:
+                pass
+        _set_form_ctl_enabled(combos.get(u'index_style'), is_index)
         # choices — только текст
         for name in (
             u'choices',
@@ -11923,9 +11960,17 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                 _set_form_ctl_enabled(dlg.getControl(name), num_date)
             except Exception:
                 pass
-        # format combo — по типу
+        _set_form_ctl_enabled(checks.get(u'data_validation'), num_date)
+        _set_form_ctl_enabled(edits.get(u'min'), num_date)
+        _set_form_ctl_enabled(edits.get(u'max'), num_date)
+        # format combo — по типу (для индекса не нужен)
         fmt_ctl = combos.get(u'format')
         if fmt_ctl is not None:
+            _set_form_ctl_enabled(fmt_ctl, not is_index)
+            try:
+                _set_form_ctl_enabled(dlg.getControl(u'formatLbl'), not is_index)
+            except Exception:
+                pass
             gs_lib = _wp_import_global_settings_lib()
             blank = u'(глобальный)'
             cur = u''
@@ -11933,7 +11978,9 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                 cur = unicode(_combo_control_text(fmt_ctl) or u'').strip()
             except Exception:
                 cur = u''
-            if is_text:
+            if is_index:
+                base = (blank,)
+            elif is_text:
                 base = (blank, u'@')
             elif is_date and gs_lib:
                 base = (blank,) + tuple(gs_lib.get('DATE_FORMAT_CHOICES') or ())

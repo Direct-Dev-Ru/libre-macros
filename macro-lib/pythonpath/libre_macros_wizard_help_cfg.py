@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.754"
+MACRO_VERSION = "3.10.755"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -131,12 +131,20 @@ _FN_HELP_TEXTS = {
         u"ДОБАВИТЬ СТОЛБЕЦ\n"
         u"══════════════════════════════════════\n"
         u"\n"
-        u"Пустой столбец в конец used-области + тип/формат/валидация.\n"
-        u"data_type: text|number|date; format — NumberFormat.\n"
-        u"text → choices[] (LIST); number/date → data_validation + min/max.\n"
+        u"Столбец в конец used-области (или обновление существующего).\n"
         u"\n"
-        u"Пример:\n"
+        u"data_type:\n"
+        u"• text — choices[] → LIST-валидация;\n"
+        u"• number / date — format; опционально data_validation + min/max;\n"
+        u"• index — заполняет строки данных:\n"
+        u"  index_style: number (1,2,3…), letters (A,B,C…AA…), roman (I,II,III…).\n"
+        u"\n"
+        u"В визарде: тип и вид индекса в одном ряду; мин/макс — тоже.\n"
+        u"\n"
+        u"Примеры:\n"
         u"[{\"v\":1,\"fn\":\"добавить_столбец\",\"new_column\":\"Статус\",\"data_type\":\"text\",\"choices\":[\"Активен\",\"Архив\"]}]\n"
+        u"[{\"v\":1,\"fn\":\"добавить_столбец\",\"new_column\":\"№\",\"data_type\":\"index\",\"index_style\":\"number\"}]\n"
+        u"[{\"v\":1,\"fn\":\"добавить_столбец\",\"new_column\":\"Код\",\"data_type\":\"index\",\"index_style\":\"letters\"}]\n"
         u"\n"
     ),
     u"жирный_по_пути": (

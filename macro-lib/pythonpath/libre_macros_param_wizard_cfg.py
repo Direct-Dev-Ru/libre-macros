@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.754"
+MACRO_VERSION = "3.10.755"
 import re
 
 try:
@@ -382,9 +382,9 @@ _FALLBACK_FINAL_REST_HINTS = {
         u'[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     u"добавить_столбец": (
-        u"JSON: new_column, data_type (text|number|date), format; text→choices[]; "
-        u"number/date→data_validation + min/max; лист — SameAll / Sheet",
-        u'[{"v":1,"fn":"добавить_столбец","new_column":"Статус","data_type":"text","choices":["Активен","Архив"]}]',
+        u"JSON: new_column, data_type (text|number|date|index); index→index_style; "
+        u"text→choices[]; number/date→data_validation+min/max",
+        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","data_type":"index","index_style":"number"}]',
     ),
     u"применить_формулу": (
         u"имя_столбца=формула Calc; {row_id} — первая строка данных",
@@ -523,8 +523,8 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u'[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     u"добавить_столбец": (
-        u"JSON: new_column, data_type, format; text→choices; number/date→data_validation+min/max",
-        u'[{"v":1,"fn":"добавить_столбец","new_column":"Сумма","data_type":"number","format":"# ##0,00","data_validation":true,"min":"0","max":"1000000"}]',
+        u"JSON: new_column, data_type (text|number|date|index); index→index_style number|letters|roman",
+        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","data_type":"index","index_style":"letters"}]',
     ),
     u"применить_формулу": (
         u"имя_столбца=формула Calc; {row_id} — первая строка данных (1-based); "
@@ -1566,11 +1566,33 @@ ADD_COLUMN_DATA_TYPE_CHOICES = (
     (u"text", u"Текст"),
     (u"number", u"Число"),
     (u"date", u"Дата"),
+    (u"index", u"Индекс"),
 )
 ADD_COLUMN_DATA_TYPE_LABEL = {c: l for c, l in ADD_COLUMN_DATA_TYPE_CHOICES}
 ADD_COLUMN_DATA_TYPE_CODE = {l.casefold(): c for c, l in ADD_COLUMN_DATA_TYPE_CHOICES}
 for _ac_code, _ac_lab in ADD_COLUMN_DATA_TYPE_CHOICES:
     ADD_COLUMN_DATA_TYPE_CODE[_ac_code.casefold()] = _ac_code
+
+# Вид индекса для data_type=index (доступен только при «Индекс»).
+ADD_COLUMN_INDEX_STYLE_CHOICES = (
+    (u"number", u"1, 2, 3…"),
+    (u"letters", u"A, B, C… AA…"),
+    (u"roman", u"I, II, III…"),
+)
+ADD_COLUMN_INDEX_STYLE_LABEL = {c: l for c, l in ADD_COLUMN_INDEX_STYLE_CHOICES}
+ADD_COLUMN_INDEX_STYLE_CODE = {l.casefold(): c for c, l in ADD_COLUMN_INDEX_STYLE_CHOICES}
+for _ais_code, _ais_lab in ADD_COLUMN_INDEX_STYLE_CHOICES:
+    ADD_COLUMN_INDEX_STYLE_CODE[_ais_code.casefold()] = _ais_code
+# алиасы
+ADD_COLUMN_INDEX_STYLE_CODE[u"число".casefold()] = u"number"
+ADD_COLUMN_INDEX_STYLE_CODE[u"цифры".casefold()] = u"number"
+ADD_COLUMN_INDEX_STYLE_CODE[u"1".casefold()] = u"number"
+ADD_COLUMN_INDEX_STYLE_CODE[u"буквы".casefold()] = u"letters"
+ADD_COLUMN_INDEX_STYLE_CODE[u"letter".casefold()] = u"letters"
+ADD_COLUMN_INDEX_STYLE_CODE[u"abc".casefold()] = u"letters"
+ADD_COLUMN_INDEX_STYLE_CODE[u"римская".casefold()] = u"roman"
+ADD_COLUMN_INDEX_STYLE_CODE[u"римские".casefold()] = u"roman"
+ADD_COLUMN_INDEX_STYLE_CODE[u"roman_numerals".casefold()] = u"roman"
 _PARAM_COL_WIDTHS = (8500, 9500, 9500, 9500, 9500, 9500)
 _DESC_GENERAL_INFO_SEPARATOR = u"---------Общая информация ---------"
 _PICK_SOURCE = None
@@ -3091,13 +3113,13 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"добавить_столбец": {
         "title": u"Добавить столбец",
         "hint": (
-            u"Пустой столбец в конец таблицы на выбранном листе (или на всех — «Одинаково…»).\n"
-            u"Имя — одно. Тип: Текст / Число / Дата.\n"
-            u"Текст — список возможных значений (выпадающий список на столбце).\n"
-            u"Число/Дата — формат; опционально контроль данных и мин/макс.\n"
-            u"Если столбец с таким именем уже есть — формат и контроль применяются к нему."
+            u"Столбец в конец таблицы (или на всех — «Одинаково…»).\n"
+            u"Тип: Текст / Число / Дата / Индекс. При «Индекс» — вид: 1,2,3 / A,B,C / I,II,III.\n"
+            u"Текст — список значений; Число/Дата — формат и опционально мин/макс.\n"
+            u"Индекс заполняет строки данных; существующий столбец с тем же именем обновляется."
         ),
-        "hint_lines": 5,
+        "hint_lines": 4,
+        "compact_fields": True,
         "dialog_fit_content": True,
         "fields": (
             {"id": "new_column", "label": u"Имя нового столбца", "default": u"Новый"},
@@ -3107,6 +3129,18 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "combo",
                 "choices": tuple(lab for _c, lab in ADD_COLUMN_DATA_TYPE_CHOICES),
                 "default": u"Текст",
+                "row_group": u"dtype_index",
+                "row_group_slot": 0,
+                "row_group_frac": 0.48,
+            },
+            {
+                "id": "index_style",
+                "label": u"Вид индекса",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in ADD_COLUMN_INDEX_STYLE_CHOICES),
+                "default": u"1, 2, 3…",
+                "row_group": u"dtype_index",
+                "row_group_slot": 1,
             },
             {
                 "id": "format",
@@ -3129,8 +3163,20 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "bool",
                 "default": False,
             },
-            {"id": "min", "label": u"Минимум", "default": u""},
-            {"id": "max", "label": u"Максимум", "default": u""},
+            {
+                "id": "min",
+                "label": u"Минимум",
+                "default": u"",
+                "row_group": u"minmax",
+                "row_group_slot": 0,
+            },
+            {
+                "id": "max",
+                "label": u"Максимум",
+                "default": u"",
+                "row_group": u"minmax",
+                "row_group_slot": 1,
+            },
         ),
     },
     u"применить_формулу": {

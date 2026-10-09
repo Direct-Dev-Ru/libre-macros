@@ -664,21 +664,26 @@ Lib: `lm_pp_range_add_column` / `lm_final_add_column` (шимы `merge_*`).
   {"v":1,"fn":"добавить_столбец","sheet":"Сводка","new_column":"Сумма","data_type":"number",
    "format":"# ##0,00","data_validation":true,"min":"0","max":"1000000"},
   {"v":1,"fn":"добавить_столбец","new_column":"Дата_отчета","data_type":"date",
-   "format":"DD.MM.YYYY","data_validation":true,"min":"01.01.2020","max":"31.12.2030"}
+   "format":"DD.MM.YYYY","data_validation":true,"min":"01.01.2020","max":"31.12.2030"},
+  {"v":1,"fn":"добавить_столбец","new_column":"№","data_type":"index","index_style":"number"},
+  {"v":1,"fn":"добавить_столбец","new_column":"Код","data_type":"index","index_style":"letters"},
+  {"v":1,"fn":"добавить_столбец","new_column":"Рим","data_type":"index","index_style":"roman"}
 ]
 ```
 
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `new_column` | string | Имя столбца |
-| `data_type` | string | `text` \| `number` \| `date` |
-| `format` | string | NumberFormat; пусто — по типу (`@` / глобальный числовой / дата) |
+| `data_type` | string | `text` \| `number` \| `date` \| `index` |
+| `index_style` | string | Для `index`: `number` (1,2,3…), `letters` (A,B,C…AA…), `roman` (I,II,III…) |
+| `format` | string | NumberFormat; пусто — по типу (`@` / глобальный числовой / дата); для индекса не используется |
 | `choices` | list | Для `text`: допустимые значения → LIST-валидация на диапазоне данных |
 | `data_validation` | bool | Для `number`/`date`: контроль мин/макс |
 | `min` / `max` | string | Границы числа или даты |
 | `sheet` | string | Лист; пусто — все листы шага |
 
-Столбец в конец used-области; при существующем заголовке — только формат и контроль.
+Столбец в конец used-области; при существующем заголовке — формат/контроль (и заполнение индекса при `data_type=index`).
+В визарде: тип данных и вид индекса в одном ряду; минимум и максимум — тоже.
 
 ---
 
