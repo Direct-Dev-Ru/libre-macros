@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-MACRO_VERSION = "3.10.757"
+MACRO_VERSION = "3.10.758"
 import json
 import os
 import sys
 from datetime import datetime
-from fnmatch import fnmatch
 from urllib.parse import unquote, urlparse
 
 import uno
@@ -245,6 +244,7 @@ def _default_dialog_settings():
         "sheet_name": "",
         "max_depth": _DEFAULT_MAX_DEPTH,
         "masks": "",
+        "exclude_masks": "",
         "size_unit": _DEFAULT_SIZE_UNIT,
         "count_pages": _DEFAULT_COUNT_PAGES,
         "count_sha256": _DEFAULT_COUNT_SHA256,
@@ -948,27 +948,21 @@ def display_path(path):
 
 
 def parse_masks(mask_text):
-    """
-    Маски файлов: *.xlsx;*.pdf или через запятую. Пусто — все файлы.
-    """
-    text = str(mask_text or "").strip()
-    if text == "":
-        return []
-    parts = []
-    for chunk in text.replace(",", ";").split(";"):
-        item = chunk.strip()
-        if item != "" and item not in parts:
-            parts.append(item)
-    return parts
+    """Маски путей: через `,`/`;`; плейсхолдер только `*` (весь путь)."""
+    return _fl_lib.parse_path_masks(mask_text)
 
 
-def file_matches_masks(file_name, masks):
-    if not masks:
-        return True
-    for pattern in masks:
-        if fnmatch(file_name, pattern):
-            return True
-    return False
+def file_matches_masks(file_name, masks, rel_path="", full_path=""):
+    """Маски включения: имя / относительный / полный путь."""
+    return _fl_lib.entry_matches_include_masks(
+        file_name, rel_path, full_path or file_name, masks
+    )
+
+
+def path_is_excluded(name, rel_path, full_path, exclude_masks):
+    return _fl_lib.entry_matches_exclude_masks(
+        name, rel_path, full_path, exclude_masks
+    )
 
 
 def parent_relative(root_path, full_path):
@@ -1455,11 +1449,13 @@ def _set_cell_number(cell, value):
         cell.String = str(value)
 
 
-def dir_tree_size(dir_path, folder_depth, max_depth, masks, op_counter=None):
+def dir_tree_size( dir_path, folder_depth, max_depth, masks, exclude_masks=None, root_path=None, op_counter=None):
     """
-    Размер папки: сумма файлов внутри с учётом лимита глубины и масок.
+    Размер папки: сумма файлов внутри с учётом лимита глубины, масок и исключений.
     """
     total = 0
+    root = root_path if root_path else dir_path
+    excl = exclude_masks if exclude_masks is not None else []
     try:
         names = os.listdir(dir_path)
     except OSError:
@@ -1469,24 +1465,34 @@ def dir_tree_size(dir_path, folder_depth, max_depth, masks, op_counter=None):
             op_counter[0] = op_counter[0] + 1
             file_list_ui_yield(counter=op_counter[0])
         full = os.path.join(dir_path, name)
+        rel_path = relative_entry_path(root, full)
+        if path_is_excluded(name, rel_path, full, excl):
+            continue
         if os.path.isfile(full):
-            if file_matches_masks(name, masks):
+            if file_matches_masks(name, masks, rel_path=rel_path, full_path=full):
                 try:
                     total += os.path.getsize(full)
                 except OSError:
                     pass
         elif os.path.isdir(full) and folder_depth < max_depth:
             total += dir_tree_size(
-                full, folder_depth + 1, max_depth, masks, op_counter
+                full,
+                folder_depth + 1,
+                max_depth,
+                masks,
+                exclude_masks=excl,
+                root_path=root,
+                op_counter=op_counter,
             )
     return total
 
 
-def collect_path_entries(root_path, max_depth=None, masks=None, show_progress=True):
+def collect_path_entries( root_path, max_depth=None, masks=None, exclude_masks=None, show_progress=True):
     """
   Собрать файлы и папки до указанной глубины.
 
   max_depth=1 — только первый уровень внутри root_path (по умолчанию).
+  masks — включение (* по всему пути); exclude_masks — исключение.
   """
     root = path_from_user_input(root_path)
     if root == "" or not os.path.isdir(root):
@@ -1502,6 +1508,7 @@ def collect_path_entries(root_path, max_depth=None, masks=None, show_progress=Tr
         max_depth = 1
 
     mask_list = masks if masks is not None else []
+    exclude_list = exclude_masks if exclude_masks is not None else []
     entries = []
     op_counter = [0]
     top_progress = [0]
@@ -1543,20 +1550,25 @@ def collect_path_entries(root_path, max_depth=None, masks=None, show_progress=Tr
             if show_progress:
                 file_list_ui_yield(counter=op_counter[0])
 
+            parent = parent_relative(root, full)
+            rel_path = relative_entry_path(root, full)
+            if path_is_excluded(name, rel_path, full, exclude_list):
+                continue
+
             try:
                 mtime = os.path.getmtime(full)
                 mtime_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
             except OSError:
                 mtime_str = ""
 
-            parent = parent_relative(root, full)
-            rel_path = relative_entry_path(root, full)
             owner = ""
             if _fl_lib.is_windows_platform():
                 owner = _fl_lib.get_file_owner(full)
 
             if os.path.isfile(full):
-                if not file_matches_masks(name, mask_list):
+                if not file_matches_masks(
+                    name, mask_list, rel_path=rel_path, full_path=full
+                ):
                     continue
                 try:
                     size = os.path.getsize(full)
@@ -1578,7 +1590,15 @@ def collect_path_entries(root_path, max_depth=None, masks=None, show_progress=Tr
                 )
             elif os.path.isdir(full):
                 size_counter = op_counter if show_progress else None
-                size = dir_tree_size(full, item_depth, max_depth, mask_list, size_counter)
+                size = dir_tree_size(
+                    full,
+                    item_depth,
+                    max_depth,
+                    mask_list,
+                    exclude_masks=exclude_list,
+                    root_path=root,
+                    op_counter=size_counter,
+                )
                 entries.append(
                     {
                         "kind": "папка",
@@ -2797,12 +2817,13 @@ def apply_sha256_dup_columns( doc, results_sheet, entries, base_ncols, data_rows
     return new_ncols
 
 
-def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE, dlp_analyze_names=_DEFAULT_DLP_ANALYZE_NAMES, dlp_names_dict_path="", dlp_analyze_content=_DEFAULT_DLP_ANALYZE_CONTENT, dlp_content_dict_path="", dlp_content_text=_DEFAULT_DLP_CONTENT_TEXT, dlp_content_word=_DEFAULT_DLP_CONTENT_WORD, dlp_content_excel=_DEFAULT_DLP_CONTENT_EXCEL, count_sha256=_DEFAULT_COUNT_SHA256, sha256_max_gb=_DEFAULT_SHA256_MAX_GB):
+def analyze_files( path, sheet_name=None, max_depth=None, masks=None, exclude_masks=None, size_unit=_DEFAULT_SIZE_UNIT, count_pages=_DEFAULT_COUNT_PAGES, sort_mode=_DEFAULT_SORT_MODE, dlp_analyze_names=_DEFAULT_DLP_ANALYZE_NAMES, dlp_names_dict_path="", dlp_analyze_content=_DEFAULT_DLP_ANALYZE_CONTENT, dlp_content_dict_path="", dlp_content_text=_DEFAULT_DLP_CONTENT_TEXT, dlp_content_word=_DEFAULT_DLP_CONTENT_WORD, dlp_content_excel=_DEFAULT_DLP_CONTENT_EXCEL, count_sha256=_DEFAULT_COUNT_SHA256, sha256_max_gb=_DEFAULT_SHA256_MAX_GB):
     """
     Собирает данные о файлах и папках и выводит на лист.
 
     max_depth — глубина обхода (1 = первый уровень внутри path).
-    masks — строка или список масок (*.xlsx;*.pdf).
+    masks — маски включения (* по всему пути; *.xlsx;*/docs/*).
+    exclude_masks — маски исключения (*/.*, *.tmp, …).
     size_unit — b | kb | mb | gb (б, Кб, Мб, Гб).
     count_pages — считать страницы PDF/Writer/Impress/Draw через UNO.
     sort_mode — пресет сортировки (SORT_PRESETS).
@@ -2825,6 +2846,12 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
             mask_list = list(masks)
         else:
             mask_list = []
+        if isinstance(exclude_masks, str):
+            exclude_list = parse_masks(exclude_masks)
+        elif exclude_masks:
+            exclude_list = list(exclude_masks)
+        else:
+            exclude_list = []
 
         do_pages = normalize_count_pages(count_pages)
         mode_sort = normalize_sort_mode(sort_mode)
@@ -2838,13 +2865,26 @@ def analyze_files( path, sheet_name=None, max_depth=None, masks=None, size_unit=
         include_owner = _fl_lib.is_windows_platform()
 
         entries, root = collect_path_entries(
-            root, max_depth=max_depth, masks=mask_list, show_progress=True
+            root,
+            max_depth=max_depth,
+            masks=mask_list,
+            exclude_masks=exclude_list,
+            show_progress=True,
         )
         if len(entries) == 0:
+            extra = []
             if mask_list:
+                extra.append(u"включение: %s" % u", ".join(mask_list))
+            if exclude_list:
+                extra.append(u"исключение: %s" % u", ".join(exclude_list))
+            if extra:
                 show_message(
-                    "В «%s» (глубина %s) нет файлов по маскам: %s"
-                    % (root, max_depth or _DEFAULT_MAX_DEPTH, ", ".join(mask_list))
+                    "В «%s» (глубина %s) нет элементов по фильтрам (%s)."
+                    % (
+                        root,
+                        max_depth or _DEFAULT_MAX_DEPTH,
+                        u"; ".join(extra),
+                    )
                 )
             else:
                 show_message(
@@ -3074,7 +3114,7 @@ def create_file_analyzer_dialog():
 
         dlg_w = 540
         # −20% к прежним 510
-        dlg_h = 408
+        dlg_h = 448
         m = 8
         gap = 6
         content_w = dlg_w - m * 2
@@ -3083,7 +3123,7 @@ def create_file_analyzer_dialog():
         field_w = content_w - browse_w - gap
         dlp_field_w = content_w - browse_w - sheet_btn_w - 2 * gap
         dialog_model.PositionX = 100
-        dialog_model.PositionY = 40
+        dialog_model.PositionY = 36
         dialog_model.Width = dlg_w
         dialog_model.Height = dlg_h
         dialog_model.Title = "Сбор данных о файлах и папках"
@@ -3153,7 +3193,7 @@ def create_file_analyzer_dialog():
         _add_label(
             dialog_model,
             "LabelMasks",
-            "Маски файлов (пусто = все; пример: *.xlsx;*.pdf):",
+            "Маски включения (* по пути; пусто = все; *.xlsx;*/docs/*):",
             m,
             y,
             content_w,
@@ -3168,6 +3208,26 @@ def create_file_analyzer_dialog():
             content_w,
             18,
             str(saved.get("masks", "")),
+        )
+        y += 22
+        _add_label(
+            dialog_model,
+            "LabelExcludeMasks",
+            "Маски исключения (через запятую; * = любой фрагмент; */.*, *.tmp):",
+            m,
+            y,
+            content_w,
+            12,
+        )
+        y += 14
+        _add_edit(
+            dialog_model,
+            "ExcludeMaskField",
+            m,
+            y,
+            content_w,
+            18,
+            str(saved.get("exclude_masks", "")),
         )
 
         y += 24
@@ -3229,6 +3289,8 @@ def create_file_analyzer_dialog():
             "SizeUnitCombo",
             "LabelMasks",
             "MaskField",
+            "LabelExcludeMasks",
+            "ExcludeMaskField",
             "LabelSort",
             "SortCombo",
             "CountPagesCheck",
@@ -3428,6 +3490,7 @@ def create_file_analyzer_dialog():
                 self.sheet_field = None
                 self.depth_field = None
                 self.mask_field = None
+                self.exclude_mask_field = None
                 self.size_unit_combo = None
                 self.sort_combo = None
                 self.count_pages_check = None
@@ -3519,6 +3582,7 @@ def create_file_analyzer_dialog():
                     _control_set_text(self.sheet_field, "")
                     _control_set_text(self.depth_field, str(_DEFAULT_MAX_DEPTH))
                     _control_set_text(self.mask_field, "")
+                    _control_set_text(self.exclude_mask_field, "")
                     if self.size_unit_combo:
                         _set_combo_items(
                             self.size_unit_combo,
@@ -3565,6 +3629,7 @@ def create_file_analyzer_dialog():
                         sheet_name = _control_get_text(self.sheet_field)
                         depth_text = _control_get_text(self.depth_field)
                         mask_text = _control_get_text(self.mask_field)
+                        exclude_mask_text = _control_get_text(self.exclude_mask_field)
                         size_unit_text = (
                             _control_get_text(self.size_unit_combo)
                             if self.size_unit_combo
@@ -3604,6 +3669,9 @@ def create_file_analyzer_dialog():
                         sheet_name = sheet_name.strip() if sheet_name else ""
                         depth_text = depth_text.strip() if depth_text else str(_DEFAULT_MAX_DEPTH)
                         mask_text = mask_text.strip() if mask_text else ""
+                        exclude_mask_text = (
+                            exclude_mask_text.strip() if exclude_mask_text else ""
+                        )
                         size_unit = size_unit_from_label(size_unit_text)
                         sort_mode = sort_mode_from_label(sort_text)
 
@@ -3663,6 +3731,7 @@ def create_file_analyzer_dialog():
                                 "sheet_name": sheet_name,
                                 "max_depth": max_depth,
                                 "masks": mask_text,
+                                "exclude_masks": exclude_mask_text,
                                 "size_unit": size_unit,
                                 "count_pages": count_pages,
                                 "count_sha256": count_sha256,
@@ -3681,6 +3750,7 @@ def create_file_analyzer_dialog():
                             sheet_name,
                             max_depth,
                             mask_text,
+                            exclude_mask_text,
                             size_unit,
                             count_pages,
                             sort_mode,
@@ -3718,6 +3788,7 @@ def create_file_analyzer_dialog():
                         None,
                         None,
                         None,
+                        None,
                     )
                     self.dialog.endExecute()
 
@@ -3726,6 +3797,7 @@ def create_file_analyzer_dialog():
         handler.sheet_field = dialog.getControl("SheetField")
         handler.depth_field = dialog.getControl("DepthField")
         handler.mask_field = dialog.getControl("MaskField")
+        handler.exclude_mask_field = dialog.getControl("ExcludeMaskField")
         handler.size_unit_combo = dialog.getControl("SizeUnitCombo")
         handler.sort_combo = dialog.getControl("SortCombo")
         handler.count_pages_check = dialog.getControl("CountPagesCheck")
@@ -3786,6 +3858,7 @@ def analyze_files_dialog(*args):
                 sheet_name,
                 max_depth,
                 mask_text,
+                exclude_mask_text,
                 size_unit,
                 count_pages,
                 sort_mode,
@@ -3801,12 +3874,13 @@ def analyze_files_dialog(*args):
             ) = result
             sheet_arg = sheet_name if sheet_name else _DEFAULT_RESULT_SHEET_NAME
             print(
-                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, единицы=%s, страницы=%s, сортировка=%s, поиск_имён=%s, поиск_содержимого=%s (t=%s/w=%s/e=%s), sha256=%s, sha256_max_gb=%s"
+                "Запуск: путь=%s, лист=%s, глубина=%s, маски=%s, исключ=%s, единицы=%s, страницы=%s, сортировка=%s, поиск_имён=%s, поиск_содержимого=%s (t=%s/w=%s/e=%s), sha256=%s, sha256_max_gb=%s"
                 % (
                     path,
                     sheet_arg,
                     max_depth,
                     mask_text,
+                    exclude_mask_text,
                     size_unit,
                     count_pages,
                     sort_mode,
@@ -3824,6 +3898,7 @@ def analyze_files_dialog(*args):
                 sheet_name=sheet_arg,
                 max_depth=max_depth,
                 masks=mask_text,
+                exclude_masks=exclude_mask_text,
                 size_unit=size_unit,
                 count_pages=count_pages,
                 sort_mode=sort_mode,
@@ -3840,7 +3915,9 @@ def analyze_files_dialog(*args):
             if success:
                 mask_note = ""
                 if mask_text:
-                    mask_note = "\nМаски: %s" % mask_text
+                    mask_note += "\nМаски включения: %s" % mask_text
+                if exclude_mask_text:
+                    mask_note += "\nМаски исключения: %s" % exclude_mask_text
                 pages_note = "\nСтраницы: да (UNO)" if count_pages else ""
                 sha_note = ""
                 if count_sha256:

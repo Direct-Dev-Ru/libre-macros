@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Вспомогательная логика file_list_macro: Owner (Windows) и поиск по именам/содержимому."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.757"
+MACRO_VERSION = "3.10.758"
 import csv
 import hashlib
 import json
@@ -916,3 +916,101 @@ def dup_marks_from_sha256_map(digests, hash_map):
             order = 1
         out.append((u"Да", order))
     return out
+
+
+def parse_path_masks(mask_text):
+    """
+    Маски путей: через запятую или `;`. Пусто → [].
+    Единственный плейсхолдер — `*` (любой фрагмент, в т.ч. пустой).
+    """
+    text = _u(mask_text).strip()
+    if text == u"":
+        return []
+    parts = []
+    for chunk in text.replace(u",", u";").split(u";"):
+        item = chunk.strip()
+        if item != u"" and item not in parts:
+            parts.append(item)
+    return parts
+
+
+def _normalize_path_for_mask(path_text):
+    return _u(path_text).replace(u"\\", u"/")
+
+
+def path_matches_star_pattern(path_text, pattern):
+    """
+    Совпадение пути с маской: только `*` — плейсхолдер (как .* в regex).
+    Остальные символы — литералы. Сравнение без учёта регистра на Windows.
+    """
+    text = _normalize_path_for_mask(path_text)
+    pat = _normalize_path_for_mask(pattern).strip()
+    if not pat:
+        return False
+    # Собрать regex: * → .*, прочее экранировать.
+    chunks = []
+    i = 0
+    n = len(pat)
+    while i < n:
+        ch = pat[i]
+        if ch == u"*":
+            chunks.append(u".*")
+            i += 1
+            continue
+        chunks.append(re.escape(ch))
+        i += 1
+    flags = re.IGNORECASE if sys.platform == "win32" else 0
+    try:
+        rx = re.compile(u"^" + u"".join(chunks) + u"$", flags)
+    except re.error:
+        return False
+    return rx.match(text) is not None
+
+
+def path_matches_any_star_mask(path_text, masks):
+    if not masks:
+        return False
+    text = _normalize_path_for_mask(path_text)
+    # Доп. вариант с ведущим «/»: чтобы «*/.*» ловил и «.git» на корне
+    # (как «/.git» — комбинация «/.» в пути).
+    variants = [text]
+    if text and not text.startswith(u"/"):
+        variants.append(u"/" + text)
+    for pattern in masks:
+        for cand in variants:
+            if path_matches_star_pattern(cand, pattern):
+                return True
+    return False
+
+
+def entry_matches_include_masks(name, rel_path, full_path, masks):
+    """
+    Маски включения: пусто → все.
+    Проверка по имени файла, относительному и полному пути (* по всему пути).
+    """
+    if not masks:
+        return True
+    candidates = (
+        _u(name),
+        _normalize_path_for_mask(rel_path),
+        _normalize_path_for_mask(full_path),
+    )
+    for cand in candidates:
+        if cand and path_matches_any_star_mask(cand, masks):
+            return True
+    return False
+
+
+def entry_matches_exclude_masks(name, rel_path, full_path, masks):
+    """Маски исключения: пусто → ничего не исключаем. Иначе OR по маскам."""
+    if not masks:
+        return False
+    candidates = (
+        _u(name),
+        _normalize_path_for_mask(rel_path),
+        _normalize_path_for_mask(full_path),
+    )
+    for cand in candidates:
+        if cand and path_matches_any_star_mask(cand, masks):
+            return True
+    return False
