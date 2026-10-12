@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.756"
+MACRO_VERSION = "3.10.757"
 import ast
 import glob
 import json
@@ -12046,12 +12046,19 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
         _set_form_ctl_enabled(checks.get(u'data_validation'), num_date)
         _set_form_ctl_enabled(edits.get(u'min'), num_date)
         _set_form_ctl_enabled(edits.get(u'max'), num_date)
-        # format combo — по типу (для индекса не нужен)
+        # format + format_from всегда доступны (format_from — полный стиль столбца;
+        # format — NumberFormat поверх, в т.ч. после копирования).
+        for name in (u'format_fromCb', u'format_fromLbl'):
+            try:
+                _set_form_ctl_enabled(dlg.getControl(name), True)
+            except Exception:
+                pass
+        _set_form_ctl_enabled(combos.get(u'format_from'), True)
         fmt_ctl = combos.get(u'format')
         if fmt_ctl is not None:
-            _set_form_ctl_enabled(fmt_ctl, not is_index)
+            _set_form_ctl_enabled(fmt_ctl, True)
             try:
-                _set_form_ctl_enabled(dlg.getControl(u'formatLbl'), not is_index)
+                _set_form_ctl_enabled(dlg.getControl(u'formatLbl'), True)
             except Exception:
                 pass
             gs_lib = _wp_import_global_settings_lib()
@@ -12061,10 +12068,12 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                 cur = unicode(_combo_control_text(fmt_ctl) or u'').strip()
             except Exception:
                 cur = u''
-            if is_index:
-                base = (blank,)
-            elif is_text:
-                base = (blank, u'@')
+            if is_text or is_index:
+                base = (blank, u'@', u'0')
+                if is_index and gs_lib:
+                    calc_fn = gs_lib.get('calc_number_format_choices')
+                    extra = tuple(calc_fn() if calc_fn is not None else (gs_lib.get('NUMBER_FORMAT_CHOICES') or ()))
+                    base = (blank, u'@', u'0') + tuple(x for x in extra if x not in (blank, u'@', u'0'))
             elif is_date and gs_lib:
                 base = (blank,) + tuple(gs_lib.get('DATE_FORMAT_CHOICES') or ())
             elif gs_lib:

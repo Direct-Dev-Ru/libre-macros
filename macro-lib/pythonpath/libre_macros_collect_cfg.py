@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.756"
+MACRO_VERSION = "3.10.757"
 import re
 
 try:
@@ -671,10 +671,10 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         '[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     "добавить_столбец": (
-        "JSON: new_column, position(_начало_|_конец_|_перед_|_после_)+relative_column; "
-        "data_type text|number|date|index; index→index_style",
+        "JSON: new_column, position+relative_column; format_from (полный стиль) + format (NumberFormat после); "
+        "data_type text|number|date|index",
         '[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_перед_","relative_column":"\'Сумма\'",'
-        '"data_type":"index","index_style":"number"}]',
+        '"data_type":"index","index_style":"number","format_from":"\'Отдел\'","format":"0"}]',
     ),
     "столбец_по_лямбде": (
         "JSON: new_column или new_column_expr (lambda sheet, headers), expr (lambda rows...) + upd_rows/*; позиции как у условного_столбца.",

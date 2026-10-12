@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.756"
+MACRO_VERSION = "3.10.757"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -13748,45 +13748,117 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
             )
             return
 
-    ref_col = max(0, int(sc))
-    try:
-        _lm_pp_finalize_derived_column(
-            sheet, ref_col, target_col, h_sr, sr, doc=doc
-        )
-    except Exception:
-        pass
-
     data_top = int(sr)
     data_bot = int(er) if int(er) >= data_top else data_top
+    fmt_from_tok = str(
+        block.get("format_from")
+        or block.get("copy_format_from")
+        or block.get("format_source")
+        or ""
+    ).strip()
+    fmt_from_col = None
+    fmt_from_err = ""
+    if fmt_from_tok != "":
+        fmt_from_col, fmt_from_err = _lm_pp_resolve_column_token_unique(
+            fmt_from_tok, sheet, header_row_range, sc, ec
+        )
+        if fmt_from_col is None:
+            _lm_log_postprocess(
+                doc,
+                sheet_name,
+                "диапазон",
+                fn_key,
+                "ошибка",
+                "format_from не найден: %s" % (fmt_from_err or fmt_from_tok),
+            )
+            return
 
-    # NumberFormat по типу / format
-    if doc is not None:
+    # Полное форматирование: с указанного столбца (диапазоном, не по ячейкам)
+    # или со столбца-донора слева (как раньше).
+    ref_col = max(0, int(sc))
+    if fmt_from_col is not None:
         try:
-            if fmt == "":
-                if data_type == "number":
-                    try:
-                        from libre_macros_global_settings_lib import load_global_settings
-
-                        gs = load_global_settings()
-                        fmt = str((gs or {}).get("number_format") or "# ##0,00").strip()
-                    except Exception:
-                        fmt = "# ##0,00"
-                elif data_type == "date":
-                    try:
-                        fmt = _lm_vlookup_default_date_format_string()
-                    except Exception:
-                        fmt = "DD.MM.YYYY"
-                elif data_type == "index" and index_style == "number":
-                    fmt = "0"
-                else:
-                    fmt = "@"
-            fmt_key = _lm_pp_number_format_key(doc, fmt)
-            # заголовок тоже форматируем для даты/числа? обычно только данные
-            _lm_pp_apply_column_number_format_chunked(
-                sheet, int(target_col), data_top, data_bot, fmt_key, status_prefix=fn_key
+            _lm_pp_clone_concat_column_formats(
+                sheet,
+                int(fmt_from_col),
+                int(target_col),
+                h_sr,
+                data_top,
+                data_bot,
             )
         except Exception:
             pass
+        try:
+            _lm_pp_autofit_columns(None, sheet, [target_col])
+        except Exception:
+            pass
+        if doc is not None:
+            try:
+                _lm_pp_calculate_doc(doc)
+            except Exception:
+                pass
+        ctx = lm_pp_active_context()
+        if ctx is not None:
+            try:
+                _lm_pp_context_refresh(ctx)
+                _lm_pp_context_expand_end_col(ctx, target_col)
+            except Exception:
+                pass
+    else:
+        try:
+            _lm_pp_finalize_derived_column(
+                sheet, ref_col, target_col, h_sr, sr, doc=doc
+            )
+        except Exception:
+            pass
+
+    # NumberFormat: явный format — после копирования стилей; иначе defaults по типу
+    # (если format_from задан и format пуст — NumberFormat уже со столбца-источника).
+    explicit_fmt = str(fmt or "").strip()
+    if explicit_fmt.casefold() == "(глобальный)":
+        explicit_fmt = ""
+    apply_fmt = explicit_fmt
+    if apply_fmt == "" and fmt_from_col is None:
+        if data_type == "number":
+            try:
+                from libre_macros_global_settings_lib import load_global_settings
+
+                gs = load_global_settings()
+                apply_fmt = str((gs or {}).get("number_format") or "# ##0,00").strip()
+            except Exception:
+                apply_fmt = "# ##0,00"
+        elif data_type == "date":
+            try:
+                apply_fmt = _lm_vlookup_default_date_format_string()
+            except Exception:
+                apply_fmt = "DD.MM.YYYY"
+        elif data_type == "index" and index_style == "number":
+            apply_fmt = "0"
+        elif data_type == "text":
+            apply_fmt = "@"
+        else:
+            apply_fmt = ""
+    if apply_fmt != "" and doc is not None:
+        try:
+            fmt_key = _lm_pp_number_format_key(doc, apply_fmt)
+            # один вызов UNO на весь столбец данных
+            rng = sheet.getCellRangeByPosition(
+                int(target_col), int(data_top), int(target_col), int(data_bot)
+            )
+            rng.NumberFormat = fmt_key
+        except Exception:
+            try:
+                fmt_key = _lm_pp_number_format_key(doc, apply_fmt)
+                _lm_pp_apply_column_number_format_chunked(
+                    sheet,
+                    int(target_col),
+                    data_top,
+                    data_bot,
+                    fmt_key,
+                    status_prefix=fn_key,
+                )
+            except Exception:
+                pass
 
     index_filled = 0
     if data_type == "index":
@@ -13825,6 +13897,10 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
         note = note + " index_style=%s filled=%d" % (index_style, int(index_filled))
     if position in ("before", "after") and rel_token:
         note = note + " relative=%s" % rel_token
+    if fmt_from_col is not None:
+        note = note + " format_from=%s" % fmt_from_tok
+    if explicit_fmt:
+        note = note + " format=%s" % explicit_fmt
     _lm_log_postprocess(
         doc,
         sheet_name,

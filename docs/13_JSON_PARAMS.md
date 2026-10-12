@@ -675,14 +675,15 @@ Lib: `lm_pp_range_add_column` / `lm_final_add_column` (шимы `merge_*`).
 | `relative_column` | string | Для `_перед_`/`_после_`: заголовок, индекс 1-based или буква `A`/`AA` |
 | `data_type` | string | `text` \| `number` \| `date` \| `index` |
 | `index_style` | string | Для `index`: `number` (1,2,3…), `letters` (A,B,C…AA…), `roman` (I,II,III…) |
-| `format` | string | NumberFormat; пусто — по типу; для индекса не используется |
+| `format_from` | string | Столбец-источник полного формата (заливка/шрифт/рамки/…); копируется диапазоном, не по ячейкам |
+| `format` | string | NumberFormat; если задан `format_from` — применяется **после** копирования стилей; иначе по типу |
 | `choices` | list | Для `text`: LIST-валидация |
 | `data_validation` | bool | Для `number`/`date`: контроль мин/макс |
 | `min` / `max` | string | Границы числа или даты |
 | `sheet` | string | Лист; пусто — все листы шага |
 
 При существующем заголовке — без повторной вставки (формат/контроль/индекс).
-В визарде: имя+куда+опорный в одном ряду; тип+вид индекса; мин/макс.
+В визарде: имя+куда+опорный; тип+вид индекса; формат+«Скопировать с»; мин/макс.
 
 ---
 

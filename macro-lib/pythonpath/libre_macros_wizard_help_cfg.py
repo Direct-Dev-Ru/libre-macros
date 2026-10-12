@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.756"
+MACRO_VERSION = "3.10.757"
 """
 Развёрнутые тексты кнопки «Справка» для визардов / постобработки.
 
@@ -144,13 +144,18 @@ _FN_HELP_TEXTS = {
         u"• index — заполняет строки данных:\n"
         u"  index_style: number (1,2,3…), letters (A,B,C…AA…), roman (I,II,III…).\n"
         u"\n"
-        u"В визарде: имя+куда+опорный в одном ряду; тип+вид индекса; мин/макс.\n"
+        u"Формат:\n"
+        u"• format_from — скопировать ВСЁ оформление со столбца (диапазоном UNO);\n"
+        u"• format — NumberFormat; если оба заданы — сначала format_from, потом format.\n"
+        u"\n"
+        u"В визарде: имя+куда+опорный; тип+вид индекса; формат+«Скопировать с»; мин/макс.\n"
         u"\n"
         u"Примеры:\n"
         u"[{\"v\":1,\"fn\":\"добавить_столбец\",\"new_column\":\"Статус\",\"position\":\"_конец_\","
         u"\"data_type\":\"text\",\"choices\":[\"Активен\",\"Архив\"]}]\n"
         u"[{\"v\":1,\"fn\":\"добавить_столбец\",\"new_column\":\"№\",\"position\":\"_перед_\","
-        u"\"relative_column\":\"'Сумма'\",\"data_type\":\"index\",\"index_style\":\"number\"}]\n"
+        u"\"relative_column\":\"'Сумма'\",\"data_type\":\"index\",\"index_style\":\"number\","
+        u"\"format_from\":\"'Отдел'\",\"format\":\"0\"}]\n"
         u"\n"
     ),
     u"жирный_по_пути": (

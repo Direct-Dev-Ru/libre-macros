@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.756"
+MACRO_VERSION = "3.10.757"
 import re
 
 try:
@@ -382,8 +382,8 @@ _FALLBACK_FINAL_REST_HINTS = {
         u'[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     u"добавить_столбец": (
-        u"JSON: new_column, position+_relative_column; data_type text|number|date|index",
-        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_конец_","data_type":"index","index_style":"number"}]',
+        u"JSON: new_column, position; format_from+format; data_type text|number|date|index",
+        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_конец_","format_from":"Отдел","data_type":"index"}]',
     ),
     u"применить_формулу": (
         u"имя_столбца=формула Calc; {row_id} — первая строка данных",
@@ -522,8 +522,9 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u'[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     u"добавить_столбец": (
-        u"JSON: new_column, position+_relative_column; data_type+index_style",
-        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_перед_","relative_column":"Сумма","data_type":"index","index_style":"letters"}]',
+        u"JSON: new_column, position; format_from+format; data_type+index_style",
+        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_перед_","relative_column":"Сумма",'
+        u'"format_from":"Отдел","format":"0","data_type":"index","index_style":"letters"}]',
     ),
     u"применить_формулу": (
         u"имя_столбца=формула Calc; {row_id} — первая строка данных (1-based); "
@@ -3134,9 +3135,9 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"добавить_столбец": {
         "title": u"Добавить столбец",
         "hint": (
-            u"Имя + куда вставить (Первый/Последний/Перед/После). Перед/После — опорный столбец.\n"
-            u"Тип: Текст / Число / Дата / Индекс (вид: 1,2,3 / A,B,C / I,II,III).\n"
-            u"Текст — список значений; Число/Дата — формат и мин/макс. Существующее имя — без вставки."
+            u"Имя + куда (Первый/Последний/Перед/После). Перед/После — опорный столбец.\n"
+            u"Тип: Текст / Число / Дата / Индекс. «Скопировать с» — весь формат столбца; "
+            u"поле «Формат» — NumberFormat поверх (после копирования)."
         ),
         "hint_lines": 3,
         "compact_fields": True,
@@ -3194,6 +3195,18 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "combo",
                 "choices": (),
                 "default": u"",
+                "row_group": u"fmt_copy",
+                "row_group_slot": 0,
+                "row_group_frac": 0.48,
+            },
+            {
+                "id": "format_from",
+                "label": u"Скопировать с",
+                "type": "combo",
+                "choices_from_headers": True,
+                "default": u"",
+                "row_group": u"fmt_copy",
+                "row_group_slot": 1,
             },
             {
                 "id": "choices",

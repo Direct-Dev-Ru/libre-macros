@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.756"
+MACRO_VERSION = "3.10.757"
 import json
 import re
 
@@ -2005,10 +2005,27 @@ def _normalize_add_column_block(block):
         out.pop("index_type", None)
 
     fmt = unicode(out.get("format") or "").strip()
-    if out["data_type"] == u"index" or fmt == u"" or fmt.casefold() == u"(глобальный)".casefold():
+    if fmt == u"" or fmt.casefold() == u"(глобальный)".casefold():
         out.pop("format", None)
     else:
         out["format"] = fmt
+
+    fmt_from = unicode(
+        out.get("format_from")
+        or out.get("copy_format_from")
+        or out.get("format_source")
+        or u""
+    ).strip()
+    if fmt_from != u"":
+        toks = _normalize_column_token_list(fmt_from)
+        if toks:
+            out["format_from"] = toks[0]
+        else:
+            out["format_from"] = fmt_from
+    else:
+        out.pop("format_from", None)
+        out.pop("copy_format_from", None)
+        out.pop("format_source", None)
 
     choices = _normalize_column_token_list(out.get("choices") or out.get("values") or out.get("list"))
     # для списка значений кавычки не нужны — голые токены

@@ -8,7 +8,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.756"
+MACRO_VERSION = "3.10.757"
 import fnmatch
 import re
 import time
