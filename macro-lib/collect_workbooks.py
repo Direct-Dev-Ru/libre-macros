@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.770"
+MACRO_VERSION = "3.10.771"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -17549,7 +17549,7 @@ def _merge_pp_context_expand_end_col(ctx, col_index):
     return ctx
 
 def _merge_pp_context_refresh(ctx):
-    """Перечитать end_col/end_row с листа (после изменения структуры столбцов)."""
+    """Перечитать end_col/end_row с листа (после изменения структуры столбцов/строк)."""
     if ctx is None:
         return ctx
     sheet = ctx.get('sheet')
@@ -17562,11 +17562,32 @@ def _merge_pp_context_refresh(ctx):
     ctx['data_start'] = int(header_row) + 1
     return ctx
 
+def _merge_pp_sync_info_header_from_ctx(info, pp_ctx=None):
+    """
+    Синхронизировать info['header_row'] с pp_ctx после шагов, меняющих шапку
+    (убрать_объединение и т.п.) — иначе row-фаза читает устаревшую строку.
+    """
+    if info is None:
+        return
+    ctx = pp_ctx if pp_ctx is not None else info.get('pp_ctx')
+    if ctx is None:
+        return
+    try:
+        hr = int(ctx.get('header_row', info.get('header_row', 0)) or 0)
+    except Exception:
+        hr = int(info.get('header_row') or 0)
+    info['header_row'] = hr
+    try:
+        ctx['header_row'] = hr
+    except Exception:
+        pass
+
 def _merge_pp_context_ranges(ctx):
     """
     Актуальные XCellRange заголовка и данных по контексту.
 
-    Возвращает (data_range, header_row_range); при отсутствии данных — узкий data_range.
+    Заголовки читаются живьём из строки header_row (после убрать_объединение —
+    уже схлопнутые имена). Возвращает (data_range, header_row_range).
     """
     sheet = ctx['sheet']
     header_row = ctx['header_row']
@@ -18846,11 +18867,13 @@ def _apply_book_pipeline_range_phase(doc, sheets_info, range_phase):
                     for st in bundle_steps:
                         _merge_pp_mark_pipeline_step_done(sh, st)
                     _merge_pp_context_refresh(pp_ctx)
+                    _merge_pp_sync_info_header_from_ctx(info, pp_ctx)
                     _merge_undo_clear_after_pp_step(doc, 'pp:range:%s|%s' % (sh.Name, label))
                     merge_ui_yield(force=True)
                 else:
                     merge_ui_set_phase('Постобработка', '%s | %s' % (sh.Name, step.get('name', 'range')), journal=False)
                     _merge_run_single_pipeline_range_step(doc, sh, pp_ctx, step)
+                    _merge_pp_sync_info_header_from_ctx(info, pp_ctx)
             n_before = len(sheets_info)
             added = _merge_pp_append_copy_sheet_infos(doc, sheets_info)
             if added > 0:
@@ -18899,10 +18922,12 @@ def _apply_book_pipeline_row_phase(doc, sheets_info, row_phase):
     for info in sheets_info:
         sh = info.get('sheet')
         pp_ctx = info.get('pp_ctx')
-        header_row = info.get('header_row', 0)
         if sh is None or pp_ctx is None:
             continue
         _merge_pp_context_refresh(pp_ctx)
+        # pp_ctx.header_row — после убрать_объединение / смены шапки.
+        _merge_pp_sync_info_header_from_ctx(info, pp_ctx)
+        header_row = int(pp_ctx.get('header_row', info.get('header_row', 0)) or 0)
         end_col = int(pp_ctx.get('end_col', 0))
         if end_col < 0:
             end_col = 0

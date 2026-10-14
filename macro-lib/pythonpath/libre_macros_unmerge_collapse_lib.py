@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.770"
+MACRO_VERSION = "3.10.771"
 """
 убрать_объединение — схлопывание хаотичных merge (Word→Calc) в одну физ. строку.
 
@@ -504,8 +504,15 @@ def lm_pp_range_unmerge_collapse(doc, sheet, data_range, header_row_range, *extr
         header_bottom = hdr_r1
         deleted = collapse_rect(sheet, hdr_r0, hdr_r1, sc, ec, sep=sep)
         deleted_total += deleted
-        # После схлопывания заголовок занимает 1 строку
+        # После схлопывания заголовок занимает 1 строку (новые имена — живые в ячейках).
         header_bottom = hdr_r0
+        # Для marker/resolve дальше — актуальная строка заголовков, не снимок на вход.
+        try:
+            header_row_range = sheet.getCellRangeByPosition(
+                int(sc), int(header_bottom), int(ec), int(header_bottom)
+            )
+        except Exception:
+            pass
 
     # Зона данных
     data_r0 = None
@@ -574,13 +581,29 @@ def lm_pp_range_unmerge_collapse(doc, sheet, data_range, header_row_range, *extr
         deleted_total += deleted
         bi -= 1
 
+    # Контекст для следующих шагов: header_row (после схлопа шапки), end_col/end_row,
+    # data_start. Имена заголовков читаются живьём из строки header_row.
+    ctx_note = u""
     try:
         ctx = lm_pp_active_context()
-        _lm_pp_context_refresh(ctx)
+        if ctx is not None:
+            if do_header:
+                ctx[u"header_row"] = int(header_bottom)
+            _lm_pp_context_refresh(ctx)
+            ctx_note = u"; ctx header=%d data=%d..%d cols=0..%d" % (
+                int(ctx.get(u"header_row", 0) or 0),
+                int(ctx.get(u"data_start", 0) or 0),
+                int(ctx.get(u"end_row", 0) or 0),
+                int(ctx.get(u"end_col", 0) or 0),
+            )
     except Exception:
         pass
 
-    note = u"удалено строк=%d; блоков данных=%d" % (deleted_total, len(blocks))
+    note = u"удалено строк=%d; блоков данных=%d%s" % (
+        deleted_total,
+        len(blocks),
+        ctx_note,
+    )
     if do_header:
         note = u"заголовок схлопнут; " + note
     _lm_log_postprocess(doc, sheet_name, u"диапазон", fn_label, u"ok", note)
