@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Субвизард условия выполнения шага (колонка D / E)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.772"
+MACRO_VERSION = "3.10.773"
 try:
     unicode
 except NameError:
@@ -69,31 +69,42 @@ def _combo_select_by_data(ctl, code, pairs):
             idx = i
             break
         i += 1
+    label = pairs[idx][1] if pairs else u""
+    # Сначала текст (надёжнее после execute()), потом индекс.
+    try:
+        ctl.setText(unicode(label))
+    except Exception:
+        pass
     try:
         ctl.selectItemPos(idx, True)
     except Exception:
-        try:
-            ctl.setText(pairs[idx][1])
-        except Exception:
-            pass
+        pass
 
 
 def _combo_selected_code(ctl, pairs, default=u""):
+    """
+    Код выбранного пункта. Текст подписи важнее SelectedItemPos:
+    после OK/execute индекс часто остаётся 0, а Text — актуальный.
+    """
     if ctl is None:
         return default
+    txt = _get_text(ctl).strip()
+    txt_cf = txt.casefold()
+    if txt_cf != u"":
+        i = 0
+        while i < len(pairs):
+            if (
+                unicode(pairs[i][1]).casefold() == txt_cf
+                or unicode(pairs[i][0]).casefold() == txt_cf
+            ):
+                return pairs[i][0]
+            i += 1
     try:
         pos = int(ctl.getSelectedItemPos())
     except Exception:
         pos = -1
     if 0 <= pos < len(pairs):
         return pairs[pos][0]
-    # ComboBox: текст подписи
-    txt = _get_text(ctl).strip().casefold()
-    i = 0
-    while i < len(pairs):
-        if unicode(pairs[i][1]).casefold() == txt or unicode(pairs[i][0]).casefold() == txt:
-            return pairs[i][0]
-        i += 1
     return default
 
 
@@ -217,6 +228,12 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     def _combo(name, x, y, w, h):
         if add_combo is not None:
             add_combo(dm, name, x, y, w, h)
+            try:
+                cm = dm.getByName(name)
+                cm.Dropdown = True
+                cm.ReadOnly = True
+            except Exception:
+                pass
             return
         model = dm.createInstance("com.sun.star.awt.UnoControlComboBoxModel")
         model.Name = name
@@ -225,6 +242,10 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         model.Width = w
         model.Height = h
         model.Dropdown = True
+        try:
+            model.ReadOnly = True
+        except Exception:
+            pass
         try:
             model.LineCount = 12
         except Exception:
@@ -238,28 +259,28 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     hint = _cfg.DIALOG_HINT_PLUGIN if is_plugin else _cfg.DIALOG_HINT_CODEC
     y = m
     _fixed("HintLbl", hint, m, y, content_w, hint_h, multiline=True)
-    y += hint_h + 6
+    y += hint_h + 4
 
     _fixed("KindLbl", u"Тип условия:", m, y + 2, lbl_w, lbl_h)
     _combo("KindCb", field_x, y, field_w, ctl_h)
-    y += row_h + 4
+    y += row_h + 2
     panel_top = y
 
     # --- lambda ---
     _fixed("LambdaLbl", u"expr (lambda: …):", m, panel_top, content_w, lbl_h)
-    pick_w = 150
-    ex_w = 150
-    build_w = 110
-    save_w = 90
-    gap = 6
-    tools_y = panel_top + lbl_h + 4
+    pick_w = 140
+    ex_w = 140
+    build_w = 100
+    save_w = 84
+    gap = 4
+    tools_y = panel_top + lbl_h + 2
     _combo("LambdaPickCb", m, tools_y, pick_w, ctl_h)
     _button("LambdaBuildBtn", u"Конструктор…", m + pick_w + gap, tools_y, build_w, ctl_h)
     _button("LambdaSaveBtn", u"Сохранить", m + pick_w + gap + build_w + gap, tools_y, save_w, ctl_h)
     _combo("LambdaExampleCb", m + pick_w + gap + build_w + gap + save_w + gap, tools_y, ex_w, ctl_h)
-    edit_y = tools_y + ctl_h + 6
+    edit_y = tools_y + ctl_h + 4
     _edit("LambdaEd", m, edit_y, content_w, lambda_edit_h, multiline=True)
-    lambda_hint_y = edit_y + lambda_edit_h + 4
+    lambda_hint_y = edit_y + lambda_edit_h + 2
     _fixed(
         "LambdaHintLbl",
         u"Сохранённые ← | Конструктор | Сохранить | Примеры →. Helpers: var/env/os_user/glob_var.",
@@ -296,8 +317,8 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     _fixed("OsOpLbl", u"Оператор:", m, panel_top + 2, lbl_w, lbl_h)
     _combo("OsOpCb", field_x, panel_top, field_w, ctl_h)
     _fixed("OsUsersLbl", u"Пользователи (user1,user2,…):", m, panel_top + row_h + 2, content_w, lbl_h)
-    _edit("OsUsersEd", m, panel_top + row_h + lbl_h + 6, content_w, os_users_h, multiline=True)
-    os_panel_h = row_h + lbl_h + 6 + os_users_h
+    _edit("OsUsersEd", m, panel_top + row_h + lbl_h + 4, content_w, os_users_h, multiline=True)
+    os_panel_h = row_h + lbl_h + 4 + os_users_h
 
     # --- always: подсказка ---
     _fixed(
@@ -321,16 +342,16 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     iter_y = panel_top + cond_panel_h + panel_gap
 
     _fixed("IterSepLbl", u"── Цикл шага (итерации) ──", m, iter_y, content_w, lbl_h)
-    _fixed("IterModeLbl", u"Режим цикла:", m, iter_y + lbl_h + 4, lbl_w, lbl_h)
+    _fixed("IterModeLbl", u"Режим цикла:", m, iter_y + lbl_h + 2, lbl_w, lbl_h)
     _combo("IterModeCb", field_x, iter_y + lbl_h + 2, field_w, ctl_h)
-    _fixed("IterValLbl", u"Число / текст:", m, iter_y + lbl_h + row_h + 4, lbl_w, lbl_h)
-    _edit("IterValEd", field_x, iter_y + lbl_h + row_h + 2, field_w - 100, ctl_h)
+    _fixed("IterValLbl", u"Число / текст:", m, iter_y + lbl_h + row_h + 2, lbl_w, lbl_h)
+    _edit("IterValEd", field_x, iter_y + lbl_h + row_h + 2, field_w - 90, ctl_h)
     _button(
         "IterLambdaBtn",
         u"λ…",
-        field_x + field_w - 94,
+        field_x + field_w - 84,
         iter_y + lbl_h + row_h + 2,
-        94,
+        84,
         ctl_h,
     )
     _fixed(
@@ -338,14 +359,14 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         u"1 = без цикла. Текст: <<Переменные.N>>. λ — лямбда → целое (макс. %d)."
         % int(getattr(_cfg, "ITERATIONS_MAX", 10000) or 10000),
         m,
-        iter_y + lbl_h + row_h * 2 + 4,
+        iter_y + lbl_h + row_h * 2 + 2,
         content_w,
         lbl_h,
     )
 
-    footer_y = iter_y + iter_sec_h + 4
+    footer_y = iter_y + iter_sec_h + 2
     dh = max(
-        int(getattr(_cfg, "DIALOG_H", 460) or 460),
+        int(getattr(_cfg, "DIALOG_H", 420) or 420),
         footer_y + footer_h + m,
     )
     try:
@@ -650,9 +671,21 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         mode = _combo_selected_code(
             iter_mode_cb, _cfg.ITER_MODE_CHOICES, _cfg.ITER_MODE_NONE
         )
+        txt = _get_text(iter_val_ed).strip()
+        # Fallback: после OK индекс combo мог сброситься в «Без цикла»,
+        # а в поле значения уже есть число / <<>> / lambda.
+        if mode == _cfg.ITER_MODE_NONE and txt != u"":
+            mode = _lib.iterations_mode_from_value(txt)
+            if mode == _cfg.ITER_MODE_NONE:
+                # чистое число ≥2
+                try:
+                    n = int(float(txt.replace(u",", u".")))
+                    if n > 1:
+                        mode = _cfg.ITER_MODE_CONST
+                except Exception:
+                    pass
         if mode == _cfg.ITER_MODE_NONE:
             return None
-        txt = _get_text(iter_val_ed).strip()
         if mode == _cfg.ITER_MODE_CONST:
             if txt == u"":
                 return None

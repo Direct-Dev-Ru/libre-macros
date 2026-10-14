@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы условия выполнения шага постобработки / финала (колонка D / E)."""
 from __future__ import unicode_literals
-MACRO_VERSION = "3.10.772"
+MACRO_VERSION = "3.10.773"
 try:
     unicode
 except NameError:
@@ -110,21 +110,21 @@ DIALOG_HINT_PLUGIN = (
 # Размеры субвизарда (не тянуть высоту главного визарда).
 # Высота = hint + kind + max(панель условия) + цикл + footer (фиксированная, без сжатия).
 DIALOG_W = 580
-DIALOG_H = 460
-DIALOG_MARGIN = 12
-DIALOG_HINT_H = 36
-DIALOG_ROW_H = 28
-DIALOG_CTL_H = 22
-DIALOG_LBL_H = 16
-DIALOG_LBL_W = 150
-DIALOG_BTN_H = 24
-DIALOG_BTN_W = 100
-DIALOG_BTN_GAP = 10
-DIALOG_FOOTER_H = 36
-DIALOG_LAMBDA_EDIT_H = 110
-DIALOG_OS_USERS_EDIT_H = 72
-DIALOG_PANEL_GAP = 10
-DIALOG_ITER_SECTION_H = 96
+DIALOG_H = 420
+DIALOG_MARGIN = 10
+DIALOG_HINT_H = 30
+DIALOG_ROW_H = 24
+DIALOG_CTL_H = 20
+DIALOG_LBL_H = 14
+DIALOG_LBL_W = 140
+DIALOG_BTN_H = 22
+DIALOG_BTN_W = 96
+DIALOG_BTN_GAP = 8
+DIALOG_FOOTER_H = 32
+DIALOG_LAMBDA_EDIT_H = 88
+DIALOG_OS_USERS_EDIT_H = 48
+DIALOG_PANEL_GAP = 6
+DIALOG_ITER_SECTION_H = 82
 
 # Примеры для kind=lambda (вставка в поле expr).
 LAMBDA_EXAMPLE_CHOICES = (
