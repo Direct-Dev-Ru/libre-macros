@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Вшитый todo_task_help_ru.odt (base64). Пересборка: python3 macro-lib/bundle_todo_task_help.py"""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.769"
+MACRO_VERSION = "3.10.770"
 import base64
 import os
 

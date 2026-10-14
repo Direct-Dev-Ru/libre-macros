@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.769"
+MACRO_VERSION = "3.10.770"
 """
 добавить_объединение — вертикальный merge выбранных столбцов по блокам.
 

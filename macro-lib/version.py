@@ -4,7 +4,7 @@
 
 Краткий About текущей версии пакета макросов (пункт меню «Версия …»).
 """
-MACRO_VERSION = "3.10.769"
+MACRO_VERSION = "3.10.770"
 from libre_macros_version_lib import show_version_entry as _entry
 
 

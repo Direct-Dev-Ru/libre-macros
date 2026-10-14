@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.769"
+MACRO_VERSION = "3.10.770"
 import re
 
 try:
@@ -408,8 +408,8 @@ _FALLBACK_FINAL_REST_HINTS = {
         u'[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     u"добавить_столбец": (
-        u"JSON: new_column, position; format_from+format; data_type text|number|date|index",
-        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_конец_","format_from":"Отдел","data_type":"index"}]',
+        u"JSON: new_column, position; if_exists=update|suffix|skip|replace; format_from+format; data_type",
+        u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_конец_","if_exists":"suffix","format_from":"Отдел","data_type":"index"}]',
     ),
     u"применить_формулу": (
         u"имя_столбца=формула Calc; {row_id} — первая строка данных",
@@ -548,9 +548,9 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u'[{"v":1,"fn":"условный_столбец","new_column":"Категория","rules":[{"column":"Сумма","op":"ge","value":1000,"then":"Средний"}],"otherwise":"Мелкий"}]',
     ),
     u"добавить_столбец": (
-        u"JSON: new_column, position; format_from+format; data_type+index_style",
+        u"JSON: new_column, position; if_exists; format_from+format; data_type+index_style",
         u'[{"v":1,"fn":"добавить_столбец","new_column":"№","position":"_перед_","relative_column":"Сумма",'
-        u'"format_from":"Отдел","format":"0","data_type":"index","index_style":"letters"}]',
+        u'"if_exists":"replace","format_from":"Отдел","format":"0","data_type":"index","index_style":"letters"}]',
     ),
     u"применить_формулу": (
         u"имя_столбца=формула Calc; {row_id} — первая строка данных (1-based); "
@@ -1652,6 +1652,30 @@ ADD_COLUMN_POSITION_CODE[u"перед".casefold()] = u"_перед_"
 ADD_COLUMN_POSITION_CODE[u"before".casefold()] = u"_перед_"
 ADD_COLUMN_POSITION_CODE[u"после".casefold()] = u"_после_"
 ADD_COLUMN_POSITION_CODE[u"after".casefold()] = u"_после_"
+
+# Если столбец с таким именем уже есть.
+ADD_COLUMN_IF_EXISTS_CHOICES = (
+    (u"update", u"Обновить существующий"),
+    (u"suffix", u"Добавить с _N"),
+    (u"skip", u"Пропуск"),
+    (u"replace", u"Удалить и добавить"),
+)
+ADD_COLUMN_IF_EXISTS_LABEL = {c: l for c, l in ADD_COLUMN_IF_EXISTS_CHOICES}
+ADD_COLUMN_IF_EXISTS_CODE = {l.casefold(): c for c, l in ADD_COLUMN_IF_EXISTS_CHOICES}
+for _aie_code, _aie_lab in ADD_COLUMN_IF_EXISTS_CHOICES:
+    ADD_COLUMN_IF_EXISTS_CODE[_aie_code.casefold()] = _aie_code
+ADD_COLUMN_IF_EXISTS_CODE[u"обновить".casefold()] = u"update"
+ADD_COLUMN_IF_EXISTS_CODE[u"reuse".casefold()] = u"update"
+ADD_COLUMN_IF_EXISTS_CODE[u"keep".casefold()] = u"update"
+ADD_COLUMN_IF_EXISTS_CODE[u"суффикс".casefold()] = u"suffix"
+ADD_COLUMN_IF_EXISTS_CODE[u"rename".casefold()] = u"suffix"
+ADD_COLUMN_IF_EXISTS_CODE[u"index".casefold()] = u"suffix"
+ADD_COLUMN_IF_EXISTS_CODE[u"пропуск".casefold()] = u"skip"
+ADD_COLUMN_IF_EXISTS_CODE[u"пропустить".casefold()] = u"skip"
+ADD_COLUMN_IF_EXISTS_CODE[u"удалить".casefold()] = u"replace"
+ADD_COLUMN_IF_EXISTS_CODE[u"перезаписать".casefold()] = u"replace"
+ADD_COLUMN_IF_EXISTS_CODE[u"overwrite".casefold()] = u"replace"
+
 _PARAM_COL_WIDTHS = (8500, 9500, 9500, 9500, 9500, 9500)
 _DESC_GENERAL_INFO_SEPARATOR = u"---------Общая информация ---------"
 _PICK_SOURCE = None
@@ -3235,8 +3259,8 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
         "title": u"Добавить столбец",
         "hint": (
             u"Имя + куда (Первый/Последний/Перед/После). Перед/После — опорный столбец.\n"
-            u"Тип: Текст / Число / Дата / Индекс. «Скопировать с» — весь формат столбца; "
-            u"поле «Формат» — NumberFormat поверх (после копирования)."
+            u"Если имя уже есть — «Если есть»: обновить / с _N / пропуск / удалить и добавить.\n"
+            u"Тип: Текст / Число / Дата / Индекс. «Скопировать с» — формат; «Формат» — NumberFormat."
         ),
         "hint_lines": 3,
         "compact_fields": True,
@@ -3268,6 +3292,13 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "default": u"",
                 "row_group": u"name_pos",
                 "row_group_slot": 2,
+            },
+            {
+                "id": "if_exists",
+                "label": u"Если есть",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in ADD_COLUMN_IF_EXISTS_CHOICES),
+                "default": u"Обновить существующий",
             },
             {
                 "id": "data_type",

@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.769"
+MACRO_VERSION = "3.10.770"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -13671,6 +13671,33 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
     except Exception:
         h_sr = max(0, int(sr) - 1)
 
+    if_exists = str(
+        block.get("if_exists")
+        or block.get("on_exists")
+        or block.get("exists")
+        or "update"
+    ).strip().casefold()
+    if_map = {
+        "update": "update",
+        "обновить": "update",
+        "reuse": "update",
+        "keep": "update",
+        "suffix": "suffix",
+        "суффикс": "suffix",
+        "rename": "suffix",
+        "index": "suffix",
+        "skip": "skip",
+        "пропуск": "skip",
+        "пропустить": "skip",
+        "replace": "replace",
+        "удалить": "replace",
+        "перезаписать": "replace",
+        "overwrite": "replace",
+    }
+    if_exists = if_map.get(if_exists, "update")
+    if if_exists not in ("update", "suffix", "skip", "replace"):
+        if_exists = "update"
+
     # Уже есть заголовок с этим именем в диапазоне данных?
     target_col = None
     try:
@@ -13689,6 +13716,69 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
         target_col = None
     existed = target_col is not None
     inserted = False
+    if_exists_note = ""
+    if existed:
+        if if_exists == "skip":
+            _lm_log_postprocess(
+                doc,
+                sheet_name,
+                "диапазон",
+                fn_key,
+                "пропуск",
+                "столбец уже есть («%s»), if_exists=skip" % new_column,
+            )
+            return
+        if if_exists == "suffix":
+            # Собрать занятые имена → Имя_2, Имя_3…
+            used = set()
+            try:
+                c = 0
+                while c <= max(int(ec) + 64, int(ec)):
+                    try:
+                        cur_h = cell_text(sheet.getCellByPosition(c, h_sr)).strip()
+                    except Exception:
+                        cur_h = ""
+                    if cur_h != "":
+                        used.add(lm_identity_key(cur_h))
+                    c = c + 1
+            except Exception:
+                pass
+            base = new_column
+            n = 2
+            cand = "%s_%d" % (base, n)
+            while lm_identity_key(cand) in used and n < 10000:
+                n = n + 1
+                cand = "%s_%d" % (base, n)
+            if_exists_note = "if_exists=suffix %s→%s" % (base, cand)
+            new_column = cand
+            target_col = None
+            existed = False
+        elif if_exists == "replace":
+            try:
+                _lm_sheet_delete_columns(sheet, int(target_col), 1)
+                if int(target_col) <= int(ec):
+                    ec = int(ec) - 1
+                if_exists_note = "if_exists=replace deleted_col=%d" % int(target_col)
+                target_col = None
+                existed = False
+                # Диапазон мог сжаться — обновим из контекста, если есть.
+                try:
+                    ctx = lm_pp_active_context()
+                    if ctx is not None:
+                        _lm_pp_context_refresh(ctx)
+                except Exception:
+                    pass
+            except Exception as err:
+                _lm_log_postprocess(
+                    doc,
+                    sheet_name,
+                    "диапазон",
+                    fn_key,
+                    "ошибка",
+                    "if_exists=replace: удаление «%s»: %s" % (new_column, err),
+                )
+                return
+        # else update — оставляем target_col, без вставки
     if not existed:
         insert_at = int(ec) + 1
         if position == "start":
@@ -13893,6 +13983,10 @@ def lm_pp_range_add_column(doc, sheet, data_range, header_row_range, *extra_args
         position,
         str(dv_ok),
     )
+    if existed and if_exists == "update":
+        note = note + " if_exists=update"
+    if if_exists_note:
+        note = note + " " + if_exists_note
     if data_type == "index":
         note = note + " index_style=%s filled=%d" % (index_style, int(index_filled))
     if position in ("before", "after") and rel_token:

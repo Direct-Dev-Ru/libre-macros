@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.769"
+MACRO_VERSION = "3.10.770"
 import ast
 import glob
 import json
@@ -10031,6 +10031,15 @@ def _block_field_to_text(block, field_id, fn_key=None):
         return getattr(_pw_cfg, 'ADD_COLUMN_POSITION_LABEL', {}).get(
             raw, unicode(block.get('position') or u'Последний')
         )
+    if field_id == 'if_exists' and unicode(fn_key or u'').casefold() in (
+        u'добавить_столбец'.casefold(),
+        u'add_column'.casefold(),
+        u'новый_столбец'.casefold(),
+    ):
+        raw = unicode(block.get('if_exists') or u'update').strip().casefold()
+        return getattr(_pw_cfg, 'ADD_COLUMN_IF_EXISTS_LABEL', {}).get(
+            raw, unicode(block.get('if_exists') or u'Обновить существующий')
+        )
     if field_id == 'required' and unicode(fn_key or u'').casefold() in (
         u'ручной_ввод_в_карту_переменных'.casefold(),
         u'ручной_ввод'.casefold(),
@@ -10475,6 +10484,20 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
         }
         code = rev.get(t, t)
         return code if code in (u'before', u'after') else unicode(text or u'').strip()
+    if field_id == 'if_exists' and unicode(fn_key or u'').casefold() in (
+        u'добавить_столбец'.casefold(),
+        u'add_column'.casefold(),
+        u'новый_столбец'.casefold(),
+    ):
+        t = unicode(text or u'').strip()
+        code = getattr(_pw_cfg, 'ADD_COLUMN_IF_EXISTS_CODE', {}).get(t, None)
+        if code is None:
+            code = getattr(_pw_cfg, 'ADD_COLUMN_IF_EXISTS_CODE', {}).get(t.casefold(), None)
+        if code is None:
+            code = u'update'
+        if code not in (u'update', u'suffix', u'skip', u'replace'):
+            code = u'update'
+        return code
     if field_id in ('old', 'new'):
         return unicode(text or u'').strip()
     text = unicode(text or u'').strip()

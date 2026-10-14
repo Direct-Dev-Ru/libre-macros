@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.769"
+MACRO_VERSION = "3.10.770"
 import json
 import re
 
@@ -2107,6 +2107,45 @@ def _normalize_add_column_block(block):
     else:
         out.pop("min", None)
         out.pop("max", None)
+
+    if_ex = unicode(
+        out.get("if_exists")
+        or out.get("on_exists")
+        or out.get("exists")
+        or out.get("если_есть")
+        or u"update"
+    ).strip()
+    if_ex_cf = if_ex.casefold()
+    if_map = {
+        u"update": u"update",
+        u"обновить": u"update",
+        u"reuse": u"update",
+        u"keep": u"update",
+        u"suffix": u"suffix",
+        u"суффикс": u"suffix",
+        u"rename": u"suffix",
+        u"index": u"suffix",
+        u"skip": u"skip",
+        u"пропуск": u"skip",
+        u"пропустить": u"skip",
+        u"replace": u"replace",
+        u"удалить": u"replace",
+        u"перезаписать": u"replace",
+        u"overwrite": u"replace",
+    }
+    try:
+        from libre_macros_param_wizard_cfg import ADD_COLUMN_IF_EXISTS_CODE
+
+        cfg_code = ADD_COLUMN_IF_EXISTS_CODE.get(if_ex) or ADD_COLUMN_IF_EXISTS_CODE.get(
+            if_ex_cf
+        )
+        if cfg_code:
+            if_map[if_ex_cf] = cfg_code
+    except Exception:
+        pass
+    out["if_exists"] = if_map.get(if_ex_cf, u"update")
+    if out["if_exists"] not in (u"update", u"suffix", u"skip", u"replace"):
+        out["if_exists"] = u"update"
 
     return _attach_sheet(out, out.get("sheet"))
 
