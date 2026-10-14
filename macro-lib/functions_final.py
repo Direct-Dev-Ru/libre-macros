@@ -1,4 +1,4 @@
-MACRO_VERSION = "3.10.771"
+MACRO_VERSION = "3.10.772"
 # region Справка — namespace и хелперы (свернуть: ▼ слева или Ctrl+Shift+[)
 """
 functions_final.py — пользовательские функции финальной обработки (вся книга).

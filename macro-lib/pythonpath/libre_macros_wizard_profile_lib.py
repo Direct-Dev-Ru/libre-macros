@@ -6,7 +6,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.771"
+MACRO_VERSION = "3.10.772"
 import json
 import os
 import sys
