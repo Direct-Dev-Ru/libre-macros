@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 """
 Ядро стека текстовых операций (ops) для PP ``текстовые_операции``
 (legacy-алиас: ``нормализация_текста``).
@@ -149,6 +149,16 @@ def normalize_op_name(raw):
         u"compute": u"compute",
         u"calc": u"compute",
         u"calculate": u"compute",
+        u"ean13_encode": u"ean13_encode",
+        u"ean13_decode": u"ean13_decode",
+        u"eangnivc_encode": u"ean13_encode",
+        u"eangnivc_decode": u"ean13_decode",
+        u"ean_gnivc_encode": u"ean13_encode",
+        u"ean_gnivc_decode": u"ean13_decode",
+        u"ean13: в шрифт eangnivc": u"ean13_encode",
+        u"ean13: из шрифта eangnivc": u"ean13_decode",
+        u"штрихкод ean13 → шрифт": u"ean13_encode",
+        u"шрифт ean13 → цифры": u"ean13_decode",
     }
     return aliases.get(name, name)
 
@@ -292,6 +302,209 @@ def coerce_ops_list(raw_ops):
             pass
         out.append(row)
     return out
+
+
+# --- EAN-13 / EAN-8 ↔ шрифт EanGnivc (EANGNIVC) ---
+# Кодировка как у 1С/Clarion: префикс #$%&'()*+, guard !, center -, L=0-9, G=A-J, R=a-j.
+_EAN_GNIVC_PREFIX = u"#$%&'()*+,"
+_EAN_GNIVC_LEFT_PATTERNS = (
+    u"LLLLLL",
+    u"LLGLGG",
+    u"LLGGLG",
+    u"LLGGGL",
+    u"LGLLGG",
+    u"LGGLLG",
+    u"LGGGLL",
+    u"LGLGLG",
+    u"LGLGGL",
+    u"LGGLGL",
+)
+_EAN_GNIVC_SET = {
+    u"L": u"0123456789",
+    u"G": u"ABCDEFGHIJ",
+    u"R": u"abcdefghij",
+}
+
+
+def _ean_digits_only(text):
+    s = _u(text).strip()
+    if s == u"":
+        return u""
+    # Допустить пробелы/дефисы в «человеческом» вводе
+    cleaned = []
+    for ch in s:
+        if ch.isdigit():
+            cleaned.append(ch)
+        elif ch in u" \t\r\n-_":
+            continue
+        else:
+            raise NormalizeOpError(
+                u"ean13: ожидаются только цифры, получено %r" % (s[:40],)
+            )
+    return u"".join(cleaned)
+
+
+def _ean13_check_digit(twelve):
+    """Контрольная цифра EAN-13 по 12 цифрам (без check)."""
+    s = _u(twelve)
+    if len(s) != 12 or not s.isdigit():
+        raise NormalizeOpError(u"ean13: для check digit нужны 12 цифр")
+    total = 0
+    i = 0
+    while i < 12:
+        d = int(s[i])
+        # веса: нечётные позиции (1-based) ×1, чётные ×3
+        if (i + 1) % 2 == 0:
+            total += d * 3
+        else:
+            total += d
+        i = i + 1
+    return unicode((10 - (total % 10)) % 10)
+
+
+def _ean_encode_digit(kind, digit):
+    table = _EAN_GNIVC_SET.get(kind) or u""
+    d = int(digit)
+    if d < 0 or d > 9 or d >= len(table):
+        raise NormalizeOpError(u"ean13: плохая цифра %r" % digit)
+    return table[d]
+
+
+def _ean_decode_char(ch):
+    ch = _u(ch)
+    if len(ch) != 1:
+        raise NormalizeOpError(u"ean13: пустой символ шрифта")
+    if u"0" <= ch <= u"9":
+        return int(ch)
+    if u"A" <= ch <= u"J":
+        return ord(ch) - ord(u"A")
+    if u"a" <= ch <= u"j":
+        return ord(ch) - ord(u"a")
+    raise NormalizeOpError(u"ean13: неизвестный символ шрифта %r" % ch)
+
+
+def ean_gnivc_encode(digits):
+    """
+    Цифры EAN-13 (13 или 12) / EAN-8 (8) → строка для шрифта EanGnivc.
+
+    12 цифр → дописать check digit. Результат вида %!88AA0A-aaeajh!
+    """
+    raw = _ean_digits_only(digits)
+    if raw == u"":
+        return u""
+    if len(raw) == 12:
+        raw = raw + _ean13_check_digit(raw)
+    if len(raw) == 13:
+        group = 6
+        prefix_alphabet = _EAN_GNIVC_PREFIX
+        code = raw
+    elif len(raw) == 8:
+        group = 4
+        prefix_alphabet = u""
+        code = u"0" + raw
+    else:
+        raise NormalizeOpError(
+            u"ean13_encode: нужна длина 8 / 12 / 13 цифр, сейчас %d" % len(raw)
+        )
+    first = int(code[0])
+    if first < 0 or first > 9:
+        raise NormalizeOpError(u"ean13_encode: первая цифра")
+    left_pat = _EAN_GNIVC_LEFT_PATTERNS[first]
+    left_parts = []
+    right_parts = []
+    i = 0
+    while i < group:
+        left_parts.append(
+            _ean_encode_digit(left_pat[i], code[i + 1])
+        )
+        right_parts.append(
+            _ean_encode_digit(u"R", code[i + 1 + group])
+        )
+        i = i + 1
+    prefix = u""
+    if prefix_alphabet != u"":
+        prefix = prefix_alphabet[first]
+    return (
+        prefix
+        + u"!"
+        + u"".join(left_parts)
+        + u"-"
+        + u"".join(right_parts)
+        + u"!"
+    )
+
+
+def ean_gnivc_decode(font_text):
+    """
+    Строка шрифта EanGnivc → цифры EAN-13 (13) или EAN-8 (8).
+
+    Пример: %!88AA0A-aaeajh! → 2880000004097
+    """
+    s = _u(font_text).strip()
+    if s == u"":
+        return u""
+    # Убрать пробелы внутри «каши»
+    s = re.sub(r"\s+", u"", s)
+    ean8 = False
+    first = None
+    body = s
+    if body and body[0] in _EAN_GNIVC_PREFIX:
+        first = _EAN_GNIVC_PREFIX.index(body[0])
+        body = body[1:]
+    elif body.startswith(u"!"):
+        ean8 = True
+        first = 0
+    else:
+        raise NormalizeOpError(
+            u"ean13_decode: нет префикса EanGnivc (#$%&'()*+,) или '!'"
+        )
+    if not (body.startswith(u"!") and body.endswith(u"!") and u"-" in body):
+        raise NormalizeOpError(
+            u"ean13_decode: ожидается вид [префикс]!ЛЕВО-ПРАВО!"
+        )
+    mid = body.find(u"-")
+    left = body[1:mid]
+    right = body[mid + 1 : -1]
+    if ean8:
+        if len(left) != 4 or len(right) != 4:
+            raise NormalizeOpError(
+                u"ean13_decode: EAN-8 — по 4 символа слева/справа"
+            )
+    else:
+        if len(left) != 6 or len(right) != 6:
+            raise NormalizeOpError(
+                u"ean13_decode: EAN-13 — по 6 символов слева/справа"
+            )
+    digits = [unicode(int(first))]
+    for ch in left:
+        digits.append(unicode(_ean_decode_char(ch)))
+    for ch in right:
+        digits.append(unicode(_ean_decode_char(ch)))
+    if ean8:
+        # При encode добавляли ведущий 0 — отдаём 8 цифр
+        return u"".join(digits[1:])
+    out = u"".join(digits)
+    # Мягкая проверка check digit (не ломаем, если битый — warning через error только при несовпадении? keep soft)
+    try:
+        expect = _ean13_check_digit(out[:12])
+        if out[12] != expect:
+            raise NormalizeOpError(
+                u"ean13_decode: check digit %s ≠ ожид. %s (%s)"
+                % (out[12], expect, out)
+            )
+    except NormalizeOpError:
+        raise
+    except Exception:
+        pass
+    return out
+
+
+def op_ean13_encode(text, _op=None):
+    return ean_gnivc_encode(text)
+
+
+def op_ean13_decode(text, _op=None):
+    return ean_gnivc_decode(text)
 
 
 def op_trim(text, _op=None):
@@ -650,6 +863,8 @@ _OP_HANDLERS = {
     u"clear": op_clear,
     u"encrypt": op_encrypt,
     u"decrypt": op_decrypt,
+    u"ean13_encode": op_ean13_encode,
+    u"ean13_decode": op_ean13_decode,
 }
 
 

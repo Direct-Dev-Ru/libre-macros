@@ -10,7 +10,7 @@
 """
 
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 import calendar
 import os
 import re
@@ -12485,8 +12485,11 @@ def direct_run_xml_postprocess(target_path, settings, one_sheet):
     vlookup_run_n = 0
     # Предупреждение: если копировать_лист уже с columns, то удалить_столбцы на тот же лист обычно лишний.
     copy_sheet_dest_with_columns = set()
+    if not isinstance(pipeline, list):
+        pipeline = list(pipeline or [])
     step_i = 0
-    for step in pipeline:
+    while step_i < len(pipeline):
+        step = pipeline[step_i]
         step_i += 1
         step_kind = (step or {}).get("kind") or u"pp"
         step_name = (step or {}).get("name") or u""
@@ -12542,10 +12545,10 @@ def direct_run_xml_postprocess(target_path, settings, one_sheet):
             )
             continue
         # Условие выполнения (колонка D/E) — один раз на шаг.
+        cond_raw = (step or {}).get("condition_raw") or u""
         try:
             from libre_macros_step_condition_lib import eval_step_condition
 
-            cond_raw = (step or {}).get("condition_raw") or u""
             if unicode(cond_raw).strip() != u"":
                 if "condition_decision" in (step or {}):
                     if not step.get("condition_decision"):
@@ -12578,6 +12581,44 @@ def direct_run_xml_postprocess(target_path, settings, one_sheet):
                         continue
         except Exception:
             pass
+        # Цикл итераций: размножить шаг в pipeline (list) на N копий.
+        try:
+            from libre_macros_step_condition_lib import resolve_step_iterations
+
+            n_iters = 1
+            if unicode(cond_raw).strip() != u"":
+                n_iters = int(resolve_step_iterations(cond_raw))
+            if n_iters < 1:
+                n_iters = 1
+            if n_iters > 1 and not (step or {}).get("_iter_expanded"):
+                step["_iter_expanded"] = True
+                # Вставить N-1 копий сразу после текущего (индекс step_i).
+                k = 1
+                while k < n_iters:
+                    clone = dict(step)
+                    clone["_iter_expanded"] = True
+                    clone["condition_decision"] = True
+                    pipeline.insert(step_i + (k - 1), clone)
+                    k += 1
+                _direct_journal(
+                    u"",
+                    u"",
+                    u"",
+                    u"",
+                    u"инфо",
+                    u"итерации=%d — %s"
+                    % (n_iters, (step or {}).get("name") or u""),
+                )
+        except Exception as err:
+            _direct_journal(
+                u"",
+                u"",
+                u"",
+                u"",
+                u"ошибка",
+                u"iterations «%s»: %s" % ((step or {}).get("name") or u"", err),
+            )
+            continue
         name = step.get("name") or u""
         extra = step.get("formula_extra")
         if extra is None:

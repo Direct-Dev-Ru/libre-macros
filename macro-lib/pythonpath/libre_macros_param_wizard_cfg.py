@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 import re
 
 try:
@@ -189,6 +189,8 @@ _FALLBACK_PP_RANGE_CHOICES = [
     u"переименовать_столбцы", u"переставить_столбцы",
     u"количество_значений", u"удалить_дубликаты", u"группировать_строки", u"копировать_переместить_лист",
     u"копирование_диапазонов", u"создать_лист",
+    u"убрать_объединение",
+    u"добавить_объединение",
     u"сводная_таблица",
     u"удаление_листов", u"скрытие_листов",
 ]
@@ -226,6 +228,7 @@ _FALLBACK_FINAL_CHOICES = [
     u"количество_значений", u"удалить_дубликаты", u"группировать_строки", u"копировать_переместить_лист",
     u"активировать_лист", u"копирование_диапазонов", u"создать_лист",
     u"отправить_по_почте",
+    u"подготовка_писем",
     u"заполнение_вниз", u"заполнить_вверх",
     u"развернуть_столбцы",
     u"транспонировать_таблицу",
@@ -364,6 +367,29 @@ _FALLBACK_FINAL_REST_HINTS = {
     u"почта": (
         u"алиас «отправить_по_почте»",
         u'[{"v":1,"fn":"отправить_по_почте","attach":"whole_book"}]',
+    ),
+    u"подготовка_писем": (
+        u"AText из ACell: template + source_sheet + out_dir + filename;\n"
+        u"block_rows (default 1) или marker; <<Столбец>> / <<Столбец>>{k} / <<n>> / <<row>>;\n"
+        u"format: odt|pdf|docx; row_filter до нарезки блоков",
+        u'[{"v":1,"fn":"подготовка_писем","sheet":"Получатели",'
+        u'"template":"/data/templates/уведомление.odt","block_rows":1,'
+        u'"out_dir":"/data/out/letters","filename":"Письмо_<<ФИО>>_<<n>>","format":"odt"}]',
+    ),
+    u"письма_по_шаблону": (
+        u"алиас «подготовка_писем»",
+        u'[{"v":1,"fn":"подготовка_писем","sheet":"Получатели","template":"/t.odt",'
+        u'"out_dir":"/out","filename":"Письмо_<<n>>"}]',
+    ),
+    u"atext_letters": (
+        u"алиас «подготовка_писем»",
+        u'[{"v":1,"fn":"подготовка_писем","sheet":"Получатели","template":"/t.odt",'
+        u'"out_dir":"/out","filename":"Письмо_<<n>>"}]',
+    ),
+    u"mail_merge_files": (
+        u"алиас «подготовка_писем»",
+        u'[{"v":1,"fn":"подготовка_писем","sheet":"Получатели","template":"/t.odt",'
+        u'"out_dir":"/out","filename":"Письмо_<<n>>"}]',
     ),
     u"удалить_столбцы": (
         u"markers: подстроки/имена, индексы 1-based, буквы A/C; смесь через запятую",
@@ -601,7 +627,8 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
     ),
     u"текстовые_операции": (
         u"JSON: columns + ops[] (trim/collapse_ws/case/lang_homoglyphs/substring/clear/"
-        u"reverse/base64/sha256/guid/encrypt…); row_filter per-op; non_text/on_error; "
+        u"reverse/base64/ean13_encode|decode/sha256/guid/encrypt…); row_filter per-op; "
+        u"non_text/on_error; "
         u"ключ шифра key|key_cell|key_file. Кнопка «Параметры…» / «Справка».",
         u'[{"v":1,"fn":"текстовые_операции","columns":["ФИО"],"ops":[{"op":"collapse_ws"},{"op":"case","mode":"proper"}]}]',
     ),
@@ -633,6 +660,16 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u"JSON: key_columns, keep, output (на месте|новый лист|смещение|маркировка), "
         u"dest_cell — якорь A1 на этом же листе для «смещение»",
         u'[{"v":1,"fn":"удалить_дубликаты","key_columns":["ФИО"],"keep":"first"}]',
+    ),
+    u"убрать_объединение": (
+        u"sep (default пробел); header_rows|header_anchor; marker|block_rows; "
+        u"data_start_row опц. — схлопнуть Word-merge в верхнюю строку блока",
+        u'[{"v":1,"fn":"убрать_объединение","header_rows":3,"marker":"A","sep":" "}]',
+    ),
+    u"добавить_объединение": (
+        u"columns[] + marker|block_rows; sep (default пробел) — вертикальный merge "
+        u"столбцов по блокам (значения → верх через sep; строки не удаляются)",
+        u'[{"v":1,"fn":"добавить_объединение","columns":["B","C"],"marker":"A","sep":" "}]',
     ),
     u"группировать_строки": (
         u"JSON: key_columns + aggregations[{op,column,as}]; output inplace|new_sheet — "
@@ -2085,6 +2122,33 @@ SEND_MAIL_CLIENT_CODE[u"системный"] = u"system"
 SEND_MAIL_CLIENT_CODE[u"uno"] = u"system"
 SEND_MAIL_CLIENT_CODE[u"mapi"] = u"system"
 
+ATEXT_LETTERS_FORMAT_CHOICES = (
+    (u"odt", u"ODT"),
+    (u"pdf", u"PDF"),
+    (u"docx", u"DOCX"),
+)
+ATEXT_LETTERS_FORMAT_LABEL = {code: label for code, label in ATEXT_LETTERS_FORMAT_CHOICES}
+ATEXT_LETTERS_FORMAT_CODE = {
+    label.casefold(): code for code, label in ATEXT_LETTERS_FORMAT_CHOICES
+}
+for _alf_code, _alf_label in ATEXT_LETTERS_FORMAT_CHOICES:
+    ATEXT_LETTERS_FORMAT_CODE[_alf_code.casefold()] = _alf_code
+
+ATEXT_LETTERS_MISSING_CHOICES = (
+    (u"empty", u"Пусто"),
+    (u"keep", u"Оставить плейсхолдер"),
+    (u"fail", u"Ошибка"),
+)
+ATEXT_LETTERS_MISSING_LABEL = {code: label for code, label in ATEXT_LETTERS_MISSING_CHOICES}
+ATEXT_LETTERS_MISSING_CODE = {
+    label.casefold(): code for code, label in ATEXT_LETTERS_MISSING_CHOICES
+}
+for _alm_code, _alm_label in ATEXT_LETTERS_MISSING_CHOICES:
+    ATEXT_LETTERS_MISSING_CODE[_alm_code.casefold()] = _alm_code
+ATEXT_LETTERS_MISSING_CODE[u"пусто"] = u"empty"
+ATEXT_LETTERS_MISSING_CODE[u"оставить"] = u"keep"
+ATEXT_LETTERS_MISSING_CODE[u"ошибка"] = u"fail"
+
 CREATE_SHEET_NAME_MODE_CHOICES = (
     (u"manual", u"Ввести вручную"),
     (u"expr", u"Вычислить"),
@@ -2176,6 +2240,41 @@ DEDUP_OUTPUT_LABEL = {code: label for code, label in DEDUP_OUTPUT_CHOICES}
 DEDUP_OUTPUT_CODE = {label.casefold(): code for code, label in DEDUP_OUTPUT_CHOICES}
 for _dedup_out_code, _dedup_out_label in DEDUP_OUTPUT_CHOICES:
     DEDUP_OUTPUT_CODE[_dedup_out_code.casefold()] = _dedup_out_code
+
+UNMERGE_HEADER_MODE_CHOICES = (
+    (u"none", u"Не трогать"),
+    (u"rows", u"Число строк"),
+    (u"anchor", u"Якорь ячейки"),
+)
+UNMERGE_HEADER_MODE_LABEL = {code: label for code, label in UNMERGE_HEADER_MODE_CHOICES}
+UNMERGE_HEADER_MODE_CODE = {
+    label.casefold(): code for code, label in UNMERGE_HEADER_MODE_CHOICES
+}
+for _uhm_code, _uhm_label in UNMERGE_HEADER_MODE_CHOICES:
+    UNMERGE_HEADER_MODE_CODE[_uhm_code.casefold()] = _uhm_code
+
+UNMERGE_DATA_MODE_CHOICES = (
+    (u"none", u"Не трогать"),
+    (u"marker", u"Столбец-маркер"),
+    (u"block_rows", u"Число строк блока"),
+)
+UNMERGE_DATA_MODE_LABEL = {code: label for code, label in UNMERGE_DATA_MODE_CHOICES}
+UNMERGE_DATA_MODE_CODE = {
+    label.casefold(): code for code, label in UNMERGE_DATA_MODE_CHOICES
+}
+for _udm_code, _udm_label in UNMERGE_DATA_MODE_CHOICES:
+    UNMERGE_DATA_MODE_CODE[_udm_code.casefold()] = _udm_code
+
+ADD_MERGE_DATA_MODE_CHOICES = (
+    (u"marker", u"Опорный столбец (merge)"),
+    (u"block_rows", u"Число строк блока"),
+)
+ADD_MERGE_DATA_MODE_LABEL = {code: label for code, label in ADD_MERGE_DATA_MODE_CHOICES}
+ADD_MERGE_DATA_MODE_CODE = {
+    label.casefold(): code for code, label in ADD_MERGE_DATA_MODE_CHOICES
+}
+for _adm_code, _adm_label in ADD_MERGE_DATA_MODE_CHOICES:
+    ADD_MERGE_DATA_MODE_CODE[_adm_code.casefold()] = _adm_code
 
 UNPIVOT_OUTPUT_CHOICES = (
     (u"inplace", u"На месте"),
@@ -3928,7 +4027,8 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
         "hint": (
             u"Стек ops по столбцам (кнопка «Справка» — полный каталог).\n"
             u"ops: trim, collapse_ws, substring, clear, case, lang_homoglyphs, reverse,\n"
-            u"base64, sha256, guid, encrypt/decrypt; row_filter per-op; non_text/on_error.\n"
+            u"base64, ean13_encode/decode (EanGnivc), sha256, guid, encrypt/decrypt;\n"
+            u"row_filter per-op; non_text/on_error.\n"
             u"Ключ шифра: key | key_cell | key_file (или <<Переменные.secret_key>>)."
         ),
         "hint_lines": 4,
@@ -4677,6 +4777,154 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"почта": {
         "alias_of": u"отправить_по_почте",
     },
+    u"подготовка_писем": {
+        "title": u"Подготовка писем (AText)",
+        "hint": (
+            u"Слева — листы данных (на каких вызывать). Один файл на блок строк; "
+            u"<<Столбец>> / <<Столбец>>{k}, <<n>>, <<row>>. Шаблон не меняется."
+        ),
+        "hint_lines": 1,
+        "dialog_fit_content": True,
+        "compact_fields": True,
+        "fields": (
+            {
+                "id": "template",
+                "label": u"Шаблон AText",
+                "default": u"",
+                "hint": u"Путь к .odt / .ott; <<Переменные.…>>",
+            },
+            {
+                "id": "block_rows",
+                "label": u"Строк в блоке",
+                "default": u"1",
+                "hint": u"1 = одно письмо на строку",
+                "row_group": u"block_hdr",
+                "row_group_slot": 0,
+                "row_group_frac": 0.35,
+            },
+            {
+                "id": "header_row",
+                "label": u"Строка заголовков",
+                "default": u"1",
+                "row_group": u"block_hdr",
+                "row_group_slot": 1,
+                "row_group_frac": 0.32,
+            },
+            {
+                "id": "data_start_row",
+                "label": u"Первая строка данных",
+                "default": u"",
+                "hint": u"Пусто = header+1",
+                "row_group": u"block_hdr",
+                "row_group_slot": 2,
+            },
+            {
+                "id": "data_end_row",
+                "label": u"Последняя строка",
+                "default": u"",
+                "hint": u"Пусто = used area",
+            },
+            {
+                "id": "marker",
+                "label": u"Блоки по merge (опц.)",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"",
+                "hint": (
+                    u"Вместо «Строк в блоке»: высота письма = высота вертикального "
+                    u"объединения в этом столбце. Пусто — резать по числу строк."
+                ),
+            },
+            {
+                "id": "columns",
+                "label": u"Только эти столбцы",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"",
+                "hint": (
+                    u"Пусто — подставлять все заголовки листа в <<…>>. "
+                    u"Иначе только выбранные (остальные плейсхолдеры — пусто/keep/fail)."
+                ),
+            },
+            {
+                "id": "out_dir",
+                "label": u"Каталог вывода",
+                "default": u"",
+                "hint": u"Создаётся при необходимости",
+            },
+            {
+                "id": "filename",
+                "label": u"Имя файла",
+                "default": u"Письмо_<<ФИО>>_<<n>>",
+                "hint": u"<<Столбец>>, <<Столбец>>{2}, <<n>>, <<row>>",
+            },
+            {
+                "id": "format",
+                "label": u"Формат",
+                "type": "combo",
+                "choices": tuple(label for _c, label in ATEXT_LETTERS_FORMAT_CHOICES),
+                "default": u"ODT",
+                "row_group": u"fmt_miss",
+                "row_group_slot": 0,
+                "row_group_frac": 0.35,
+            },
+            {
+                "id": "missing_column",
+                "label": u"Нет столбца / индекс",
+                "type": "combo",
+                "choices": tuple(label for _c, label in ATEXT_LETTERS_MISSING_CHOICES),
+                "default": u"Пусто",
+                "row_group": u"fmt_miss",
+                "row_group_slot": 1,
+            },
+            {
+                "id": "row_filter",
+                "label": u"Фильтр строк",
+                "type": "lambda_pick",
+                "default": u"",
+                "hint": (
+                    u"Пусто — все строки. Иначе lambda rows: … (True — строка в письма). "
+                    u"Список сохранённых + конструктор."
+                ),
+            },
+            {
+                "id": "max_files",
+                "label": u"Лимит файлов",
+                "default": u"500",
+                "row_group": u"lim_flags",
+                "row_group_slot": 0,
+                "row_group_frac": 0.28,
+            },
+            {
+                "id": "overwrite",
+                "label": u"Перезапись",
+                "type": "combo",
+                "choices": (u"Да", u"Нет"),
+                "default": u"Да",
+                "row_group": u"lim_flags",
+                "row_group_slot": 1,
+                "row_group_frac": 0.28,
+            },
+            {
+                "id": "open_folder",
+                "label": u"Открыть папку",
+                "type": "combo",
+                "choices": (u"Нет", u"Да"),
+                "default": u"Нет",
+                "row_group": u"lim_flags",
+                "row_group_slot": 2,
+            },
+        ),
+    },
+    u"письма_по_шаблону": {
+        "alias_of": u"подготовка_писем",
+    },
+    u"atext_letters": {
+        "alias_of": u"подготовка_писем",
+    },
+    u"mail_merge_files": {
+        "alias_of": u"подготовка_писем",
+    },
     u"копировать_лист": {
         "alias_of": u"копировать_переместить_лист",
     },
@@ -4714,6 +4962,117 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
         "hint": u"Подстрока в заголовке столбца-источника (по умолчанию «статус»).",
         "fields": (
             {"id": "marker", "label": u"Маркер столбца", "default": u"статус"},
+        ),
+    },
+    u"убрать_объединение": {
+        "title": u"Убрать объединение",
+        "hint": (
+            u"Схлопывает хаотичные объединения (часто после копирования из Word):\n"
+            u"значения блока → верхняя строка через sep, снятие merge, удаление лишних строк.\n"
+            u"Заголовок: число строк или якорь объединённой ячейки.\n"
+            u"Данные: столбец-маркер (вертикальные merge) или постоянная высота блока.\n"
+            u"Горизонтальные merge склеиваются влево; столбцы не удаляются. Цикл снизу вверх."
+        ),
+        "hint_lines": 6,
+        "dialog_fit_content": True,
+        "fields": (
+            {
+                "id": "sep",
+                "label": u"Разделитель",
+                "default": u" ",
+                "hint": u"Пробел по умолчанию; \\n \\t \\r — перевод строки/таб (как в ВПР)",
+            },
+            {
+                "id": "header_mode",
+                "label": u"Заголовок",
+                "type": "combo",
+                "choices": tuple(label for _code, label in UNMERGE_HEADER_MODE_CHOICES),
+                "default": u"Число строк",
+            },
+            {
+                "id": "header_rows",
+                "label": u"Строк заголовка",
+                "default": u"3",
+            },
+            {
+                "id": "header_anchor",
+                "label": u"Якорь заголовка (A1)",
+                "default": u"B1",
+            },
+            {
+                "id": "data_mode",
+                "label": u"Данные",
+                "type": "combo",
+                "choices": tuple(label for _code, label in UNMERGE_DATA_MODE_CHOICES),
+                "default": u"Столбец-маркер",
+            },
+            {
+                "id": "marker",
+                "label": u"Столбец-маркер",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"A",
+            },
+            {
+                "id": "block_rows",
+                "label": u"Строк в блоке",
+                "default": u"2",
+            },
+            {
+                "id": "data_start_row",
+                "label": u"Первая строка данных (1-based, опц.)",
+                "default": u"",
+            },
+        ),
+    },
+    u"добавить_объединение": {
+        "title": u"Добавить объединение",
+        "hint": (
+            u"Вертикально объединяет выбранные столбцы по блокам (обратная к «убрать_объединение»).\n"
+            u"Значения блока → верхняя ячейка через sep, затем merge; строки не удаляются.\n"
+            u"Блоки: опорный столбец (уже с merge) или постоянное число строк.\n"
+            u"Столбцы — накопление из заголовков ('…'), × / ××; индексы и буквы допустимы."
+        ),
+        "hint_lines": 5,
+        "dialog_fit_content": True,
+        "fields": (
+            {
+                "id": "columns",
+                "label": u"Столбцы для merge",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"B,C",
+            },
+            {
+                "id": "sep",
+                "label": u"Разделитель",
+                "default": u" ",
+                "hint": u"Пробел по умолчанию; \\n \\t \\r — перевод строки/таб. Пример: \\n--------\\n",
+            },
+            {
+                "id": "data_mode",
+                "label": u"Как задать блоки",
+                "type": "combo",
+                "choices": tuple(label for _code, label in ADD_MERGE_DATA_MODE_CHOICES),
+                "default": u"Опорный столбец (merge)",
+            },
+            {
+                "id": "marker",
+                "label": u"Опорный столбец",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"A",
+            },
+            {
+                "id": "block_rows",
+                "label": u"Строк в блоке",
+                "default": u"2",
+            },
+            {
+                "id": "data_start_row",
+                "label": u"Первая строка данных (1-based, опц.)",
+                "default": u"",
+            },
         ),
     },
 }
@@ -4757,6 +5116,8 @@ NORMALIZE_OP_CHOICES = (
     (u"reverse", u"Перевернуть текст"),
     (u"base64_encode", u"Base64: кодировать"),
     (u"base64_decode", u"Base64: декодировать"),
+    (u"ean13_encode", u"EAN-13: в шрифт EanGnivc"),
+    (u"ean13_decode", u"EAN-13: из шрифта EanGnivc"),
     (u"sha256", u"SHA-256"),
     (u"guid", u"GUID"),
     (u"encrypt", u"Зашифровать"),
@@ -4770,6 +5131,12 @@ NORMALIZE_OP_CODE[u"вычислить"] = u"compute"
 NORMALIZE_OP_CODE[u"calc"] = u"compute"
 NORMALIZE_OP_CODE[u"calculate"] = u"compute"
 NORMALIZE_OP_CODE[u"expr"] = u"compute"
+NORMALIZE_OP_CODE[u"eangnivc_encode"] = u"ean13_encode"
+NORMALIZE_OP_CODE[u"eangnivc_decode"] = u"ean13_decode"
+NORMALIZE_OP_CODE[u"ean_gnivc_encode"] = u"ean13_encode"
+NORMALIZE_OP_CODE[u"ean_gnivc_decode"] = u"ean13_decode"
+NORMALIZE_OP_CODE[u"штрихкод ean13 → шрифт"] = u"ean13_encode"
+NORMALIZE_OP_CODE[u"шрифт ean13 → цифры"] = u"ean13_decode"
 NORMALIZE_CASE_MODES = (
     (u"lower", u"нижний"),
     (u"upper", u"верхний"),

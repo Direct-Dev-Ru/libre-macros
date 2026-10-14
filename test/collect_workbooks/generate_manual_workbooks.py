@@ -69,6 +69,21 @@ from generate_group_by_rows_sources import (
     OUT_XLSX as GROUP_BY_ROWS_XLSX,
     generate_group_by_rows_sources,
 )
+from generate_unmerge_sources import (
+    OUT_XLSX as UNMERGE_XLSX,
+    generate_unmerge_sources,
+)
+from generate_add_merge_sources import (
+    OUT_XLSX as ADD_MERGE_XLSX,
+    generate_add_merge_sources,
+)
+from generate_atext_letters_sources import (
+    OUT_XLSX as ATEXT_LETTERS_XLSX,
+    TPL_LETTER as ATEXT_TPL_LETTER,
+    TPL_PAIR as ATEXT_TPL_PAIR,
+    OUT_DIR as ATEXT_LETTERS_DIR,
+    generate_atext_letters_sources,
+)
 from help_sheet_content import (
     HELP_SHEET_NAME,
     collect_help_sheet_content,
@@ -113,6 +128,18 @@ def abs_transpose_source():
 
 def abs_group_by_rows_source():
     return GROUP_BY_ROWS_XLSX
+
+
+def abs_unmerge_source():
+    return UNMERGE_XLSX
+
+
+def abs_add_merge_source():
+    return ADD_MERGE_XLSX
+
+
+def abs_atext_letters_source():
+    return ATEXT_LETTERS_XLSX
 
 
 def vlookup_row(tier):
@@ -1123,6 +1150,152 @@ def scenario_16_transpose_table():
     ]
 
 
+def scenario_19_add_merge():
+    """Копирование → добавить_объединение (marker и block_rows)."""
+    import json
+
+    j_marker = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "добавить_объединение",
+                "sheet": "По_маркеру",
+                "columns": ["B", "C"],
+                "marker": "A",
+                "sep": " ",
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    j_blocks = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "добавить_объединение",
+                "sheet": "По_блокам",
+                "columns": ["A", "B"],
+                "block_rows": 2,
+                "data_start_row": 2,
+                "sep": " | ",
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return [
+        ("Файлы-Источники", (abs_add_merge_source(),)),
+        ("Листы", ("По_маркеру", "По_блокам")),
+    ] + block_rows(start_row="2", header_row="1") + [
+        ("Режим", ("Копирование листов",)),
+        (P_RANGE, "добавить_объединение", j_marker),
+        (P_RANGE, "добавить_объединение", j_blocks),
+        pp_range("тонкая_сетка"),
+        pp_range("авто_ширина"),
+    ]
+
+
+def scenario_20_atext_letters():
+    """Копирование → Финальная_обработка: подготовка_писем (1 и 2 строки в блоке)."""
+    import json
+
+    out_single = os.path.join(ATEXT_LETTERS_DIR, "out_single")
+    out_pairs = os.path.join(ATEXT_LETTERS_DIR, "out_pairs")
+    j_single = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "подготовка_писем",
+                "sheet": "Получатели",
+                "template": ATEXT_TPL_LETTER,
+                "header_row": 1,
+                "data_start_row": 2,
+                "block_rows": 1,
+                "out_dir": out_single,
+                "filename": "Письмо_<<ФИО>>_<<n>>",
+                "format": "odt",
+                "row_filter": 'lambda rows: str(rows("ФИО") or "").strip() != ""',
+                "overwrite": True,
+                "open_folder": False,
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    j_pair = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "подготовка_писем",
+                "sheet": "Получатели",
+                "template": ATEXT_TPL_PAIR,
+                "header_row": 1,
+                "block_rows": 2,
+                "out_dir": out_pairs,
+                "filename": "Пара_<<ФИО>>{1}_<<ФИО>>{2}_<<n>>",
+                "format": "odt",
+                "row_filter": 'lambda rows: str(rows("ФИО") or "").strip() != ""',
+                "overwrite": True,
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    P_FINAL = "Финальная_обработка"
+    return [
+        ("Файлы-Источники", (abs_atext_letters_source(),)),
+        ("Листы", ("Получатели",)),
+    ] + block_rows(start_row="2", header_row="1") + [
+        ("Режим", ("Копирование листов",)),
+        (P_FINAL, "подготовка_писем", j_single),
+        (P_FINAL, "подготовка_писем", j_pair),
+    ]
+
+
+def scenario_18_unmerge_collapse():
+    """Копирование → убрать_объединение (header_rows+marker и block_rows)."""
+    import json
+
+    j_table = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "убрать_объединение",
+                "sheet": "Таблица",
+                "header_rows": 3,
+                "marker": "A",
+                "sep": " ",
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    j_fixed = json.dumps(
+        [
+            {
+                "v": 1,
+                "fn": "убрать_объединение",
+                "sheet": "Блоки_фиксир",
+                "header_rows": 0,
+                "block_rows": 2,
+                "sep": " | ",
+            }
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return [
+        ("Файлы-Источники", (abs_unmerge_source(),)),
+        ("Листы", ("Таблица", "Блоки_фиксир")),
+    ] + block_rows(start_row="1", header_row="1") + [
+        ("Режим", ("Копирование листов",)),
+        (P_RANGE, "убрать_объединение", j_table),
+        (P_RANGE, "убрать_объединение", j_fixed),
+        pp_range("тонкая_сетка"),
+        pp_range("авто_ширина"),
+    ]
+
+
 def scenario_17_group_by_rows():
     """Копирование → группировать_строки (inplace + new_sheet)."""
     import json
@@ -1239,6 +1412,24 @@ SCENARIOS = [
         scenario_17_group_by_rows(),
         3,
     ),
+    (
+        "18_unmerge_collapse.xltx",
+        "Сценарий 18: убрать_объединение (шапка+маркер A; block_rows на втором листе).",
+        scenario_18_unmerge_collapse(),
+        3,
+    ),
+    (
+        "19_add_merge.xltx",
+        "Сценарий 19: добавить_объединение (опорный marker; block_rows).",
+        scenario_19_add_merge(),
+        3,
+    ),
+    (
+        "20_atext_letters.xltx",
+        "Сценарий 20: подготовка_писем (block_rows=1 и =2; AText из ACell).",
+        scenario_20_atext_letters(),
+        3,
+    ),
 ] + VLOOKUP_SCENARIOS
 
 
@@ -1335,6 +1526,40 @@ def write_manual_check():
             "пустые ключи пропущены.",
             "",
             "В логе: `группировать_строки` — ok, групп/пропущено без ошибок JSON.",
+            "",
+            "## 18_unmerge_collapse.xltx",
+            "",
+            "Источник `sources/unmerge/source_unmerge.xlsx`, режим «Копирование листов».",
+            "",
+            "1. `убрать_объединение` на `Таблица`: `header_rows=3`, `marker=A`, `sep` пробел → "
+            "1 строка шапки, 2 строки данных, merges сняты, столбцы D/E на месте.",
+            "2. `убрать_объединение` на `Блоки_фиксир`: `header_rows=0`, `block_rows=2`, "
+            "`sep=\" | \"` → по одной строке на блок.",
+            "",
+            "В логе: `убрать_объединение` — ok, без ошибок JSON.",
+            "",
+            "## 19_add_merge.xltx",
+            "",
+            "Источник `sources/add_merge/source_add_merge.xlsx`, режим «Копирование листов».",
+            "",
+            "1. `добавить_объединение` на `По_маркеру`: `marker=A`, `columns=[B,C]` → "
+            "B/C объединены по высоте A, значения через пробел вверху.",
+            "2. `добавить_объединение` на `По_блокам`: `block_rows=2`, `columns=[A,B]`, "
+            "`sep=\" | \"` → пары строк слиты в merge.",
+            "",
+            "В логе: `добавить_объединение` — ok, без ошибок JSON.",
+            "",
+            "## 20_atext_letters.xltx",
+            "",
+            "Источник `sources/atext_letters/source_recipients.xlsx`, шаблоны `.odt` рядом.",
+            "Режим «Копирование листов»; шаги в **Финальная_обработка**.",
+            "",
+            "1. `подготовка_писем` `block_rows=1` → `out_single/Письмо_<ФИО>_<n>.odt` "
+            "(4 файла; пустая ФИО отфильтрована).",
+            "2. `подготовка_писем` `block_rows=2` → `out_pairs/Пара_<ФИО1>_<ФИО2>_<n>.odt` "
+            "(2 файла; в тексте `{1}`/`{2}`).",
+            "",
+            "В логе: `подготовка_писем` / финальная_обработка — ok, файлов=…",
         ]
     )
     lines.append("")
@@ -1454,8 +1679,74 @@ def main():
         action="store_true",
         help="Не пересоздавать sources/group_by_rows/source_group_by_rows.xlsx",
     )
+    ap.add_argument(
+        "--skip-unmerge",
+        action="store_true",
+        help="Не пересоздавать sources/unmerge/source_unmerge.xlsx",
+    )
+    ap.add_argument(
+        "--only-unmerge",
+        action="store_true",
+        help="Только источник + 18_unmerge_collapse.xltx (без остальных сценариев)",
+    )
+    ap.add_argument(
+        "--skip-add-merge",
+        action="store_true",
+        help="Не пересоздавать sources/add_merge/source_add_merge.xlsx",
+    )
+    ap.add_argument(
+        "--only-add-merge",
+        action="store_true",
+        help="Только источник + 19_add_merge.xltx (без остальных сценариев)",
+    )
+    ap.add_argument(
+        "--skip-atext-letters",
+        action="store_true",
+        help="Не пересоздавать sources/atext_letters/*",
+    )
+    ap.add_argument(
+        "--only-atext-letters",
+        action="store_true",
+        help="Только источник + 20_atext_letters.xltx (без остальных сценариев)",
+    )
     ap.add_argument("--odf", action="store_true", help="Конвертировать в workbooks/ODF/*.ots")
     args = ap.parse_args()
+    if args.only_unmerge:
+        print("Источники unmerge:")
+        generate_unmerge_sources()
+        for fn, comment, body, cols in SCENARIOS:
+            if fn != "18_unmerge_collapse.xltx":
+                continue
+            path = write_workbook(fn, comment, body, value_cols=cols)
+            print("  %s" % path)
+        write_manual_check()
+        print("  %s" % MANUAL_CHECK)
+        print("Готово (only-unmerge).")
+        return
+    if args.only_add_merge:
+        print("Источники add_merge:")
+        generate_add_merge_sources()
+        for fn, comment, body, cols in SCENARIOS:
+            if fn != "19_add_merge.xltx":
+                continue
+            path = write_workbook(fn, comment, body, value_cols=cols)
+            print("  %s" % path)
+        write_manual_check()
+        print("  %s" % MANUAL_CHECK)
+        print("Готово (only-add-merge).")
+        return
+    if args.only_atext_letters:
+        print("Источники atext_letters:")
+        generate_atext_letters_sources()
+        for fn, comment, body, cols in SCENARIOS:
+            if fn != "20_atext_letters.xltx":
+                continue
+            path = write_workbook(fn, comment, body, value_cols=cols)
+            print("  %s" % path)
+        write_manual_check()
+        print("  %s" % MANUAL_CHECK)
+        print("Готово (only-atext-letters).")
+        return
     if not args.skip_sources:
         generate_sources()
         generate_xml_sources()
@@ -1475,6 +1766,15 @@ def main():
     if not args.skip_group_by_rows:
         print("Источники group_by_rows:")
         generate_group_by_rows_sources()
+    if not args.skip_unmerge:
+        print("Источники unmerge:")
+        generate_unmerge_sources()
+    if not args.skip_add_merge:
+        print("Источники add_merge:")
+        generate_add_merge_sources()
+    if not args.skip_atext_letters:
+        print("Источники atext_letters:")
+        generate_atext_letters_sources()
     for fn, comment, body, cols in SCENARIOS:
         path = write_workbook(fn, comment, body, value_cols=cols)
         print("  %s" % path)

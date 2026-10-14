@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы условия выполнения шага постобработки / финала (колонка D / E)."""
 from __future__ import unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 try:
     unicode
 except NameError:
@@ -14,17 +14,38 @@ STEP_CONDITION_VERSION = 1
 STEP_CONDITION_COL_CODEC = 3  # D
 STEP_CONDITION_COL_PLUGIN = 4  # E
 
+KIND_ALWAYS = u"always"
 KIND_LAMBDA = u"lambda"
 KIND_VARIABLE = u"variable"
 KIND_ENV = u"env"
 KIND_OS_USER = u"os_user"
 
 KIND_CHOICES = (
+    (KIND_ALWAYS, u"Без условия (всегда)"),
     (KIND_LAMBDA, u"Лямбда"),
     (KIND_VARIABLE, u"Переменная runtime"),
     (KIND_ENV, u"Переменная среды"),
     (KIND_OS_USER, u"Пользователь ОС"),
 )
+
+# Цикл шага: сколько раз вызвать функцию (1 = без цикла).
+ITER_MODE_NONE = u"none"
+ITER_MODE_CONST = u"const"
+ITER_MODE_TEXT = u"text"
+ITER_MODE_LAMBDA = u"lambda"
+
+ITER_MODE_CHOICES = (
+    (ITER_MODE_NONE, u"Без цикла (1 раз)"),
+    (ITER_MODE_CONST, u"Число"),
+    (ITER_MODE_TEXT, u"Текст / <<Переменные>>"),
+    (ITER_MODE_LAMBDA, u"Лямбда (число)"),
+)
+
+ITER_MODE_LABEL = dict(ITER_MODE_CHOICES)
+ITER_MODE_CODE = dict((lab, code) for code, lab in ITER_MODE_CHOICES)
+
+ITERATIONS_MAX = 10000
+ITERATIONS_DEFAULT = 1
 
 KIND_LABEL = dict(KIND_CHOICES)
 KIND_CODE = dict((lab, code) for code, lab in KIND_CHOICES)
@@ -76,19 +97,19 @@ COMPARE_AS_CHOICES = (
     (u"auto", u"авто"),
 )
 
-DIALOG_TITLE = u"Условие выполнения шага"
+DIALOG_TITLE = u"Условие и цикл шага"
 DIALOG_HINT_CODEC = (
-    u"Пустое условие = шаг всегда выполняется.\n"
+    u"Пустое условие = шаг всегда. Ниже — цикл (число / <<Переменные>> / лямбда).\n"
     u"Сейчас редактируется колонка D."
 )
 DIALOG_HINT_PLUGIN = (
-    u"Пустое условие = шаг всегда выполняется.\n"
-    u"Для плагина условие хранится в колонке E (D = extra)."
+    u"Пустое условие = шаг всегда. Ниже — цикл итераций.\n"
+    u"Для плагина условие/цикл в колонке E (D = extra)."
 )
 
 # Размеры субвизарда (не тянуть высоту главного визарда).
 DIALOG_W = 580
-DIALOG_H = 420
+DIALOG_H = 500
 DIALOG_MARGIN = 12
 DIALOG_HINT_H = 36
 DIALOG_ROW_H = 28
@@ -101,6 +122,7 @@ DIALOG_BTN_GAP = 10
 DIALOG_FOOTER_H = 36
 DIALOG_LAMBDA_EDIT_H = 110
 DIALOG_OS_USERS_EDIT_H = 72
+DIALOG_ITER_SECTION_H = 96
 
 # Примеры для kind=lambda (вставка в поле expr).
 LAMBDA_EXAMPLE_CHOICES = (
@@ -131,3 +153,19 @@ LAMBDA_EXAMPLE_CHOICES = (
 )
 
 LAMBDA_BUILDER_KIND = u"gate"
+
+# Примеры лямбды числа итераций.
+ITER_LAMBDA_EXAMPLE_CHOICES = (
+    (
+        u"Константа 3",
+        u"lambda: 3",
+    ),
+    (
+        u"Из переменной",
+        u'lambda: int(float(str(<<Переменные.N>> or "1").replace(",", ".") or 1))',
+    ),
+    (
+        u"По длине списка",
+        u'lambda: max(1, len(str(<<Переменные.Список>> or "").split(",")))',
+    ),
+)

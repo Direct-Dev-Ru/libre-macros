@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 import re
 
 try:
@@ -520,7 +520,12 @@ _MERGE_UI_DIALOG_COPY_CHUNK = 50
 # Буфер UNO: мелкий чанк, чтобы чаще обновлять диалог. По_API использует MERGE_COPY_ROW_CHUNK.
 _MERGE_UI_DIALOG_YIELD_EVERY_ROWS = 1
 _MERGE_UI_DIALOG_STATUS_EVERY_ROWS = 10
-_MERGE_UI_DIALOG_EVENT_MS = 250
+_MERGE_UI_DIALOG_EVENT_MS = 200
+# Текст→число/дата (UNO): чаще отдавать UI и обновлять detail.
+_MERGE_UI_CONVERT_YIELD_BATCH = 64
+_MERGE_UI_STATUS_TEXT_MAX = 72
+_merge_ui_lib_hooks_bound = False
+_merge_ui_lib_hooks_backup = None
 _merge_debug_t0 = None
 _MERGE_DEBUG_LOG_DOC = None
 _MERGE_CONSOLE_LOG_BUFFER = []
@@ -583,6 +588,7 @@ _LM_PP_REQUIRED_BINDINGS = (
     ("merge_final_conditional_column", "lm_final_conditional_column"),
     ("merge_final_activate_sheet", "lm_final_activate_sheet"),
     ("merge_final_send_mail", "lm_final_send_mail"),
+    ("merge_final_atext_letters", "lm_final_atext_letters"),
 )
 MERGE_POSTPROCESS_RANGE_REST_HINTS = {
     "сетка": _MERGE_PP_GRID_REST_HINT,
@@ -803,6 +809,16 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         '"aggregations":[{"op":"sum","column":"\'Сумма\'","as":"Сумма"},'
         '{"op":"count","as":"Количество"}],"output":"inplace"}]',
     ),
+    "убрать_объединение": (
+        "JSON: sep (default пробел); header_rows|header_anchor; marker|block_rows; "
+        "data_start_row опц. — схлопнуть Word-merge в верхнюю строку блока",
+        '[{"v":1,"fn":"убрать_объединение","header_rows":3,"marker":"A","sep":" "}]',
+    ),
+    "добавить_объединение": (
+        "JSON: columns[] + marker|block_rows; sep (default пробел) — вертикальный merge "
+        "выбранных столбцов по блокам (значения → верхняя через sep)",
+        '[{"v":1,"fn":"добавить_объединение","columns":["B","C"],"marker":"A","sep":" "}]',
+    ),
     "копировать_переместить_лист": (
         "JSON: source_sheet + copy=false|true; copy=false (по умолч.) — переместить "
         "лист before/after anchor_sheet; copy=true — копия в dest_sheet",
@@ -831,6 +847,14 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         "to/cc/bcc; to_source_sheet+to_source_range; client auto|system|outlook|thunderbird",
         '[{"v":1,"fn":"отправить_по_почте","attach":"whole_book","to":["boss@corp.local"],'
         '"filename":"Отчет","subject":"Отчет"}]',
+    ),
+    "подготовка_писем": (
+        "финал: AText из ACell; sheet слева в визарде; template/out_dir/filename; "
+        "block_rows (default 1) или marker; <<Столбец>> / <<Столбец>>{k} / <<n>> / <<row>>; "
+        "format odt|pdf|docx",
+        '[{"v":1,"fn":"подготовка_писем","sheet":"Получатели",'
+        '"template":"/data/templates/уведомление.odt","block_rows":1,'
+        '"out_dir":"/data/out/letters","filename":"Письмо_<<ФИО>>_<<n>>","format":"odt"}]',
     ),
     "сводная_таблица": (
         "JSON макета — кнопка «Параметры»; source_sheet — лист результата; "
@@ -1052,6 +1076,12 @@ _PP_RANGE_MAP_SPEC = (
     ("скрытие_листов", "merge_pp_range_hide_sheets"),
     ("сортировка", "merge_pp_range_sort_data"),
     ("раскрасить_блоки", "merge_pp_range_colorize_data"),
+    ("убрать_объединение", "merge_pp_range_unmerge_collapse"),
+    ("unmerge_collapse", "merge_pp_range_unmerge_collapse"),
+    ("снять_объединение", "merge_pp_range_unmerge_collapse"),
+    ("добавить_объединение", "merge_pp_range_add_merge"),
+    ("add_merge", "merge_pp_range_add_merge"),
+    ("объединить_ячейки", "merge_pp_range_add_merge"),
 )
 _PP_ROW_MAP_SPEC = (
     ("высота_строки", "merge_pp_row_height_pad"),
@@ -1234,6 +1264,19 @@ MERGE_FINAL_PROCESSING_REST_HINTS = {
         "алиас «отправить_по_почте»",
         MERGE_POSTPROCESS_RANGE_REST_HINTS["отправить_по_почте"][1],
     ),
+    "подготовка_писем": MERGE_POSTPROCESS_RANGE_REST_HINTS["подготовка_писем"],
+    "письма_по_шаблону": (
+        "алиас «подготовка_писем»",
+        MERGE_POSTPROCESS_RANGE_REST_HINTS["подготовка_писем"][1],
+    ),
+    "atext_letters": (
+        "алиас «подготовка_писем»",
+        MERGE_POSTPROCESS_RANGE_REST_HINTS["подготовка_писем"][1],
+    ),
+    "mail_merge_files": (
+        "алиас «подготовка_писем»",
+        MERGE_POSTPROCESS_RANGE_REST_HINTS["подготовка_писем"][1],
+    ),
     "активировать_лист": (
         "JSON: target_sheet — сделать лист активным; скрытый показывается; курсор в A1; "
         "tab_color — цвет ярлычка (имя/#hex; нет/сброс — умолчание)",
@@ -1333,6 +1376,10 @@ _FINAL_MAP_SPEC = (
     ("mailto", "merge_final_send_mail"),
     ("send_mail", "merge_final_send_mail"),
     ("почта", "merge_final_send_mail"),
+    ("подготовка_писем", "merge_final_atext_letters"),
+    ("письма_по_шаблону", "merge_final_atext_letters"),
+    ("atext_letters", "merge_final_atext_letters"),
+    ("mail_merge_files", "merge_final_atext_letters"),
     ("сводная_таблица", "merge_final_pivot_table"),
 )
 MERGE_FINAL_PROCESSING_MAP = {}

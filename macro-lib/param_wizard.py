@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 import ast
 import glob
 import json
@@ -9737,6 +9737,15 @@ def _is_send_mail_wizard_fn(fn_key):
         u'почта'.casefold(),
     )
 
+
+def _is_atext_letters_wizard_fn(fn_key):
+    return unicode(fn_key or u'').casefold() in (
+        u'подготовка_писем'.casefold(),
+        u'письма_по_шаблону'.casefold(),
+        u'atext_letters'.casefold(),
+        u'mail_merge_files'.casefold(),
+    )
+
 def _block_field_to_text(block, field_id, fn_key=None):
     if unicode(fn_key or u'').casefold() == u'градиент'.casefold() and field_id == 'sort_dir':
         raw = unicode(block.get(field_id) or u'').strip().casefold()
@@ -9831,6 +9840,62 @@ def _block_field_to_text(block, field_id, fn_key=None):
     if field_id == 'keep':
         raw = unicode(block.get('keep') or u'first').strip().casefold()
         return _pw_cfg.DEDUP_KEEP_LABEL.get(raw, unicode(block.get('keep') or u'first'))
+    if unicode(fn_key or u'').casefold() == u'убрать_объединение'.casefold():
+        if field_id == 'header_mode':
+            raw = unicode(block.get('header_mode') or u'').strip().casefold()
+            if raw == u'':
+                if unicode(block.get('header_anchor') or u'').strip() != u'':
+                    raw = u'anchor'
+                elif block.get('header_rows') is not None:
+                    raw = u'rows'
+                else:
+                    raw = u'none'
+            return _pw_cfg.UNMERGE_HEADER_MODE_LABEL.get(
+                raw, unicode(block.get('header_mode') or u'Не трогать')
+            )
+        if field_id == 'data_mode':
+            raw = unicode(block.get('data_mode') or u'').strip().casefold()
+            if raw == u'':
+                if block.get('block_rows') is not None:
+                    raw = u'block_rows'
+                elif unicode(block.get('marker') or u'').strip() != u'' or (
+                    isinstance(block.get('marker'), (list, tuple)) and block.get('marker')
+                ):
+                    raw = u'marker'
+                else:
+                    raw = u'none'
+            return _pw_cfg.UNMERGE_DATA_MODE_LABEL.get(
+                raw, unicode(block.get('data_mode') or u'Не трогать')
+            )
+        if field_id == 'marker':
+            val = block.get('marker')
+            if isinstance(val, (list, tuple)):
+                try:
+                    from libre_macros_param_codec import join_column_name_tokens
+                    return join_column_name_tokens(val)
+                except Exception:
+                    return u','.join(unicode(x) for x in val if unicode(x).strip() != u'')
+            return unicode(val or u'')
+    if unicode(fn_key or u'').casefold() == u'добавить_объединение'.casefold():
+        if field_id == 'data_mode':
+            raw = unicode(block.get('data_mode') or u'').strip().casefold()
+            if raw == u'':
+                if block.get('block_rows') is not None:
+                    raw = u'block_rows'
+                else:
+                    raw = u'marker'
+            return _pw_cfg.ADD_MERGE_DATA_MODE_LABEL.get(
+                raw, unicode(block.get('data_mode') or u'Опорный столбец (merge)')
+            )
+        if field_id == 'marker':
+            val = block.get('marker')
+            if isinstance(val, (list, tuple)):
+                try:
+                    from libre_macros_param_codec import join_column_name_tokens
+                    return join_column_name_tokens(val)
+                except Exception:
+                    return u','.join(unicode(x) for x in val if unicode(x).strip() != u'')
+            return unicode(val or u'')
     if unicode(fn_key or u'').casefold() == u'разделить_по_столбцам'.casefold():
         if field_id == 'source_policy':
             raw = unicode(block.get('source_policy') or u'replace').strip().casefold()
@@ -9847,6 +9912,47 @@ def _block_field_to_text(block, field_id, fn_key=None):
             return _pw_cfg.SPLIT_NON_TEXT_LABEL.get(
                 raw, unicode(block.get('non_text') or u'skip')
             )
+    if _is_atext_letters_wizard_fn(fn_key):
+        if field_id == u'format':
+            raw = unicode(block.get('format') or u'odt').strip().casefold()
+            return _pw_cfg.ATEXT_LETTERS_FORMAT_LABEL.get(
+                raw, unicode(block.get('format') or u'odt')
+            )
+        if field_id == u'missing_column':
+            raw = unicode(block.get('missing_column') or u'empty').strip().casefold()
+            return _pw_cfg.ATEXT_LETTERS_MISSING_LABEL.get(
+                raw, unicode(block.get('missing_column') or u'empty')
+            )
+        if field_id == u'overwrite':
+            try:
+                from libre_macros_lib import lm_parse_bool_param
+                return u'Да' if lm_parse_bool_param(block.get('overwrite'), default=True) else u'Нет'
+            except Exception:
+                return u'Да' if block.get('overwrite', True) is not False else u'Нет'
+        if field_id == u'open_folder':
+            try:
+                from libre_macros_lib import lm_parse_bool_param
+                return u'Да' if lm_parse_bool_param(block.get('open_folder'), default=False) else u'Нет'
+            except Exception:
+                return u'Да' if block.get('open_folder') else u'Нет'
+        if field_id == u'marker':
+            val = block.get('marker')
+            if isinstance(val, (list, tuple)):
+                try:
+                    from libre_macros_param_codec import join_column_name_tokens
+                    return join_column_name_tokens(val)
+                except Exception:
+                    return u','.join(unicode(x) for x in val if unicode(x).strip() != u'')
+            return unicode(val or u'')
+        if field_id == u'columns':
+            val = block.get('columns')
+            if isinstance(val, (list, tuple)):
+                try:
+                    from libre_macros_param_codec import join_column_name_tokens
+                    return join_column_name_tokens(val)
+                except Exception:
+                    return u','.join(unicode(x) for x in val if unicode(x).strip() != u'')
+            return unicode(val or u'')
     if _is_send_mail_wizard_fn(fn_key):
         if field_id in (u'to', u'cc', u'bcc'):
             val = block.get(field_id) or []
@@ -10499,6 +10605,20 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
         t = unicode(text or u'').strip().casefold()
         code = _pw_cfg.DEDUP_KEEP_CODE.get(t, t)
         return code if code in (u'first', u'last') else u'first'
+    if unicode(fn_key or u'').casefold() == u'убрать_объединение'.casefold():
+        if field_id == 'header_mode':
+            t = unicode(text or u'').strip().casefold()
+            code = _pw_cfg.UNMERGE_HEADER_MODE_CODE.get(t, t)
+            return code if code in (u'none', u'rows', u'anchor') else u'none'
+        if field_id == 'data_mode':
+            t = unicode(text or u'').strip().casefold()
+            code = _pw_cfg.UNMERGE_DATA_MODE_CODE.get(t, t)
+            return code if code in (u'none', u'marker', u'block_rows') else u'none'
+    if unicode(fn_key or u'').casefold() == u'добавить_объединение'.casefold():
+        if field_id == 'data_mode':
+            t = unicode(text or u'').strip().casefold()
+            code = _pw_cfg.ADD_MERGE_DATA_MODE_CODE.get(t, t)
+            return code if code in (u'marker', u'block_rows') else u'marker'
     if unicode(fn_key or u'').casefold() == u'разделить_по_столбцам'.casefold():
         if field_id == 'source_policy':
             t = unicode(text or u'').strip().casefold()
@@ -10512,6 +10632,37 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
             t = unicode(text or u'').strip().casefold()
             code = _pw_cfg.SPLIT_NON_TEXT_CODE.get(t, t)
             return code if code in (u'skip', u'empty', u'text', u'fail') else u'skip'
+    if _is_atext_letters_wizard_fn(fn_key):
+        if field_id == u'format':
+            t = unicode(text or u'').strip().casefold()
+            code = _pw_cfg.ATEXT_LETTERS_FORMAT_CODE.get(t, t)
+            if code in _pw_cfg.ATEXT_LETTERS_FORMAT_LABEL:
+                return code
+            return u'odt'
+        if field_id == u'missing_column':
+            t = unicode(text or u'').strip().casefold()
+            code = _pw_cfg.ATEXT_LETTERS_MISSING_CODE.get(t, t)
+            if code in _pw_cfg.ATEXT_LETTERS_MISSING_LABEL:
+                return code
+            return u'empty'
+        if field_id in (u'overwrite', u'open_folder'):
+            try:
+                from libre_macros_lib import lm_parse_bool_param
+                default = True if field_id == u'overwrite' else False
+                return bool(lm_parse_bool_param(text, default=default))
+            except Exception:
+                t = unicode(text or u'').strip().casefold()
+                if t in (u'да', u'yes', u'true', u'1'):
+                    return True
+                if t in (u'нет', u'no', u'false', u'0'):
+                    return False
+                return field_id == u'overwrite'
+        if field_id in (u'marker', u'columns'):
+            try:
+                from libre_macros_param_codec import canonicalize_column_token_list_for_store
+                return canonicalize_column_token_list_for_store(text)
+            except Exception:
+                return unicode(text or u'').strip()
     if _is_send_mail_wizard_fn(fn_key):
         if field_id in (u'to', u'cc', u'bcc'):
             text = unicode(text or u'').strip()
@@ -10851,7 +11002,7 @@ def _wp_lambda_builder_kind_for_field(fid, fn_key=u''):
     """kind конструктора по id поля / fn родительской формы."""
     f = unicode(fid or u'').strip()
     fk = unicode(fn_key or u'').strip()
-    if f in (u'row_filter_lambda', u'match_expr', u'RowLambdaEd'):
+    if f in (u'row_filter', u'row_filter_lambda', u'match_expr', u'RowLambdaEd'):
         return u'rows_predicate'
     if f in (u'new_column_expr',):
         return u'name'
@@ -11342,9 +11493,11 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
     dm.Title = schema.get('title') or fn_key
     _inner_dialog_set_sizeable(dm)
     y = m
+    hint_gap = 2 if compact_fields else 4
+    params_lbl_h = 12 if compact_fields else 14
     if hint:
         _wizard_dlg_add_fixed(dm, 'HintLbl', hint, m, y, dw - m * 2, hint_h, multiline=True)
-        y += hint_h + 4
+        y += hint_h + hint_gap
     if form_opt_h > 0:
         _wizard_dlg_add_checkbox(
             dm,
@@ -11370,16 +11523,16 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             _wizard_dlg_add_checkbox(
                 dm, 'SameAllChk', u'Одинаково на всех листах', m, y, left_w + col_gap - 4, 16
             )
-        _wizard_dlg_add_fixed(dm, 'ParamsLbl', u'Параметры:', rx, y, right_w, 14)
-        fy = y + 16 + 2
-        y += 22
+        _wizard_dlg_add_fixed(dm, 'ParamsLbl', u'Параметры:', rx, y, right_w, params_lbl_h)
+        fy = y + params_lbl_h + 2
+        y += (params_lbl_h + 8) if compact_fields else 22
         _wizard_dlg_add_fixed(dm, 'BlocksLbl', u'Блоки:', m, y, left_w, 14)
         y += 16
         _wizard_dlg_add_listbox(dm, 'BlocksLB', m, y, left_w, list_h, multiselect=False)
     else:
-        _wizard_dlg_add_fixed(dm, 'ParamsLbl', u'Параметры:', m, y, right_w, 14)
-        y += 16
-        fy = y + 2
+        _wizard_dlg_add_fixed(dm, 'ParamsLbl', u'Параметры:', m, y, right_w, params_lbl_h)
+        y += params_lbl_h
+        fy = y + (1 if compact_fields else 2)
     field_edits = {}
     field_checks = {}
     field_combos = {}

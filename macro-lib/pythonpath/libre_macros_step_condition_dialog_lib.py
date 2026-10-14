@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Субвизард условия выполнения шага (колонка D / E)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 try:
     unicode
 except NameError:
@@ -294,8 +294,44 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     _fixed("OsUsersLbl", u"Пользователи (user1,user2,…):", m, panel_top + row_h + 2, content_w, lbl_h)
     _edit("OsUsersEd", m, panel_top + row_h + lbl_h + 6, content_w, os_users_h, multiline=True)
 
+    # --- always: подсказка (панель пустая) ---
+    _fixed(
+        "AlwaysHintLbl",
+        u"Условие не задано — шаг выполняется всегда. Ниже можно задать цикл.",
+        m,
+        panel_top + 2,
+        content_w,
+        lbl_h * 2,
+        multiline=True,
+    )
+
     # --- footer: Clear | OK | Cancel .......... Help (без JsonChk)
     footer_y = dh - m - footer_h
+    iter_sec_h = int(getattr(_cfg, "DIALOG_ITER_SECTION_H", 96) or 96)
+    iter_y = footer_y - iter_sec_h - 4
+    _fixed("IterSepLbl", u"── Цикл шага (итерации) ──", m, iter_y, content_w, lbl_h)
+    _fixed("IterModeLbl", u"Режим цикла:", m, iter_y + lbl_h + 4, lbl_w, lbl_h)
+    _combo("IterModeCb", field_x, iter_y + lbl_h + 2, field_w, ctl_h)
+    _fixed("IterValLbl", u"Число / текст:", m, iter_y + lbl_h + row_h + 4, lbl_w, lbl_h)
+    _edit("IterValEd", field_x, iter_y + lbl_h + row_h + 2, field_w - 100, ctl_h)
+    _button(
+        "IterLambdaBtn",
+        u"λ…",
+        field_x + field_w - 94,
+        iter_y + lbl_h + row_h + 2,
+        94,
+        ctl_h,
+    )
+    _fixed(
+        "IterHintLbl",
+        u"1 = без цикла. Текст: <<Переменные.N>>. λ — лямбда → целое (макс. %d)."
+        % int(getattr(_cfg, "ITERATIONS_MAX", 10000) or 10000),
+        m,
+        iter_y + lbl_h + row_h * 2 + 4,
+        content_w,
+        lbl_h,
+    )
+
     clear_w = 140
     _button("ClearBtn", u"Очистить условие", m, footer_y, clear_w, btn_h)
     _button("OkBtn", u"OK", m + clear_w + btn_gap, footer_y, btn_w, btn_h)
@@ -323,6 +359,10 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     try:
         dm.getByName("LambdaBuildBtn").PushButtonType = 0
         dm.getByName("LambdaSaveBtn").PushButtonType = 0
+    except Exception:
+        pass
+    try:
+        dm.getByName("IterLambdaBtn").PushButtonType = 0
     except Exception:
         pass
 
@@ -355,6 +395,10 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     env_val = _dlg_ctl(dlg, "EnvValEd")
     os_op = _dlg_ctl(dlg, "OsOpCb")
     os_users = _dlg_ctl(dlg, "OsUsersEd")
+    iter_mode_cb = _dlg_ctl(dlg, "IterModeCb")
+    iter_val_ed = _dlg_ctl(dlg, "IterValEd")
+    iter_lambda_btn = _dlg_ctl(dlg, "IterLambdaBtn")
+    iter_val_lbl = _dlg_ctl(dlg, "IterValLbl")
 
     _fill_combo(kind_cb, _cfg.KIND_CHOICES)
     _fill_combo(var_op, _cfg.COMPARE_OPS)
@@ -363,6 +407,7 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     _fill_combo(env_rhs, _cfg.RHS_KIND_CHOICES)
     _fill_combo(os_op, _cfg.OS_USER_OPS)
     _fill_combo(lambda_example, _cfg.LAMBDA_EXAMPLE_CHOICES, blank_first=True)
+    _fill_combo(iter_mode_cb, _cfg.ITER_MODE_CHOICES)
 
     saved_state = [()]
     if load_saved_lambdas_fn is not None:
@@ -409,8 +454,13 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
             cond = _lib.decode_step_condition(initial)
         except Exception:
             cond = None
-    kind0 = (cond or {}).get(u"kind") or _cfg.KIND_OS_USER
+    kind0 = (cond or {}).get(u"kind") or _cfg.KIND_ALWAYS
     _combo_select_by_data(kind_cb, kind0, _cfg.KIND_CHOICES)
+    iter_raw0 = (cond or {}).get(u"iterations") if cond else None
+    iter_mode0 = _lib.iterations_mode_from_value(iter_raw0)
+    _combo_select_by_data(iter_mode_cb, iter_mode0, _cfg.ITER_MODE_CHOICES)
+    if iter_raw0 is not None:
+        _set_text(iter_val_ed, unicode(iter_raw0))
     if cond:
         if cond.get(u"kind") == _cfg.KIND_LAMBDA:
             _set_text(lambda_ed, cond.get(u"expr") or u"")
@@ -442,6 +492,7 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     _refresh_saved_pick(_get_text(lambda_ed))
 
     panel_names = {
+        _cfg.KIND_ALWAYS: (u"AlwaysHintLbl",),
         _cfg.KIND_LAMBDA: (
             "LambdaLbl",
             "LambdaEd",
@@ -485,7 +536,44 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
             for nm in names:
                 _set_visible(_dlg_ctl(dlg, nm), vis)
 
+    def _set_label(ctl, text):
+        if ctl is None:
+            return
+        try:
+            ctl.Model.Label = unicode(text or u"")
+            return
+        except Exception:
+            pass
+        _set_text(ctl, text)
+
+    def _show_iter_mode(mode):
+        mode = unicode(mode or _cfg.ITER_MODE_NONE)
+        show_val = mode != _cfg.ITER_MODE_NONE
+        show_btn = mode == _cfg.ITER_MODE_LAMBDA
+        _set_visible(iter_val_lbl, show_val)
+        _set_visible(iter_val_ed, show_val)
+        _set_visible(iter_lambda_btn, show_btn)
+        hint_ctl = _dlg_ctl(dlg, "IterHintLbl")
+        if mode == _cfg.ITER_MODE_CONST:
+            _set_label(hint_ctl, u"Целое ≥2 — сколько раз вызвать функцию.")
+        elif mode == _cfg.ITER_MODE_TEXT:
+            _set_label(
+                hint_ctl,
+                u"Текст или <<Переменные.Имя>> → целое после подстановки.",
+            )
+        elif mode == _cfg.ITER_MODE_LAMBDA:
+            _set_label(
+                hint_ctl,
+                u"Лямбда без аргументов → целое. Кнопка λ… — конструктор.",
+            )
+        else:
+            _set_label(
+                hint_ctl,
+                u"Без цикла (1 раз). Число / <<Переменные>> / λ — режим выше.",
+            )
+
     _show_kind(kind0)
+    _show_iter_mode(iter_mode0)
 
     result = {u"action": None, u"text": None}
 
@@ -498,27 +586,30 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
                 _set_text(lambda_ed, item.get(u"expr") or u"")
                 return
 
-    def _open_builder():
+    def _open_builder(target_ed=None, builder_kind=None):
         if open_lambda_builder_fn is None:
             return
+        ed = target_ed if target_ed is not None else lambda_ed
+        kind_b = builder_kind or getattr(_cfg, "LAMBDA_BUILDER_KIND", u"gate")
         try:
             ok, expr = open_lambda_builder_fn(
                 dlg,
-                kind=getattr(_cfg, "LAMBDA_BUILDER_KIND", u"gate"),
-                initial_expr=_get_text(lambda_ed),
+                kind=kind_b,
+                initial_expr=_get_text(ed),
                 doc=doc,
                 saved_lambdas=saved_state[0],
             )
         except Exception:
             return
         if ok:
-            _set_text(lambda_ed, expr or u"")
-            try:
-                if load_saved_lambdas_fn is not None:
-                    saved_state[0] = list(load_saved_lambdas_fn() or [])
-            except Exception:
-                pass
-            _refresh_saved_pick(_get_text(lambda_ed))
+            _set_text(ed, expr or u"")
+            if ed is lambda_ed:
+                try:
+                    if load_saved_lambdas_fn is not None:
+                        saved_state[0] = list(load_saved_lambdas_fn() or [])
+                except Exception:
+                    pass
+                _refresh_saved_pick(_get_text(lambda_ed))
 
     def _save_current_lambda():
         if save_lambda_fn is None:
@@ -534,6 +625,32 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
             pass
         _refresh_saved_pick(expr)
 
+    def _collect_iterations_value():
+        mode = _combo_selected_code(
+            iter_mode_cb, _cfg.ITER_MODE_CHOICES, _cfg.ITER_MODE_NONE
+        )
+        if mode == _cfg.ITER_MODE_NONE:
+            return None
+        txt = _get_text(iter_val_ed).strip()
+        if mode == _cfg.ITER_MODE_CONST:
+            if txt == u"":
+                return None
+            try:
+                return int(float(txt.replace(u",", u".")))
+            except Exception:
+                raise ValueError(u"цикл: нужно целое число")
+        if mode == _cfg.ITER_MODE_LAMBDA:
+            if txt == u"":
+                raise ValueError(u"цикл: пустая лямбда")
+            stripped = txt.lstrip()
+            if not (stripped.startswith(u"lambda") or stripped.startswith(u"def ")):
+                txt = u"lambda: " + txt
+            return txt
+        # text / <<Переменные>>
+        if txt == u"":
+            return None
+        return txt
+
     class _H(unohelper.Base, XActionListener, XItemListener):
         def disposing(self, ev):
             pass
@@ -546,8 +663,19 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
                 name = u""
             if name == u"KindCb":
                 try:
-                    kind = _combo_selected_code(kind_cb, _cfg.KIND_CHOICES, _cfg.KIND_OS_USER)
+                    kind = _combo_selected_code(
+                        kind_cb, _cfg.KIND_CHOICES, _cfg.KIND_ALWAYS
+                    )
                     _show_kind(kind)
+                except Exception:
+                    pass
+                return
+            if name == u"IterModeCb":
+                try:
+                    mode = _combo_selected_code(
+                        iter_mode_cb, _cfg.ITER_MODE_CHOICES, _cfg.ITER_MODE_NONE
+                    )
+                    _show_iter_mode(mode)
                 except Exception:
                     pass
                 return
@@ -579,6 +707,16 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
             if name in (u"LambdaBuildBtn",) or cmd == u"LambdaBuildBtn":
                 _open_builder()
                 return
+            if name in (u"IterLambdaBtn",) or cmd == u"IterLambdaBtn":
+                _open_builder(target_ed=iter_val_ed, builder_kind=u"gate")
+                try:
+                    _combo_select_by_data(
+                        iter_mode_cb, _cfg.ITER_MODE_LAMBDA, _cfg.ITER_MODE_CHOICES
+                    )
+                    _show_iter_mode(_cfg.ITER_MODE_LAMBDA)
+                except Exception:
+                    pass
+                return
             if name in (u"LambdaSaveBtn",) or cmd == u"LambdaSaveBtn":
                 _save_current_lambda()
                 return
@@ -589,7 +727,11 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
                 except Exception:
                     pass
                 return
-            if name in (u"OkBtn", u"OkButton", u"ok", u"OK") or cmd in (u"ok", u"OK", u"OkBtn"):
+            if name in (u"OkBtn", u"OkButton", u"ok", u"OK") or cmd in (
+                u"ok",
+                u"OK",
+                u"OkBtn",
+            ):
                 result[u"action"] = u"ok"
                 try:
                     dlg.endExecute()
@@ -607,7 +749,12 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
                     pass
 
     h = _H()
-    for listen_name in (u"KindCb", u"LambdaPickCb", u"LambdaExampleCb"):
+    for listen_name in (
+        u"KindCb",
+        u"LambdaPickCb",
+        u"LambdaExampleCb",
+        u"IterModeCb",
+    ):
         ctl = _dlg_ctl(dlg, listen_name)
         if ctl is None:
             continue
@@ -621,6 +768,7 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         u"CancelBtn",
         u"LambdaBuildBtn",
         u"LambdaSaveBtn",
+        u"IterLambdaBtn",
     ):
         btn = _dlg_ctl(dlg, btn_name)
         if btn is None:
@@ -637,16 +785,20 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         return u""
     if action == u"cancel" or (action is None and rc != 1):
         return None
-    kind = _combo_selected_code(kind_cb, _cfg.KIND_CHOICES, _cfg.KIND_OS_USER)
+    kind = _combo_selected_code(kind_cb, _cfg.KIND_CHOICES, _cfg.KIND_ALWAYS)
     obj = {u"v": 1, u"fn": _cfg.STEP_CONDITION_FN, u"kind": kind}
     try:
-        if kind == _cfg.KIND_LAMBDA:
+        if kind == _cfg.KIND_ALWAYS:
+            pass
+        elif kind == _cfg.KIND_LAMBDA:
             obj[u"expr"] = _get_text(lambda_ed).strip()
         elif kind == _cfg.KIND_VARIABLE:
             obj[u"name"] = _get_text(var_name).strip()
             obj[u"op"] = _combo_selected_code(var_op, _cfg.COMPARE_OPS, u"eq")
             obj[u"value"] = _get_text(var_val).strip()
-            obj[u"missing"] = _combo_selected_code(var_miss, _cfg.MISSING_CHOICES, u"false")
+            obj[u"missing"] = _combo_selected_code(
+                var_miss, _cfg.MISSING_CHOICES, u"false"
+            )
             obj[u"compare_as"] = u"text"
             obj[u"case_sensitive"] = False
         elif kind == _cfg.KIND_ENV:
@@ -667,6 +819,9 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
             obj[u"op"] = _combo_selected_code(os_op, _cfg.OS_USER_OPS, u"in")
             obj[u"users"] = _get_text(os_users).strip()
             obj[u"case_sensitive"] = False
+        it_val = _collect_iterations_value()
+        if it_val is not None:
+            obj[u"iterations"] = it_val
         return _lib.encode_step_condition(obj)
     except Exception as err:
         raise ValueError(u"Условие: %s" % err)

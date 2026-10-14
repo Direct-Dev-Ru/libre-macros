@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 import json
 import re
 
@@ -85,6 +85,15 @@ _FN_ALIASES = {
     "mailto": "отправить_по_почте",
     "send_mail": "отправить_по_почте",
     "почта": "отправить_по_почте",
+    "письма_по_шаблону": "подготовка_писем",
+    "atext_letters": "подготовка_писем",
+    "mail_merge_files": "подготовка_писем",
+    "unmerge_collapse": "убрать_объединение",
+    "снять_объединение": "убрать_объединение",
+    "убрать объединение": "убрать_объединение",
+    "add_merge": "добавить_объединение",
+    "объединить_ячейки": "добавить_объединение",
+    "добавить объединение": "добавить_объединение",
 }
 
 _SHEET_BLOCK_FORM_FNS = frozenset(
@@ -139,6 +148,9 @@ _SHEET_BLOCK_FORM_FNS = frozenset(
         "пропуск_строк_источника",
         "строка_заголовков",
         "отправить_по_почте",
+        "подготовка_писем",
+        "убрать_объединение",
+        "добавить_объединение",
     }
 )
 
@@ -319,6 +331,8 @@ def _normalize_block_for_fn(fn_key, block):
         return _normalize_create_sheet_block(block)
     if fn_key == "отправить_по_почте":
         return _normalize_send_mail_block(block)
+    if fn_key == "подготовка_писем":
+        return _normalize_atext_letters_block(block)
     if fn_key == "объединить_листы_в_один":
         return _normalize_merge_sheets_into_one_block(block)
     if fn_key == "разделить_листы":
@@ -335,6 +349,10 @@ def _normalize_block_for_fn(fn_key, block):
         return _normalize_add_to_variables_map_block(block)
     if fn_key == "ручной_ввод_в_карту_переменных":
         return _normalize_manual_variable_input_block(block)
+    if fn_key == "убрать_объединение":
+        return _normalize_unmerge_collapse_block(block)
+    if fn_key == "добавить_объединение":
+        return _normalize_add_merge_block(block)
     return _normalize_block(fn_key, block)
 def _looks_like_json_payload(raw):
     s = unicode(raw or "").strip()
@@ -530,6 +548,8 @@ def _decode_json_blocks(fn_key, items):
         return [_normalize_create_sheet_block(b) for b in items]
     if fn_key == "отправить_по_почте":
         return [_normalize_send_mail_block(b) for b in items]
+    if fn_key == "подготовка_писем":
+        return [_normalize_atext_letters_block(b) for b in items]
     if fn_key == "объединить_листы_в_один":
         return [_normalize_merge_sheets_into_one_block(b) for b in items]
     if fn_key == "разделить_листы":
@@ -546,6 +566,10 @@ def _decode_json_blocks(fn_key, items):
         return [_normalize_add_to_variables_map_block(b) for b in items]
     if fn_key == "ручной_ввод_в_карту_переменных":
         return [_normalize_manual_variable_input_block(b) for b in items]
+    if fn_key == "убрать_объединение":
+        return [_normalize_unmerge_collapse_block(b) for b in items]
+    if fn_key == "добавить_объединение":
+        return [_normalize_add_merge_block(b) for b in items]
     return [_normalize_block(fn_key, b) for b in items]
 def _decode_pivot_json(items):
     if len(items) == 0:
@@ -3983,6 +4007,146 @@ def _normalize_remove_duplicates_block(block):
             )
     out["pre_sort"] = norm_ps
     return _attach_sheet(out, out.get("sheet"))
+def _normalize_add_merge_block(block):
+    out = _normalize_block("добавить_объединение", block)
+    if u"sep" in out or u"separator" in out:
+        if u"sep" in out:
+            out[u"sep"] = unicode(out.get(u"sep") if out.get(u"sep") is not None else u" ")
+        else:
+            out[u"sep"] = unicode(
+                out.get(u"separator") if out.get(u"separator") is not None else u" "
+            )
+        out.pop(u"separator", None)
+    else:
+        out[u"sep"] = u" "
+
+    out[u"columns"] = _normalize_column_token_list(out.get(u"columns"))
+
+    data_mode = unicode(out.get(u"data_mode") or u"").strip().casefold()
+    if data_mode in (u"marker", u"столбец-маркер", u"маркер", u"опорный", u"опорный столбец"):
+        out.pop(u"block_rows", None)
+    elif data_mode in (u"block_rows", u"число строк блока", u"число_строк_блока", u"блок"):
+        out.pop(u"marker", None)
+    out.pop(u"data_mode", None)
+
+    marker_tokens = _normalize_column_token_list(out.get(u"marker"))
+    if marker_tokens:
+        out[u"marker"] = marker_tokens[0]
+    else:
+        out.pop(u"marker", None)
+
+    if out.get(u"block_rows") is not None and unicode(out.get(u"block_rows")).strip() != u"":
+        try:
+            out[u"block_rows"] = int(out.get(u"block_rows"))
+        except (TypeError, ValueError):
+            out.pop(u"block_rows", None)
+    else:
+        out.pop(u"block_rows", None)
+
+    if out.get(u"marker") and out.get(u"block_rows") is not None:
+        out.pop(u"block_rows", None)
+
+    if out.get(u"data_start_row") is not None and unicode(out.get(u"data_start_row")).strip() != u"":
+        try:
+            out[u"data_start_row"] = int(out.get(u"data_start_row"))
+        except (TypeError, ValueError):
+            out.pop(u"data_start_row", None)
+    else:
+        out.pop(u"data_start_row", None)
+
+    return _attach_sheet(out, out.get(u"sheet"))
+
+
+def _normalize_unmerge_collapse_block(block):
+    out = _normalize_block("убрать_объединение", block)
+    # sep: default пробел; пустая строка допустима (склейка вплотную)
+    if u"sep" in out or u"separator" in out:
+        if u"sep" in out:
+            out[u"sep"] = unicode(out.get(u"sep") if out.get(u"sep") is not None else u" ")
+        else:
+            out[u"sep"] = unicode(
+                out.get(u"separator") if out.get(u"separator") is not None else u" "
+            )
+        out.pop(u"separator", None)
+    else:
+        out[u"sep"] = u" "
+
+    header_mode = unicode(out.get(u"header_mode") or u"").strip().casefold()
+    if header_mode in (u"none", u"не трогать", u"нет", u""):
+        if header_mode in (u"none", u"не трогать", u"нет"):
+            out.pop(u"header_rows", None)
+            out.pop(u"header_anchor", None)
+    elif header_mode in (u"rows", u"число строк", u"число_строк", u"header_rows"):
+        out.pop(u"header_anchor", None)
+    elif header_mode in (u"anchor", u"якорь", u"якорь ячейки", u"header_anchor"):
+        out.pop(u"header_rows", None)
+
+    has_rows = out.get(u"header_rows") is not None and unicode(out.get(u"header_rows")).strip() != u""
+    has_anchor = unicode(out.get(u"header_anchor") or u"").strip() != u""
+    if has_rows and has_anchor:
+        # приоритет якорю, если оба (визард мог оставить хвост)
+        if header_mode in (u"rows", u"число строк", u"число_строк", u"header_rows"):
+            out.pop(u"header_anchor", None)
+            has_anchor = False
+        else:
+            out.pop(u"header_rows", None)
+            has_rows = False
+    if has_rows:
+        try:
+            out[u"header_rows"] = int(out.get(u"header_rows"))
+        except (TypeError, ValueError):
+            out.pop(u"header_rows", None)
+            has_rows = False
+    else:
+        out.pop(u"header_rows", None)
+    if has_anchor:
+        out[u"header_anchor"] = unicode(out.get(u"header_anchor") or u"").strip()
+    else:
+        out.pop(u"header_anchor", None)
+
+    # UI-поле header_mode не пишем в JSON
+    out.pop(u"header_mode", None)
+
+    data_mode = unicode(out.get(u"data_mode") or u"").strip().casefold()
+    if data_mode in (u"none", u"не трогать", u"нет"):
+        out.pop(u"marker", None)
+        out.pop(u"block_rows", None)
+    elif data_mode in (u"marker", u"столбец-маркер", u"маркер", u"столбец"):
+        out.pop(u"block_rows", None)
+    elif data_mode in (u"block_rows", u"число строк блока", u"число_строк_блока", u"блок"):
+        out.pop(u"marker", None)
+    out.pop(u"data_mode", None)
+
+    marker_tokens = _normalize_column_token_list(out.get(u"marker"))
+    if marker_tokens:
+        # один столбец-маркер
+        out[u"marker"] = marker_tokens[0]
+    else:
+        out.pop(u"marker", None)
+
+    if out.get(u"block_rows") is not None and unicode(out.get(u"block_rows")).strip() != u"":
+        try:
+            out[u"block_rows"] = int(out.get(u"block_rows"))
+        except (TypeError, ValueError):
+            out.pop(u"block_rows", None)
+    else:
+        out.pop(u"block_rows", None)
+
+    if out.get(u"marker") and out.get(u"block_rows") is not None:
+        # приоритет marker
+        out.pop(u"block_rows", None)
+
+    if out.get(u"data_start_row") is not None and unicode(out.get(u"data_start_row")).strip() != u"":
+        try:
+            out[u"data_start_row"] = int(out.get(u"data_start_row"))
+        except (TypeError, ValueError):
+            out.pop(u"data_start_row", None)
+    else:
+        out.pop(u"data_start_row", None)
+
+    return _attach_sheet(out, out.get(u"sheet"))
+
+
 def _normalize_activate_sheet_block(block):
     out = _normalize_block("активировать_лист", block)
     target = unicode(
@@ -4431,6 +4595,12 @@ def _normalize_create_sheet_block(block):
             out["values_only"] = bool(out.get("values_only"))
 
     return _attach_sheet(out, out.get("sheet"))
+
+
+def _normalize_atext_letters_block(block):
+    from libre_macros_atext_letters_lib import normalize_atext_letters_block
+
+    return normalize_atext_letters_block(block)
 
 
 def _normalize_send_mail_block(block):

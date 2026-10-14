@@ -418,7 +418,7 @@ def _cw_get(name, default=None):
     return getattr(_cw_cfg, name, default)
 
 
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 def get_user_scripts_path():
     ctx = uno.getComponentContext()
     path_sub = ctx.ServiceManager.createInstanceWithContext('com.sun.star.util.PathSubstitution', ctx)
@@ -1608,6 +1608,37 @@ def _merge_step_condition_allows(target, doc=None, label='', scope='диапаз
         _merge_log_postprocess(doc, sheet_name, scope, label, status, note)
     return False
 
+def _merge_step_condition_raw(target):
+    """Сырой JSON условия с wrapped fn / step-dict."""
+    if target is None:
+        return ''
+    if isinstance(target, dict):
+        return target.get('condition_raw') or ''
+    return getattr(target, '_merge_step_condition_raw', None) or ''
+
+def _merge_step_iterations_count(target, doc=None, label='', scope='диапазон', sheet_name='', final=False):
+    """
+    Сколько раз вызвать шаг (>=1).
+    0 — ошибка разбора iterations (уже в журнале, шаг не выполнять).
+    """
+    raw = _merge_step_condition_raw(target)
+    if str(raw or '').strip() == '':
+        return 1
+    try:
+        from libre_macros_step_condition_lib import resolve_step_iterations
+        n = int(resolve_step_iterations(raw))
+    except Exception as err:
+        note = 'iterations: %s' % err
+        print('  ⚠ итерации шага «%s»: %s' % (label or '?', err))
+        if final:
+            _merge_log_final_processing(doc, str(label or ''), 'ошибка', note)
+        else:
+            _merge_log_postprocess(doc, sheet_name, scope, label, 'ошибка', note)
+        return 0
+    if n < 1:
+        n = 1
+    return n
+
 def _merge_pp_plugin_blocks_from_parsed(parsed):
     """Все блоки из JSON list/dict для «функция_плагин»."""
     if isinstance(parsed, list):
@@ -2476,19 +2507,31 @@ def _merge_run_final_processing_entries(doc, report, entries, sheets, data_range
         if not _merge_step_condition_allows(fn, doc=doc, label=label, scope='финальная_обработка', final=True):
             i = i + 1
             continue
-        merge_debug('_merge_run_final_processing_entries', 'step: %s' % label)
+        n_iters = _merge_step_iterations_count(
+            fn, doc=doc, label=label, scope='финальная_обработка', final=True
+        )
+        if n_iters < 1:
+            i = i + 1
+            continue
+        merge_debug('_merge_run_final_processing_entries', 'step: %s ×%d' % (label, n_iters))
         merge_ui_set_phase('Финальная обработка', str(label), journal=False)
         prev_stage = _merge_pp_active_log_stage()
         _merge_pp_set_log_stage('финальная_обработка')
         _merge_pp_log_fn_begin()
         try:
-            # Диапазоны заново: предыдущие шаги (применить_формулу и т.п.) меняют used area.
-            sheets, data_ranges, header_row_ranges = _merge_final_collect_workbook_collections(doc, header_row=0)
-            fn(doc, sheets, data_ranges, header_row_ranges)
-            # Если в текущем шаге была создана сводная с as_values=true, материализуем её
-            # до следующего шага финальной обработки — тогда следующий шаг увидит результат.
-            _merge_run_pending_pivot_as_values(doc, report)
-            _merge_log_final_processing(doc, str(label), 'ok', _merge_format_workbook_sheets_note(doc))
+            it = 0
+            while it < n_iters:
+                # Диапазоны заново: предыдущие шаги (применить_формулу и т.п.) меняют used area.
+                sheets, data_ranges, header_row_ranges = _merge_final_collect_workbook_collections(doc, header_row=0)
+                fn(doc, sheets, data_ranges, header_row_ranges)
+                # Если в текущем шаге была создана сводная с as_values=true, материализуем её
+                # до следующего шага финальной обработки — тогда следующий шаг увидит результат.
+                _merge_run_pending_pivot_as_values(doc, report)
+                it = it + 1
+            note = _merge_format_workbook_sheets_note(doc)
+            if n_iters > 1:
+                note = 'итерации=%d; %s' % (n_iters, note)
+            _merge_log_final_processing(doc, str(label), 'ok', note)
         except Exception as err:
             detail = _merge_pp_format_postprocess_error(err)
             _merge_log_final_processing(doc, str(label), 'ошибка', detail)
@@ -6541,20 +6584,20 @@ def merge_ui_log_append(line, replace_prefix=None):
 
 def merge_ui_detail_set(text):
     """Перезаписать поле текущего прогресса (счётчики, строка N/M)."""
-    if not _merge_ui_is_dialog_mode():
-        return
     s = str(text or '')
-    try:
-        if _cw_cfg._merge_ui_progress_detail_label is not None:
-            try:
-                _cw_cfg._merge_ui_progress_detail_label.setText(s)
-            except Exception:
+    if _merge_ui_is_dialog_mode():
+        try:
+            if _cw_cfg._merge_ui_progress_detail_label is not None:
                 try:
-                    _cw_cfg._merge_ui_progress_detail_label.setLabel(s)
+                    _cw_cfg._merge_ui_progress_detail_label.setText(s)
                 except Exception:
-                    pass
-    except Exception:
-        pass
+                    try:
+                        _cw_cfg._merge_ui_progress_detail_label.setLabel(s)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    _merge_ui_status_indicator_set(text=s)
     merge_ui_yield(force=True)
     _merge_ui_dialog_pulse()
 
@@ -6714,12 +6757,24 @@ def _merge_ui_build_status_text(fname=None, sheet_name=None, source_row_1based=N
     return '\n'.join(lines)
 
 def _merge_ui_dialog_pulse():
-    """Отдать события UI и перерисовать диалог прогресса."""
+    """Отдать события UI и перерисовать диалог прогресса (peer toolkit + invalidate)."""
     if _cw_cfg._merge_ui_progress_dialog is None:
         return
     ms = int(_cw_cfg._MERGE_UI_DIALOG_EVENT_MS)
+    peer = None
     try:
-        toolkit = get_awt_toolkit()
+        peer = _cw_cfg._merge_ui_progress_dialog.getPeer()
+    except Exception:
+        peer = None
+    try:
+        toolkit = None
+        if peer is not None and hasattr(peer, 'getToolkit'):
+            try:
+                toolkit = peer.getToolkit()
+            except Exception:
+                toolkit = None
+        if toolkit is None:
+            toolkit = get_awt_toolkit()
         if toolkit is not None:
             if hasattr(toolkit, 'processEventsToIdle'):
                 toolkit.processEventsToIdle(ms)
@@ -6728,9 +6783,15 @@ def _merge_ui_dialog_pulse():
     except Exception:
         pass
     try:
-        peer = _cw_cfg._merge_ui_progress_dialog.getPeer()
         if peer is not None:
-            peer.setVisible(True)
+            try:
+                peer.invalidate(0)
+            except Exception:
+                pass
+            try:
+                peer.setVisible(True)
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -8712,6 +8773,7 @@ def merge_ui_yield(force=False, counter=None):
 
     Вызывать периодически в длинных циклах (копирование 40k+ строк, row-постобработка).
     force=True — всегда (между файлами/пакетами); иначе каждые MERGE_UI_YIELD_EVERY_ROWS.
+    В режиме диалога — pulse по peer диалога; .uno:Repaint книги не вызываем (дорого и не чинит UI).
     """
     interval = _merge_ui_yield_every()
     if not force:
@@ -8722,9 +8784,13 @@ def merge_ui_yield(force=False, counter=None):
             _cw_cfg._merge_ui_yield_counter = _cw_cfg._merge_ui_yield_counter + 1
             if _cw_cfg._merge_ui_yield_counter % interval != 0:
                 return
-    timeout_ms = _cw_cfg._MERGE_UI_DIALOG_EVENT_MS if _merge_ui_is_dialog_mode() else 100
+    dialog_mode = _merge_ui_is_dialog_mode()
+    timeout_ms = _cw_cfg._MERGE_UI_DIALOG_EVENT_MS if dialog_mode else 100
     if force:
         merge_debug('merge_ui_yield', 'force=True')
+    if dialog_mode:
+        _merge_ui_dialog_pulse()
+        return
     try:
         toolkit = get_awt_toolkit()
         if toolkit is not None:
@@ -8753,6 +8819,7 @@ def merge_ui_yield(force=False, counter=None):
                     pass
     except Exception:
         pass
+    # StatusIndicator-режим: лёгкий Repaint Calc. В диалоге — не трогаем книгу.
     try:
         ctx = XSCRIPTCONTEXT.getComponentContext()
         helper = ctx.ServiceManager.createInstanceWithContext('com.sun.star.frame.DispatchHelper', ctx)
@@ -8761,8 +8828,6 @@ def merge_ui_yield(force=False, counter=None):
             helper.executeDispatch(frame, '.uno:Repaint', '_self', 0, ())
     except Exception:
         pass
-    if _merge_ui_is_dialog_mode():
-        _merge_ui_dialog_pulse()
 
 def _merge_ui_dialog_set(value, text=None):
     """Обновить полосу прогресса; text — устаревший alias для журнала."""
@@ -8802,21 +8867,32 @@ def _merge_ui_dialog_autoclose_enabled(default=True):
         return default
 
 def _merge_ui_dialog_finish():
-    """Закрыть диалог прогресса после этапа."""
-    if _cw_cfg._merge_ui_progress_dialog is None:
-        return
-    try:
-        _cw_cfg._merge_ui_progress_dialog.setVisible(False)
-        _cw_cfg._merge_ui_progress_dialog.dispose()
-    except Exception:
-        pass
-    _cw_cfg._merge_ui_progress_dialog = None
-    _cw_cfg._merge_ui_progress_label = None
-    _cw_cfg._merge_ui_progress_detail_label = None
-    _cw_cfg._merge_ui_progress_bar = None
-    _cw_cfg._merge_ui_progress_abort_btn = None
-    _cw_cfg._merge_ui_progress_finish_btn = None
-    _cw_cfg._merge_ui_dialog_handler = None
+    """Закрыть диалог прогресса после этапа (и параллельный StatusIndicator / _lm_ui hooks)."""
+    had_dialog = _cw_cfg._merge_ui_progress_dialog is not None
+    if had_dialog:
+        try:
+            _cw_cfg._merge_ui_progress_dialog.setVisible(False)
+            _cw_cfg._merge_ui_progress_dialog.dispose()
+        except Exception:
+            pass
+        _cw_cfg._merge_ui_progress_dialog = None
+        _cw_cfg._merge_ui_progress_label = None
+        _cw_cfg._merge_ui_progress_detail_label = None
+        _cw_cfg._merge_ui_progress_bar = None
+        _cw_cfg._merge_ui_progress_abort_btn = None
+        _cw_cfg._merge_ui_progress_finish_btn = None
+        _cw_cfg._merge_ui_dialog_handler = None
+    if had_dialog:
+        # SI и hooks открывались вместе с диалогом — снять даже если caller
+        # вызвал только _merge_ui_dialog_finish (auto_close и т.п.).
+        try:
+            _merge_ui_status_indicator_finish()
+        except Exception:
+            pass
+        try:
+            _merge_ui_unbind_lib_hooks()
+        except Exception:
+            pass
 
 def merge_ui_dialog_await_finish(summary_text, on_finish=None):
     """
@@ -8877,54 +8953,55 @@ def merge_ui_dialog_await_finish(summary_text, on_finish=None):
         print('Диалог завершения: %s' % err)
         print(traceback.format_exc())
     finally:
-        _merge_ui_dialog_finish()
+        # Диалог + параллельный StatusIndicator + снять _lm_ui_* hooks.
+        merge_ui_status_finish()
 
-def merge_ui_status_start(text, max_value, settings=None):
-    """Индикатор прогресса: StatusIndicator или диалог (MERGE_PROGRESS_UI_MODE)."""
-    merge_ui_status_finish()
-    ui_mode = _merge_progress_ui_mode(settings)
-    if ui_mode == _cw_cfg.MERGE_PROGRESS_UI_DIALOG:
-        _merge_ui_dialog_start(text, max_value, settings=settings)
-        return
-    if ui_mode != _cw_cfg.MERGE_PROGRESS_UI_STATUS:
-        return
+def _merge_ui_truncate_status_text(text, max_len=None):
+    """Укоротить текст для StatusIndicator (статусбар Calc)."""
+    s = str(text or '')
     try:
+        lim = int(max_len) if max_len is not None else int(_cw_cfg._MERGE_UI_STATUS_TEXT_MAX)
+    except Exception:
+        lim = 72
+    if lim < 8:
+        lim = 8
+    if len(s) <= lim:
+        return s
+    return s[: lim - 1] + u'…'
+
+def _merge_ui_status_indicator_start(text, max_value):
+    """Запустить StatusIndicator на текущем frame (параллельно с диалогом или отдельно)."""
+    try:
+        if _cw_cfg._merge_ui_status_indicator is not None:
+            try:
+                _cw_cfg._merge_ui_status_indicator.end()
+            except Exception:
+                pass
+            _cw_cfg._merge_ui_status_indicator = None
         frame = XSCRIPTCONTEXT.getDesktop().getCurrentFrame()
         if frame is None:
             return
         si = frame.createStatusIndicator()
         if si is not None:
-            si.start(str(text), int(max_value))
+            si.start(_merge_ui_truncate_status_text(text), int(max_value))
             _cw_cfg._merge_ui_status_indicator = si
     except Exception:
         _cw_cfg._merge_ui_status_indicator = None
 
-def merge_ui_status_set(value, text=None, settings=None):
-    """Обновить индикатор прогресса и отдать события UI."""
-    ui_mode = _merge_progress_ui_mode(settings)
-    if ui_mode == _cw_cfg.MERGE_PROGRESS_UI_DIALOG:
-        if text is not None:
-            merge_ui_detail_set(str(text).replace('\n', ' — '))
-        if value is not None:
-            _merge_ui_dialog_set(value, None)
-        else:
-            merge_ui_sync_progress()
-        merge_ui_yield(force=True)
-        _merge_ui_dialog_pulse()
+def _merge_ui_status_indicator_set(value=None, text=None):
+    """Обновить параллельный StatusIndicator, если он открыт."""
+    si = _cw_cfg._merge_ui_status_indicator
+    if si is None:
         return
     try:
-        if _cw_cfg._merge_ui_status_indicator is not None:
-            _cw_cfg._merge_ui_status_indicator.setValue(int(value))
-            if text is not None:
-                _cw_cfg._merge_ui_status_indicator.setText(str(text))
+        if value is not None:
+            si.setValue(int(value))
+        if text is not None:
+            si.setText(_merge_ui_truncate_status_text(str(text).replace('\n', ' — ')))
     except Exception:
         pass
-    merge_ui_yield(force=True)
 
-def merge_ui_status_finish():
-    """Закрыть StatusIndicator или диалог прогресса после этапа."""
-    _merge_ui_dialog_finish()
-    _cw_cfg._merge_ui_active_report = None
+def _merge_ui_status_indicator_finish():
     if _cw_cfg._merge_ui_status_indicator is None:
         return
     try:
@@ -8932,6 +9009,125 @@ def merge_ui_status_finish():
     except Exception:
         pass
     _cw_cfg._merge_ui_status_indicator = None
+
+def _merge_ui_bind_lib_hooks():
+    """
+    На время сбора: _lm_ui_* в libre_macros_lib → merge_ui_* (иначе stubs pass).
+    Шимы намеренно не прокидывают _lm_ui_*; постобработка зовёт lib напрямую.
+    """
+    if _cw_cfg._merge_ui_lib_hooks_bound:
+        return
+    try:
+        import libre_macros_lib as lm
+    except Exception:
+        return
+    names = (
+        '_lm_ui_yield',
+        '_lm_ui_poll_abort',
+        '_lm_ui_detail_set',
+        '_lm_ui_sync_progress',
+        '_lm_ui_status_set',
+        '_lm_ui_should_update_status',
+        '_lm_ui_is_dialog_mode',
+    )
+    backup = {}
+    for name in names:
+        backup[name] = getattr(lm, name, None)
+
+    def _ui_yield(counter=0, force=False):
+        c = counter
+        if c is not None:
+            try:
+                c = int(c)
+            except Exception:
+                c = None
+        merge_ui_yield(force=bool(force), counter=c)
+
+    def _ui_poll_abort():
+        return merge_ui_poll_abort()
+
+    def _ui_detail_set(text):
+        merge_ui_detail_set(text)
+
+    def _ui_sync_progress(extra_frac=0.0, file_frac=None):
+        ff = 0.0 if file_frac is None else file_frac
+        merge_ui_sync_progress(extra_frac=extra_frac, file_frac=ff)
+
+    def _ui_status_set(counter, text):
+        merge_ui_status_set(counter, text=text)
+
+    def _ui_should_update_status(counter, is_last=False):
+        return _merge_ui_should_update_status(counter, is_last=is_last)
+
+    def _ui_is_dialog_mode():
+        return _merge_ui_is_dialog_mode()
+
+    lm._lm_ui_yield = _ui_yield
+    lm._lm_ui_poll_abort = _ui_poll_abort
+    lm._lm_ui_detail_set = _ui_detail_set
+    lm._lm_ui_sync_progress = _ui_sync_progress
+    lm._lm_ui_status_set = _ui_status_set
+    lm._lm_ui_should_update_status = _ui_should_update_status
+    lm._lm_ui_is_dialog_mode = _ui_is_dialog_mode
+    _cw_cfg._merge_ui_lib_hooks_backup = backup
+    _cw_cfg._merge_ui_lib_hooks_bound = True
+
+def _merge_ui_unbind_lib_hooks():
+    """Вернуть stubs _lm_ui_* в libre_macros_lib после сбора."""
+    if not _cw_cfg._merge_ui_lib_hooks_bound:
+        return
+    backup = _cw_cfg._merge_ui_lib_hooks_backup or {}
+    try:
+        import libre_macros_lib as lm
+        for name, fn in backup.items():
+            if fn is not None:
+                setattr(lm, name, fn)
+    except Exception:
+        pass
+    _cw_cfg._merge_ui_lib_hooks_backup = None
+    _cw_cfg._merge_ui_lib_hooks_bound = False
+
+def merge_ui_status_start(text, max_value, settings=None):
+    """Индикатор прогресса: StatusIndicator и/или диалог (MERGE_PROGRESS_UI_MODE)."""
+    merge_ui_status_finish()
+    ui_mode = _merge_progress_ui_mode(settings)
+    if ui_mode == _cw_cfg.MERGE_PROGRESS_UI_DIALOG:
+        _merge_ui_dialog_start(text, max_value, settings=settings)
+        # Параллельно статусбар — обычно рисуется надёжнее modeless-диалога.
+        _merge_ui_status_indicator_start(text, max_value)
+        _merge_ui_bind_lib_hooks()
+        return
+    if ui_mode != _cw_cfg.MERGE_PROGRESS_UI_STATUS:
+        _merge_ui_bind_lib_hooks()
+        return
+    _merge_ui_status_indicator_start(text, max_value)
+    _merge_ui_bind_lib_hooks()
+
+def merge_ui_status_set(value, text=None, settings=None):
+    """Обновить индикатор прогресса и отдать события UI."""
+    ui_mode = _merge_progress_ui_mode(settings)
+    if ui_mode == _cw_cfg.MERGE_PROGRESS_UI_DIALOG:
+        if text is not None:
+            merge_ui_detail_set(str(text).replace('\n', ' — '))
+        elif value is not None:
+            _merge_ui_status_indicator_set(value=value)
+        if value is not None:
+            _merge_ui_dialog_set(value, None)
+            _merge_ui_status_indicator_set(value=value)
+        else:
+            merge_ui_sync_progress()
+        merge_ui_yield(force=True)
+        _merge_ui_dialog_pulse()
+        return
+    _merge_ui_status_indicator_set(value=value, text=text)
+    merge_ui_yield(force=True)
+
+def merge_ui_status_finish():
+    """Закрыть StatusIndicator и диалог прогресса после этапа."""
+    _merge_ui_unbind_lib_hooks()
+    _merge_ui_dialog_finish()
+    _cw_cfg._merge_ui_active_report = None
+    _merge_ui_status_indicator_finish()
 
 def _merge_pp_current_fn_label():
     """Подпись текущего шага постобработки для строки статуса Calc."""
@@ -10014,9 +10210,11 @@ def _merge_uno_convert_text_numbers_dates(doc, sheet, header_row=0):
     hdr = int(header_row or 0)
     if end_col < 0 or end_row <= hdr:
         return
-    merge_ui_set_phase('Преобразование текста', 'лист «%s»' % (getattr(sheet, 'Name', '') or ''), journal=False)
+    sheet_label = getattr(sheet, 'Name', '') or ''
+    merge_ui_set_phase('Преобразование текста', 'лист «%s»' % sheet_label, journal=False)
+    merge_ui_detail_set('Преобразование текста: лист «%s»…' % sheet_label)
     merge_ui_yield(force=True)
-    merge_debug('uno_convert', 'sheet=%s cols=0..%d rows=%d..%d' % (getattr(sheet, 'Name', ''), end_col, hdr + 1, end_row))
+    merge_debug('uno_convert', 'sheet=%s cols=0..%d rows=%d..%d' % (sheet_label, end_col, hdr + 1, end_row))
 
     def get_row_map(row0):
         return _merge_uno_sheet_row_map(sheet, row0, end_col)
@@ -10043,15 +10241,30 @@ def _merge_uno_convert_text_numbers_dates(doc, sheet, header_row=0):
     except Exception:
         pass
     if not date_cols and not num_cols and not explicit_fmt:
-        merge_debug('uno_convert', 'sheet=%s no columns to convert' % getattr(sheet, 'Name', ''))
+        merge_debug('uno_convert', 'sheet=%s no columns to convert' % sheet_label)
         return
     converted_dt = 0
     converted_num = 0
     data_r0 = hdr + 1
     rr = data_r0
-    batch = 256
+    try:
+        batch = int(_cw_cfg._MERGE_UI_CONVERT_YIELD_BATCH)
+    except Exception:
+        batch = 64
+    if batch < 1:
+        batch = 1
+    total_rows = end_row - data_r0 + 1
+    if total_rows < 1:
+        total_rows = 1
     while rr <= end_row:
         if (rr - data_r0) % batch == 0:
+            done = rr - data_r0
+            if done < 0:
+                done = 0
+            merge_ui_detail_set(
+                'Преобразование текста: строка %d/%d («%s»)'
+                % (done + 1, total_rows, sheet_label)
+            )
             merge_ui_yield(force=True)
         row_map = get_row_map(rr)
         for col in date_cols:
@@ -10096,9 +10309,13 @@ def _merge_uno_convert_text_numbers_dates(doc, sheet, header_row=0):
             except Exception:
                 pass
     if converted_dt or converted_num:
-        merge_debug('uno_convert', 'sheet=%s dates=%d numbers=%d' % (getattr(sheet, 'Name', ''), converted_dt, converted_num))
+        merge_debug('uno_convert', 'sheet=%s dates=%d numbers=%d' % (sheet_label, converted_dt, converted_num))
+        note = 'текст→число/дата: %d ячеек (даты %d, числа %d)' % (converted_dt + converted_num, converted_dt, converted_num)
+        merge_ui_detail_set(note)
         if _merge_ui_is_dialog_mode():
-            merge_ui_log_append('  текст→число/дата: %d ячеек (даты %d, числа %d)' % (converted_dt + converted_num, converted_dt, converted_num))
+            merge_ui_log_append('  %s' % note)
+    else:
+        merge_ui_detail_set('Преобразование текста: лист «%s» — без изменений' % sheet_label)
 
 def _merge_number_format_string_and_locale(doc, fmt_key):
     """
@@ -17912,15 +18129,29 @@ def _merge_run_single_pipeline_range_step(doc, sheet, pp_ctx, step):
     if not _merge_pp_wrapped_applies_to_sheet(fn, sheet):
         _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'пропуск', 'лист не в sheet JSON плагина')
         return False
+    gate_target = fn if fn is not None else step
+    n_iters = _merge_step_iterations_count(
+        gate_target, doc=doc, label=label, scope='диапазон', sheet_name=sheet_name
+    )
+    if n_iters < 1:
+        return False
     old_ctx = _cw_cfg._MERGE_PP_ACTIVE_CTX
     _cw_cfg._MERGE_PP_ACTIVE_CTX = pp_ctx
     _merge_pp_sync_lib_active_context(pp_ctx)
     _merge_pp_set_current_fn_label(label)
-    data_range, header_row_range = _merge_pp_context_ranges(pp_ctx)
     _merge_pp_log_fn_begin()
     try:
-        fn(doc, sheet, data_range, header_row_range)
-        _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'ok', 'выполнено (столбцов %d)' % (int(pp_ctx['end_col']) + 1))
+        it = 0
+        while it < n_iters:
+            data_range, header_row_range = _merge_pp_context_ranges(pp_ctx)
+            fn(doc, sheet, data_range, header_row_range)
+            if it + 1 < n_iters:
+                _merge_pp_context_refresh(pp_ctx)
+            it = it + 1
+        note = 'выполнено (столбцов %d)' % (int(pp_ctx['end_col']) + 1)
+        if n_iters > 1:
+            note = 'итерации=%d; %s' % (n_iters, note)
+        _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'ok', note)
     except Exception as err:
         detail = _merge_pp_format_postprocess_error(err)
         _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'ошибка', detail)
@@ -18246,14 +18477,26 @@ def _merge_run_final_processing_entries_on_sheets_info(doc, report, entries, she
         if not _merge_step_condition_allows(fn, doc=doc, label=label, scope='финальная_обработка', final=True):
             i = i + 1
             continue
+        n_iters = _merge_step_iterations_count(
+            fn, doc=doc, label=label, scope='финальная_обработка', final=True
+        )
+        if n_iters < 1:
+            i = i + 1
+            continue
         merge_ui_set_phase('Финальная обработка', str(label), journal=False)
         prev_stage = _merge_pp_active_log_stage()
         _merge_pp_set_log_stage('финальная_обработка')
         _merge_pp_log_fn_begin()
         try:
-            sheets, data_ranges, header_row_ranges = _merge_collections_from_sheets_info(sheets_info)
-            fn(doc, sheets, data_ranges, header_row_ranges)
-            _merge_log_final_processing(doc, str(label), 'ok', _merge_format_workbook_sheets_note(doc))
+            it = 0
+            while it < n_iters:
+                sheets, data_ranges, header_row_ranges = _merge_collections_from_sheets_info(sheets_info)
+                fn(doc, sheets, data_ranges, header_row_ranges)
+                it = it + 1
+            note = _merge_format_workbook_sheets_note(doc)
+            if n_iters > 1:
+                note = 'итерации=%d; %s' % (n_iters, note)
+            _merge_log_final_processing(doc, str(label), 'ok', note)
         except Exception as err:
             detail = _merge_pp_format_postprocess_error(err)
             _merge_log_final_processing(doc, str(label), 'ошибка', detail)
@@ -18518,6 +18761,12 @@ def _apply_book_pipeline_range_phase(doc, sheets_info, range_phase):
             if not _merge_step_condition_allows(gate_target, doc=doc, label=label, scope='диапазон'):
                 ri = ri + 1
                 continue
+            n_iters = _merge_step_iterations_count(
+                gate_target, doc=doc, label=label, scope='диапазон'
+            )
+            if n_iters < 1:
+                ri = ri + 1
+                continue
             coalesce_key = _merge_pp_group_by_coalesce_key(fn) if fn is not None else None
             bundle_steps = [step]
             rj = ri + 1
@@ -18561,25 +18810,28 @@ def _apply_book_pipeline_range_phase(doc, sheets_info, range_phase):
                     _cw_cfg._MERGE_PP_ACTIVE_CTX = pp_ctx
                     _merge_pp_sync_lib_active_context(pp_ctx)
                     _merge_pp_set_current_fn_label(label)
-                    data_range, header_row_range = _merge_pp_context_ranges(pp_ctx)
                     _merge_pp_log_fn_begin()
                     try:
-                        _merge_pp_run_group_by_merged(
-                            doc,
-                            sh,
-                            data_range,
-                            header_row_range,
-                            [st.get('fn') for st in bundle_steps if st.get('fn') is not None],
+                        it = 0
+                        while it < n_iters:
+                            data_range, header_row_range = _merge_pp_context_ranges(pp_ctx)
+                            _merge_pp_run_group_by_merged(
+                                doc,
+                                sh,
+                                data_range,
+                                header_row_range,
+                                [st.get('fn') for st in bundle_steps if st.get('fn') is not None],
+                            )
+                            if it + 1 < n_iters:
+                                _merge_pp_context_refresh(pp_ctx)
+                            it = it + 1
+                        note = 'склеено уровней=%d (столбцов %d)' % (
+                            len(bundle_steps),
+                            int(pp_ctx['end_col']) + 1,
                         )
-                        _merge_log_postprocess(
-                            doc,
-                            sh.Name,
-                            'диапазон',
-                            label,
-                            'ok',
-                            'склеено уровней=%d (столбцов %d)'
-                            % (len(bundle_steps), int(pp_ctx['end_col']) + 1),
-                        )
+                        if n_iters > 1:
+                            note = 'итерации=%d; %s' % (n_iters, note)
+                        _merge_log_postprocess(doc, sh.Name, 'диапазон', label, 'ok', note)
                     except Exception as err:
                         detail = _merge_pp_format_postprocess_error(err)
                         _merge_log_postprocess(doc, sh.Name, 'диапазон', label, 'ошибка', detail)
@@ -18788,6 +19040,12 @@ def _merge_run_postprocess_range(callback_spec, doc, sheet, pp_ctx):
         if not _merge_step_condition_allows(fn, doc=doc, label=label, scope='диапазон', sheet_name=sheet_name):
             i = i + 1
             continue
+        n_iters = _merge_step_iterations_count(
+            fn, doc=doc, label=label, scope='диапазон', sheet_name=sheet_name
+        )
+        if n_iters < 1:
+            i = i + 1
+            continue
         if not _merge_pp_wrapped_applies_to_sheet(fn, sheet):
             _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'пропуск', 'лист не в sheet JSON плагина')
             i = i + 1
@@ -18813,22 +19071,25 @@ def _merge_run_postprocess_range(callback_spec, doc, sheet, pp_ctx):
             merge_ui_set_phase('Постобработка диапазона', '%d/%d — %s' % (i + 1, n_fns, label), journal=False)
         merge_ui_status_set(i, _merge_pp_status_text('диапазон %d/%d' % (i + 1, n_fns)))
         _merge_pp_set_current_fn_label(label)
-        data_range, header_row_range = _merge_pp_context_ranges(pp_ctx)
         _merge_pp_log_fn_begin()
         try:
+            it = 0
+            while it < n_iters:
+                data_range, header_row_range = _merge_pp_context_ranges(pp_ctx)
+                if len(bundle) > 1:
+                    _merge_pp_run_group_by_merged(doc, sheet, data_range, header_row_range, bundle)
+                else:
+                    fn(doc, sheet, data_range, header_row_range)
+                if it + 1 < n_iters:
+                    _merge_pp_context_refresh(pp_ctx)
+                it = it + 1
             if len(bundle) > 1:
-                _merge_pp_run_group_by_merged(doc, sheet, data_range, header_row_range, bundle)
-                _merge_log_postprocess(
-                    doc,
-                    sheet_name,
-                    'диапазон',
-                    label,
-                    'ok',
-                    'склеено уровней=%d (столбцов %d)' % (len(bundle), int(pp_ctx['end_col']) + 1),
-                )
+                note = 'склеено уровней=%d (столбцов %d)' % (len(bundle), int(pp_ctx['end_col']) + 1)
             else:
-                fn(doc, sheet, data_range, header_row_range)
-                _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'ok', 'выполнено (столбцов %d)' % (int(pp_ctx['end_col']) + 1))
+                note = 'выполнено (столбцов %d)' % (int(pp_ctx['end_col']) + 1)
+            if n_iters > 1:
+                note = 'итерации=%d; %s' % (n_iters, note)
+            _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'ok', note)
         except Exception as err:
             detail = _merge_pp_format_postprocess_error(err)
             _merge_log_postprocess(doc, sheet_name, 'диапазон', label, 'ошибка', detail)
@@ -18859,16 +19120,28 @@ def _merge_run_postprocess_row_fns(fns, doc, sheet, data_row_range, header_row_r
         if not _merge_step_condition_allows(fn, doc=doc, label=label, scope='строки данных', sheet_name=sheet_name):
             i = i + 1
             continue
+        n_iters = _merge_step_iterations_count(
+            fn, doc=doc, label=label, scope='строки данных', sheet_name=sheet_name
+        )
+        if n_iters < 1:
+            i = i + 1
+            continue
         if not _merge_pp_wrapped_applies_to_sheet(fn, sheet):
             i = i + 1
             continue
         _merge_pp_set_current_fn_label(label)
         log_key = (sheet_name, label)
         try:
-            fn(doc, sheet, data_row_range, header_row_range, row_index)
+            it = 0
+            while it < n_iters:
+                fn(doc, sheet, data_row_range, header_row_range, row_index)
+                it = it + 1
             if log_key not in _cw_cfg._MERGE_PP_ROW_LOGGED:
                 _cw_cfg._MERGE_PP_ROW_LOGGED.add(log_key)
-                _merge_log_postprocess(doc, sheet_name, 'строки данных', label, 'ok', 'выполнено на каждой строке')
+                note = 'выполнено на каждой строке'
+                if n_iters > 1:
+                    note = 'итерации=%d; %s' % (n_iters, note)
+                _merge_log_postprocess(doc, sheet_name, 'строки данных', label, 'ok', note)
         except Exception as err:
             detail = _merge_pp_format_postprocess_error(err)
             _merge_log_postprocess(doc, sheet_name, scope, label, 'ошибка', detail)
@@ -21028,12 +21301,15 @@ def _merge_dispatch_copy_sheet_between_docs(src_doc, src_sheet_name, dst_doc, ds
             _cw_cfg._MERGE_COPY_SHEET_LAST_ERROR = 'XSpreadsheets2 недоступен на dst_doc.Sheets (queryInterface вернул None)'
             return False
         insert_index = int(dst_doc.Sheets.getCount())
+        merge_ui_detail_set('Импорт листа «%s»…' % src_sheet_name)
         merge_ui_yield(force=True)
         ui_locked = _merge_doc_action_lock(dst_doc)
         try:
             sheets2.importSheet(src_doc, str(src_sheet_name), insert_index)
         finally:
             _merge_doc_action_unlock(dst_doc, ui_locked)
+        dst_label = dst_sheet_name if str(dst_sheet_name) != str(src_sheet_name) else src_sheet_name
+        merge_ui_detail_set('Импорт листа «%s» — готово' % dst_label)
         merge_ui_yield(force=True)
         new_sheet = get_sheet(dst_doc, src_sheet_name)
         if new_sheet is None:
@@ -23291,8 +23567,8 @@ def merge_on_copy_sheets(target_doc, files, is_current_book_flags, per_file_shee
                         report.status(u'  → CSV «%s» ← %s (importSheet)' % (target_name, tname))
                     else:
                         report.status('  → копия «%s» ← %s' % (target_name, tname))
-                    if _merge_ui_is_dialog_mode():
-                        merge_ui_yield(force=True)
+                    merge_ui_detail_set('Копирование листа «%s» → «%s»…' % (src_sheet_name, target_name))
+                    merge_ui_yield(force=True)
                     maybe_prefetch_cell_to_column(cell_to_column_cache, ctc_per_file_specs, fi, fpath if not is_current_book else '', is_current_book, path_display, src_sheet_name, src)
                     maybe_prefetch_add_to_variables_map(_cw_cfg._MERGE_ADD_TO_VARIABLES_PER_FILE, fi, fpath if not is_current_book else '', is_current_book, path_display, src_sheet_name, src, report=report)
                     copied = _merge_copy_sheet_between_docs(src, src_sheet_name, target_doc, target_name, report)

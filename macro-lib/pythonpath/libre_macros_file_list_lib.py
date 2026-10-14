@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Вспомогательная логика file_list_macro: Owner (Windows) и поиск по именам/содержимому."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 import csv
 import hashlib
 import json

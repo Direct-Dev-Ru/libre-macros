@@ -5,7 +5,7 @@ from __future__ import print_function
 
 Подключается из libre_macros_lib.py; публичный API — lm_final_*.
 """
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 import re
 
 import libre_macros_lib as lm
@@ -1043,6 +1043,27 @@ def lm_final_create_sheet(doc, sheets, data_ranges, header_row_ranges, *extra_ar
     _lm_final_log(doc, label, status, note)
 
 
+def lm_final_atext_letters(doc, sheets, data_ranges, header_row_ranges, *extra_args):
+    """
+    Финальная фаза: письма AText из листа ACell (mail-merge файлы на диск).
+
+    Лист данных — поле sheet слева в визарде (или source_sheet).
+    [{"v":1,"fn":"подготовка_писем","sheet":"Получатели","template":"/t.odt",
+      "out_dir":"/out","filename":"Письмо_<<ФИО>>_<<n>>","block_rows":1}]
+    """
+    _unused = (data_ranges, header_row_ranges)
+    label = "подготовка_писем"
+    blocks = lm._lm_pp_param_decode(label, extra_args)
+    if len(blocks) == 0:
+        _lm_final_log(doc, label, "пропуск", "пустая C")
+        return
+    import libre_macros_atext_letters_lib as al
+
+    expanded = al.expand_atext_letters_blocks_for_sheets(blocks, sheets)
+    status, note = al.run_atext_letters_blocks(doc, expanded)
+    _lm_final_log(doc, label, status, note)
+
+
 def lm_final_send_mail(doc, sheets, data_ranges, header_row_ranges, *extra_args):
     """
     Финальная фаза: подготовить вложение и открыть compose в почтовом клиенте.
@@ -1144,4 +1165,5 @@ LM_FINAL_PUBLIC_NAMES = (
     "lm_final_copy_ranges",
     "lm_final_create_sheet",
     "lm_final_send_mail",
+    "lm_final_atext_letters",
 )

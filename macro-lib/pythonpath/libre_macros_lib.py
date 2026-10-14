@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -25097,6 +25097,7 @@ from libre_macros_final_lib import (  # noqa: E402
     _LM_FINAL_SKIP_PIVOT_FOLLOWUP_KEYS,
     _lm_final_is_pivot_followup_skip_name,
     lm_final_apply_pending_pivot_as_values,
+    lm_final_atext_letters,
     lm_final_copy_sheet,
     lm_final_copy_ranges,
     lm_final_create_sheet,
@@ -25154,6 +25155,20 @@ def lm_pp_range_form_to_table(doc, sheet, data_range, header_row_range, *extra_a
 def lm_pp_range_table_to_form(doc, sheet, data_range, header_row_range, *extra_args):
     """RANGE: таблица_в_анкету (lazy import)."""
     from libre_macros_form_table_lib import lm_pp_range_table_to_form as _fn
+
+    return _fn(doc, sheet, data_range, header_row_range, *extra_args)
+
+
+def lm_pp_range_unmerge_collapse(doc, sheet, data_range, header_row_range, *extra_args):
+    """RANGE: убрать_объединение (lazy import)."""
+    from libre_macros_unmerge_collapse_lib import lm_pp_range_unmerge_collapse as _fn
+
+    return _fn(doc, sheet, data_range, header_row_range, *extra_args)
+
+
+def lm_pp_range_add_merge(doc, sheet, data_range, header_row_range, *extra_args):
+    """RANGE: добавить_объединение (lazy import)."""
+    from libre_macros_add_merge_lib import lm_pp_range_add_merge as _fn
 
     return _fn(doc, sheet, data_range, header_row_range, *extra_args)
 
@@ -25286,6 +25301,8 @@ LM_PP_PUBLIC_NAMES = (
     "lm_pp_range_copy_sheet",
     "lm_pp_range_copy_ranges",
     "lm_pp_range_create_sheet",
+    "lm_pp_range_unmerge_collapse",
+    "lm_pp_range_add_merge",
     "lm_pp_range_merge_sheets_into_one",
     "lm_pp_copy_sheet_clear_pending",
     "lm_pp_copy_sheet_remove_pending_names",

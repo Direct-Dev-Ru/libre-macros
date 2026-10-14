@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Условие выполнения шага постобработки / финальной обработки (колонка D или E)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.758"
+MACRO_VERSION = "3.10.768"
 try:
     unicode
 except NameError:
@@ -79,6 +79,174 @@ def _parse_value_list(raw):
     return _parse_users_list(raw)
 
 
+def normalize_iterations_value(raw):
+    """
+    Нормализация поля iterations для хранения в JSON.
+
+    None / '' / 1 → None (без цикла).
+    int/float / чистое число → int (>=2) или None.
+    Иначе — unicode-строка (<<Переменные>> или lambda: …).
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        try:
+            n = int(raw)
+        except Exception:
+            return None
+        if n <= 1:
+            return None
+        if n > int(_cfg.ITERATIONS_MAX):
+            raise StepConditionError(
+                u"iterations: максимум %d" % int(_cfg.ITERATIONS_MAX)
+            )
+        return n
+    s = _u(raw).strip()
+    if s == u"" or s == u"1":
+        return None
+    if s.isdigit() or (s.startswith(u"-") and s[1:].isdigit()):
+        try:
+            n = int(s)
+        except Exception:
+            return s
+        if n <= 1:
+            return None
+        if n > int(_cfg.ITERATIONS_MAX):
+            raise StepConditionError(
+                u"iterations: максимум %d" % int(_cfg.ITERATIONS_MAX)
+            )
+        return n
+    return s
+
+
+def iterations_mode_from_value(raw):
+    """Режим UI по сохранённому iterations."""
+    if raw is None:
+        return _cfg.ITER_MODE_NONE
+    if isinstance(raw, (int, float)):
+        return _cfg.ITER_MODE_CONST if int(raw) > 1 else _cfg.ITER_MODE_NONE
+    s = _u(raw).strip()
+    if s == u"" or s == u"1":
+        return _cfg.ITER_MODE_NONE
+    if s.isdigit():
+        return _cfg.ITER_MODE_CONST
+    stripped = s.lstrip()
+    if stripped.startswith(u"lambda") or stripped.startswith(u"def "):
+        return _cfg.ITER_MODE_LAMBDA
+    return _cfg.ITER_MODE_TEXT
+
+
+def resolve_step_iterations(raw_or_obj):
+    """
+    Сколько раз вызвать шаг. Всегда >= 1.
+    Пусто / 1 → 1. Ошибка разбора → StepConditionError.
+    """
+    if raw_or_obj is None:
+        return int(_cfg.ITERATIONS_DEFAULT)
+    if isinstance(raw_or_obj, dict):
+        try:
+            cond = normalize_step_condition(raw_or_obj)
+        except StepConditionError:
+            # даже битое условие — попробуем сырое поле
+            cond = raw_or_obj if isinstance(raw_or_obj, dict) else None
+        raw = (cond or {}).get(u"iterations") if isinstance(cond, dict) else None
+        if raw is None and isinstance(raw_or_obj, dict):
+            raw = raw_or_obj.get(u"iterations")
+    elif isinstance(raw_or_obj, (str, unicode)) or type(raw_or_obj).__name__ == "str":
+        text = _u(raw_or_obj).strip()
+        if text == u"":
+            return int(_cfg.ITERATIONS_DEFAULT)
+        try:
+            cond = decode_step_condition(text)
+        except Exception:
+            cond = None
+        raw = (cond or {}).get(u"iterations") if isinstance(cond, dict) else None
+    else:
+        raw = raw_or_obj
+    return _resolve_iterations_raw(raw)
+
+
+def _resolve_iterations_raw(raw):
+    if raw is None:
+        return int(_cfg.ITERATIONS_DEFAULT)
+    if isinstance(raw, bool):
+        return int(_cfg.ITERATIONS_DEFAULT)
+    if isinstance(raw, (int, float)):
+        n = int(raw)
+        if n < 1:
+            n = 1
+        if n > int(_cfg.ITERATIONS_MAX):
+            raise StepConditionError(
+                u"iterations: максимум %d" % int(_cfg.ITERATIONS_MAX)
+            )
+        return n
+    s = _u(raw).strip()
+    if s == u"":
+        return int(_cfg.ITERATIONS_DEFAULT)
+    stripped = s.lstrip()
+    if stripped.startswith(u"lambda") or stripped.startswith(u"def "):
+        n = _eval_iterations_lambda(s)
+        return n
+    # <<Переменные…>> и прочий текст → expand → число
+    try:
+        from libre_macros_lib import _lm_pp_expand_source_variables_template
+
+        expanded = _lm_pp_expand_source_variables_template(
+            s,
+            log_fn_key=u"условие_выполнения",
+            for_formula=False,
+        )
+    except Exception:
+        try:
+            from libre_macros_lambda_column_lib import expand_source_variables_in_lambda_code
+
+            expanded = expand_source_variables_in_lambda_code(
+                s, log_fn_key=u"условие_выполнения"
+            )
+        except Exception:
+            expanded = s
+    expanded = _u(expanded).strip().replace(u" ", u"").replace(u",", u".")
+    if expanded == u"":
+        return int(_cfg.ITERATIONS_DEFAULT)
+    try:
+        n = int(float(expanded))
+    except Exception:
+        raise StepConditionError(
+            u"iterations: не число после подстановки (%r)" % (expanded[:40],)
+        )
+    if n < 1:
+        n = 1
+    if n > int(_cfg.ITERATIONS_MAX):
+        raise StepConditionError(
+            u"iterations: максимум %d" % int(_cfg.ITERATIONS_MAX)
+        )
+    return n
+
+
+def _eval_iterations_lambda(expr):
+    """Лямбда без аргументов → int число итераций."""
+    ok_or_n, summary = _eval_lambda_value(expr, want_bool=False)
+    try:
+        n = int(ok_or_n)
+    except Exception:
+        try:
+            n = int(float(_u(ok_or_n).strip().replace(u",", u".")))
+        except Exception:
+            raise StepConditionError(
+                u"iterations lambda: нужно число, получено %r (%s)"
+                % (_u(ok_or_n)[:40], summary)
+            )
+    if n < 1:
+        n = 1
+    if n > int(_cfg.ITERATIONS_MAX):
+        raise StepConditionError(
+            u"iterations: максимум %d" % int(_cfg.ITERATIONS_MAX)
+        )
+    return n
+
+
 def normalize_step_condition(obj):
     """Нормализовать dict условия. Пустое / None → None."""
     if obj is None:
@@ -90,8 +258,6 @@ def normalize_step_condition(obj):
     if not isinstance(obj, dict):
         raise StepConditionError(u"условие: ожидается JSON-объект")
     kind = _u(obj.get(u"kind") or u"").strip().casefold()
-    if kind == u"":
-        raise StepConditionError(u"условие: не задан kind")
     aliases = {
         u"лямбда": _cfg.KIND_LAMBDA,
         u"переменная": _cfg.KIND_VARIABLE,
@@ -102,20 +268,44 @@ def normalize_step_condition(obj):
         u"пользователь": _cfg.KIND_OS_USER,
         u"os_username": _cfg.KIND_OS_USER,
         u"user": _cfg.KIND_OS_USER,
+        u"always": _cfg.KIND_ALWAYS,
+        u"всегда": _cfg.KIND_ALWAYS,
+        u"нет": _cfg.KIND_ALWAYS,
+        u"none": _cfg.KIND_ALWAYS,
+        u"": _cfg.KIND_ALWAYS,
     }
     kind = aliases.get(kind, kind)
+    iterations = None
+    if u"iterations" in obj:
+        iterations = normalize_iterations_value(obj.get(u"iterations"))
+    if kind == u"" or kind is None:
+        kind = _cfg.KIND_ALWAYS
     if kind not in (
+        _cfg.KIND_ALWAYS,
         _cfg.KIND_LAMBDA,
         _cfg.KIND_VARIABLE,
         _cfg.KIND_ENV,
         _cfg.KIND_OS_USER,
     ):
         raise StepConditionError(u"условие: неизвестный kind «%s»" % kind)
+    # Только цикл без условия — допустимо.
+    if kind == _cfg.KIND_ALWAYS:
+        if iterations is None:
+            return None
+        out = {
+            u"v": int(_cfg.STEP_CONDITION_VERSION),
+            u"fn": _cfg.STEP_CONDITION_FN,
+            u"kind": _cfg.KIND_ALWAYS,
+            u"iterations": iterations,
+        }
+        return out
     out = {
         u"v": int(_cfg.STEP_CONDITION_VERSION),
         u"fn": _cfg.STEP_CONDITION_FN,
         u"kind": kind,
     }
+    if iterations is not None:
+        out[u"iterations"] = iterations
     if kind == _cfg.KIND_LAMBDA:
         expr = _u(obj.get(u"expr") or obj.get(u"lambda") or u"").strip()
         if expr == u"":
@@ -383,7 +573,11 @@ def _missing_result(policy, kind_label):
     return False, u"%s missing→False" % kind_label
 
 
-def _eval_lambda(expr):
+def _eval_lambda_value(expr, want_bool=True):
+    """
+    Выполнить лямбду без аргументов.
+    want_bool=True → (bool, summary); иначе (result, summary).
+    """
     from libre_macros_lambda_column_lib import expand_source_variables_in_lambda_code
     from libre_macros_sanitize_lib import (
         LM_SANITIZE_POLICY_STANDARD,
@@ -458,13 +652,18 @@ def _eval_lambda(expr):
     try:
         result = fn()
     except TypeError:
-        # lambda rows: … — без rows не вызываем
         raise StepConditionError(
             u"условие lambda: выражение требует аргументы (rows не поддерживается в gate шага)"
         )
     except Exception as err:
         raise StepConditionError(u"условие lambda: выполнение: %s" % err)
-    return bool(result), u"lambda"
+    if want_bool:
+        return bool(result), u"lambda"
+    return result, u"lambda"
+
+
+def _eval_lambda(expr):
+    return _eval_lambda_value(expr, want_bool=True)
 
 
 def _eval_variable(cond):
@@ -575,6 +774,8 @@ def eval_step_condition(raw_or_obj, variables_map=None, variables_order=None):
         prev_map = None
         prev_order = None
     try:
+        if kind == _cfg.KIND_ALWAYS or kind in (u"", None):
+            return True, u"всегда"
         if kind == _cfg.KIND_LAMBDA:
             return _eval_lambda(cond.get(u"expr"))
         if kind == _cfg.KIND_VARIABLE:
@@ -608,12 +809,23 @@ def condition_summary(cond_or_raw):
     if cond is None:
         return u""
     kind = cond.get(u"kind")
-    if kind == _cfg.KIND_LAMBDA:
-        return u"lambda"
-    if kind == _cfg.KIND_VARIABLE:
-        return u"variable:%s %s" % (cond.get(u"name"), cond.get(u"op"))
-    if kind == _cfg.KIND_ENV:
-        return u"env:%s %s" % (cond.get(u"env_name"), cond.get(u"op"))
-    if kind == _cfg.KIND_OS_USER:
-        return u"os_user %s [%s]" % (cond.get(u"op"), u",".join(cond.get(u"users") or [])[:5])
-    return _u(kind)
+    parts = []
+    if kind == _cfg.KIND_ALWAYS:
+        parts.append(u"всегда")
+    elif kind == _cfg.KIND_LAMBDA:
+        parts.append(u"lambda")
+    elif kind == _cfg.KIND_VARIABLE:
+        parts.append(u"variable:%s %s" % (cond.get(u"name"), cond.get(u"op")))
+    elif kind == _cfg.KIND_ENV:
+        parts.append(u"env:%s %s" % (cond.get(u"env_name"), cond.get(u"op")))
+    elif kind == _cfg.KIND_OS_USER:
+        parts.append(
+            u"os_user %s [%s]"
+            % (cond.get(u"op"), u",".join(cond.get(u"users") or [])[:5])
+        )
+    else:
+        parts.append(_u(kind))
+    it = cond.get(u"iterations")
+    if it is not None:
+        parts.append(u"×%s" % _u(it))
+    return u" ".join(parts)
