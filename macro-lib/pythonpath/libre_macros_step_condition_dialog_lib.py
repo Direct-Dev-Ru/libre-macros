@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Субвизард условия выполнения шага (колонка D / E)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.768"
+MACRO_VERSION = "3.10.769"
 try:
     unicode
 except NameError:
@@ -144,7 +144,6 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     dm = sm.createInstanceWithContext("com.sun.star.awt.UnoControlDialogModel", ctx)
 
     dw = int(getattr(_cfg, "DIALOG_W", 580) or 580)
-    dh = int(getattr(_cfg, "DIALOG_H", 420) or 420)
     m = int(getattr(_cfg, "DIALOG_MARGIN", 12) or 12)
     row_h = int(getattr(_cfg, "DIALOG_ROW_H", 28) or 28)
     ctl_h = int(getattr(_cfg, "DIALOG_CTL_H", 22) or 22)
@@ -154,14 +153,15 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     btn_w = int(getattr(_cfg, "DIALOG_BTN_W", 100) or 100)
     btn_gap = int(getattr(_cfg, "DIALOG_BTN_GAP", 10) or 10)
     footer_h = int(getattr(_cfg, "DIALOG_FOOTER_H", 36) or 36)
-    lambda_edit_h = int(getattr(_cfg, "DIALOG_LAMBDA_EDIT_H", 110) or 110)
-    os_users_h = int(getattr(_cfg, "DIALOG_OS_USERS_EDIT_H", 72) or 72)
+    lambda_edit_h = int(getattr(_cfg, "DIALOG_LAMBDA_EDIT_H", 90) or 90)
+    os_users_h = int(getattr(_cfg, "DIALOG_OS_USERS_EDIT_H", 56) or 56)
     hint_h = int(getattr(_cfg, "DIALOG_HINT_H", 36) or 36)
+    panel_gap = int(getattr(_cfg, "DIALOG_PANEL_GAP", 8) or 8)
+    iter_sec_h = int(getattr(_cfg, "DIALOG_ITER_SECTION_H", 88) or 88)
 
     dm.PositionX = 120
     dm.PositionY = 60
     dm.Width = dw
-    dm.Height = dh
     dm.Title = _cfg.DIALOG_TITLE
     if set_sizeable is not None:
         try:
@@ -259,14 +259,16 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     _combo("LambdaExampleCb", m + pick_w + gap + build_w + gap + save_w + gap, tools_y, ex_w, ctl_h)
     edit_y = tools_y + ctl_h + 6
     _edit("LambdaEd", m, edit_y, content_w, lambda_edit_h, multiline=True)
+    lambda_hint_y = edit_y + lambda_edit_h + 4
     _fixed(
         "LambdaHintLbl",
         u"Сохранённые ← | Конструктор | Сохранить | Примеры →. Helpers: var/env/os_user/glob_var.",
         m,
-        edit_y + lambda_edit_h + 4,
+        lambda_hint_y,
         content_w,
         lbl_h,
     )
+    lambda_panel_h = (lambda_hint_y + lbl_h) - panel_top
 
     # --- variable ---
     _fixed("VarNameLbl", u"Имя переменной:", m, panel_top + 2, lbl_w, lbl_h)
@@ -277,6 +279,7 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     _edit("VarValEd", field_x, panel_top + row_h * 2, field_w, ctl_h)
     _fixed("VarMissLbl", u"Если нет в карте:", m, panel_top + row_h * 3 + 2, lbl_w, lbl_h)
     _combo("VarMissCb", field_x, panel_top + row_h * 3, field_w, ctl_h)
+    var_panel_h = row_h * 4
 
     # --- env ---
     _fixed("EnvNameLbl", u"Переменная среды:", m, panel_top + 2, lbl_w, lbl_h)
@@ -287,14 +290,16 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
     _combo("EnvRhsCb", field_x, panel_top + row_h * 2, field_w, ctl_h)
     _fixed("EnvValLbl", u"Значение / имя:", m, panel_top + row_h * 3 + 2, lbl_w, lbl_h)
     _edit("EnvValEd", field_x, panel_top + row_h * 3, field_w, ctl_h)
+    env_panel_h = row_h * 4
 
     # --- os_user ---
     _fixed("OsOpLbl", u"Оператор:", m, panel_top + 2, lbl_w, lbl_h)
     _combo("OsOpCb", field_x, panel_top, field_w, ctl_h)
     _fixed("OsUsersLbl", u"Пользователи (user1,user2,…):", m, panel_top + row_h + 2, content_w, lbl_h)
     _edit("OsUsersEd", m, panel_top + row_h + lbl_h + 6, content_w, os_users_h, multiline=True)
+    os_panel_h = row_h + lbl_h + 6 + os_users_h
 
-    # --- always: подсказка (панель пустая) ---
+    # --- always: подсказка ---
     _fixed(
         "AlwaysHintLbl",
         u"Условие не задано — шаг выполняется всегда. Ниже можно задать цикл.",
@@ -304,21 +309,30 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         lbl_h * 2,
         multiline=True,
     )
+    always_panel_h = lbl_h * 2 + 4
 
-    # --- footer: Clear | OK | Cancel .......... Help (без JsonChk)
-    footer_y = dh - m - footer_h
-    iter_sec_h = int(getattr(_cfg, "DIALOG_ITER_SECTION_H", 96) or 96)
-    iter_y = footer_y - iter_sec_h - 4
-    _fixed("IterSepLbl", u"── Цикл шага (итерации) ──", m, iter_y, content_w, lbl_h)
-    _fixed("IterModeLbl", u"Режим цикла:", m, iter_y + lbl_h + 4, lbl_w, lbl_h)
-    _combo("IterModeCb", field_x, iter_y + lbl_h + 2, field_w, ctl_h)
-    _fixed("IterValLbl", u"Число / текст:", m, iter_y + lbl_h + row_h + 4, lbl_w, lbl_h)
-    _edit("IterValEd", field_x, iter_y + lbl_h + row_h + 2, field_w - 100, ctl_h)
+    # Высоты панелей условия — цикл ставится сразу под активной.
+    panel_h_by_kind = {
+        _cfg.KIND_ALWAYS: always_panel_h,
+        _cfg.KIND_LAMBDA: lambda_panel_h,
+        _cfg.KIND_VARIABLE: var_panel_h,
+        _cfg.KIND_ENV: env_panel_h,
+        _cfg.KIND_OS_USER: os_panel_h,
+    }
+    # Начальная раскладка по самой высокой панели; после decode kind — сжатие.
+    cond_panel_h = max(panel_h_by_kind.values())
+    iter_y0 = panel_top + cond_panel_h + panel_gap
+
+    _fixed("IterSepLbl", u"── Цикл шага (итерации) ──", m, iter_y0, content_w, lbl_h)
+    _fixed("IterModeLbl", u"Режим цикла:", m, iter_y0 + lbl_h + 4, lbl_w, lbl_h)
+    _combo("IterModeCb", field_x, iter_y0 + lbl_h + 2, field_w, ctl_h)
+    _fixed("IterValLbl", u"Число / текст:", m, iter_y0 + lbl_h + row_h + 4, lbl_w, lbl_h)
+    _edit("IterValEd", field_x, iter_y0 + lbl_h + row_h + 2, field_w - 100, ctl_h)
     _button(
         "IterLambdaBtn",
         u"λ…",
         field_x + field_w - 94,
-        iter_y + lbl_h + row_h + 2,
+        iter_y0 + lbl_h + row_h + 2,
         94,
         ctl_h,
     )
@@ -327,17 +341,34 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         u"1 = без цикла. Текст: <<Переменные.N>>. λ — лямбда → целое (макс. %d)."
         % int(getattr(_cfg, "ITERATIONS_MAX", 10000) or 10000),
         m,
-        iter_y + lbl_h + row_h * 2 + 4,
+        iter_y0 + lbl_h + row_h * 2 + 4,
         content_w,
         lbl_h,
     )
 
+    footer_y0 = iter_y0 + iter_sec_h + 4
+    dh = footer_y0 + footer_h + m
+    try:
+        dm.Height = dh
+    except Exception:
+        pass
+
     clear_w = 140
-    _button("ClearBtn", u"Очистить условие", m, footer_y, clear_w, btn_h)
-    _button("OkBtn", u"OK", m + clear_w + btn_gap, footer_y, btn_w, btn_h)
-    _button("CancelBtn", u"Отмена", m + clear_w + btn_gap + btn_w + btn_gap, footer_y, btn_w, btn_h)
+    _button("ClearBtn", u"Очистить условие", m, footer_y0, clear_w, btn_h)
+    _button("OkBtn", u"OK", m + clear_w + btn_gap, footer_y0, btn_w, btn_h)
+    _button("CancelBtn", u"Отмена", m + clear_w + btn_gap + btn_w + btn_gap, footer_y0, btn_w, btn_h)
     help_w = 90
-    _button("HelpButton", u"Справка", dw - m - help_w, footer_y, help_w, btn_h)
+    _button("HelpButton", u"Справка", dw - m - help_w, footer_y0, help_w, btn_h)
+
+    iter_layout_names = (
+        (u"IterSepLbl", 0, content_w, lbl_h),
+        (u"IterModeLbl", lbl_h + 4, lbl_w, lbl_h),
+        (u"IterModeCb", lbl_h + 2, field_w, ctl_h),
+        (u"IterValLbl", lbl_h + row_h + 4, lbl_w, lbl_h),
+        (u"IterValEd", lbl_h + row_h + 2, field_w - 100, ctl_h),
+        (u"IterLambdaBtn", lbl_h + row_h + 2, 94, ctl_h),
+        (u"IterHintLbl", lbl_h + row_h * 2 + 4, content_w, lbl_h),
+    )
     try:
         ok_m = dm.getByName("OkBtn")
         ok_m.DefaultButton = True
@@ -530,11 +561,61 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         ),
     }
 
+    def _set_ctl_pos(name, x, y, w=None, h=None):
+        try:
+            model = dm.getByName(name)
+        except Exception:
+            return
+        try:
+            model.PositionX = int(x)
+            model.PositionY = int(y)
+            if w is not None:
+                model.Width = int(w)
+            if h is not None:
+                model.Height = int(h)
+        except Exception:
+            pass
+
+    def _layout_after_condition(kind):
+        """Цикл и footer сразу под активной панелью условия."""
+        ph = int(panel_h_by_kind.get(kind, cond_panel_h) or cond_panel_h)
+        iy = panel_top + ph + panel_gap
+        for nm, dy, ww, hh in iter_layout_names:
+            xx = m
+            if nm == u"IterModeLbl" or nm == u"IterValLbl":
+                xx = m
+            elif nm in (u"IterModeCb", u"IterValEd"):
+                xx = field_x
+            elif nm == u"IterLambdaBtn":
+                xx = field_x + field_w - 94
+            _set_ctl_pos(nm, xx, iy + dy, ww, hh)
+        fy = iy + iter_sec_h + 4
+        _set_ctl_pos(u"ClearBtn", m, fy, clear_w, btn_h)
+        _set_ctl_pos(u"OkBtn", m + clear_w + btn_gap, fy, btn_w, btn_h)
+        _set_ctl_pos(
+            u"CancelBtn",
+            m + clear_w + btn_gap + btn_w + btn_gap,
+            fy,
+            btn_w,
+            btn_h,
+        )
+        _set_ctl_pos(u"HelpButton", dw - m - help_w, fy, help_w, btn_h)
+        new_h = fy + footer_h + m
+        try:
+            dm.Height = int(new_h)
+        except Exception:
+            pass
+        try:
+            dlg.setPosSize(0, 0, dw, int(new_h), 12)  # WIDTH | HEIGHT
+        except Exception:
+            pass
+
     def _show_kind(kind):
         for k, names in panel_names.items():
             vis = k == kind
             for nm in names:
                 _set_visible(_dlg_ctl(dlg, nm), vis)
+        _layout_after_condition(kind)
 
     def _set_label(ctl, text):
         if ctl is None:
