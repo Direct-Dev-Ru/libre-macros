@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.780"
+MACRO_VERSION = "3.10.781"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -67,7 +67,7 @@ def _log(msg):
 
 
 def _script_context():
-    """XSCRIPTCONTEXT из entry-макроса (__main__/builtins) — в pythonpath его нет."""
+    """XSCRIPTCONTEXT из entry-макроса (__main__/builtins/sys.modules) — в pythonpath его нет."""
     try:
         import __main__
 
@@ -82,6 +82,20 @@ def _script_context():
         xsc = getattr(builtins, "XSCRIPTCONTEXT", None)
         if xsc is not None:
             return xsc
+    except Exception:
+        pass
+    try:
+        import sys
+
+        for mod in list(sys.modules.values()):
+            if mod is None:
+                continue
+            try:
+                xsc = getattr(mod, "XSCRIPTCONTEXT", None)
+            except Exception:
+                xsc = None
+            if xsc is not None:
+                return xsc
     except Exception:
         pass
     return None
@@ -822,11 +836,35 @@ def _save_detail_to_sheet(state, force=False):
     return True
 
 
+def _ensure_param_wizard_xscriptcontext(pw):
+    """
+    Субвизарды C в param_wizard берут ctx через XSCRIPTCONTEXT;
+    при import param_wizard из pythonpath имени может не быть → диалог C не создаётся.
+    """
+    if pw is None:
+        return
+    if getattr(pw, u"XSCRIPTCONTEXT", None) is not None:
+        return
+    xsc = _script_context()
+    if xsc is None:
+        return
+    try:
+        pw.XSCRIPTCONTEXT = xsc
+    except Exception:
+        pass
+    try:
+        import builtins
+
+        if getattr(builtins, u"XSCRIPTCONTEXT", None) is None:
+            builtins.XSCRIPTCONTEXT = xsc
+    except Exception:
+        pass
+
+
 def _suspend_all_params_dialog(state):
     """
     Полноэкранный all_params как owner ломает ComboBox во вложенных визардах
-    (списки не открываются) и может прятать диалог C за собой.
-    На время субвизарда отключаем owner и не передаём его в createPeer.
+    и прячет диалог C за собой. Скрываем окно; peer субвизарда — к документу.
     """
     dialog = state.get(u"dialog")
     if dialog is None:
@@ -835,12 +873,20 @@ def _suspend_all_params_dialog(state):
         dialog.setEnable(False)
     except Exception:
         pass
+    try:
+        dialog.setVisible(False)
+    except Exception:
+        pass
     return dialog
 
 
 def _resume_all_params_dialog(dialog):
     if dialog is None:
         return
+    try:
+        dialog.setVisible(True)
+    except Exception:
+        pass
     try:
         dialog.setEnable(True)
     except Exception:
@@ -870,6 +916,7 @@ def _open_col_c_wizard(state):
         return
     _save_detail_to_sheet(state, force=True)
     pw = _pw()
+    _ensure_param_wizard_xscriptcontext(pw)
     entry = entries[si]
     spec = entry.get(u"spec") or {}
     row = int(entry.get(u"row"))
@@ -1007,6 +1054,7 @@ def _open_col_d_wizard(state):
         return
     _save_detail_to_sheet(state, force=True)
     pw = _pw()
+    _ensure_param_wizard_xscriptcontext(pw)
     row = int(entries[si].get(u"row"))
     sub = pw._col_d_condition_subdialog_for_row(sheet, catalog, row)
     if sub is None:

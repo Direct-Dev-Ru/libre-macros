@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.780"
+MACRO_VERSION = "3.10.781"
 import ast
 import glob
 import json
@@ -9637,6 +9637,16 @@ def _show_inner_codec_param_dialog(parent_dialog, fn_key, initial_text, doc=None
         parse_warn = unicode(err)
     try:
         ctx = XSCRIPTCONTEXT.getComponentContext()
+    except Exception:
+        ctx = None
+    if ctx is None:
+        try:
+            ctx = uno.getComponentContext()
+        except Exception:
+            ctx = None
+    try:
+        if ctx is None:
+            raise RuntimeError(u'нет UNO-контекста')
         sm = ctx.getServiceManager()
         toolkit = sm.createInstanceWithContext('com.sun.star.awt.Toolkit', ctx)
         dm = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialogModel', ctx)
@@ -11597,7 +11607,21 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
         if no_sheet_blocks:
             _strip_block_sheet_targeting(empty, schema)
         norm_blocks = [empty]
-    ctx = XSCRIPTCONTEXT.getComponentContext()
+    try:
+        ctx = XSCRIPTCONTEXT.getComponentContext()
+    except Exception:
+        ctx = None
+    if ctx is None:
+        try:
+            ctx = uno.getComponentContext()
+        except Exception:
+            ctx = None
+    if ctx is None:
+        _wp_message_box_execute(
+            doc, parent_dialog, MESSAGEBOX, MSG_BUTTONS.BUTTONS_OK, fn_key,
+            u'Нет UNO-контекста для визарда параметров (C).',
+        )
+        return None
     sm = ctx.getServiceManager()
     toolkit = sm.createInstanceWithContext('com.sun.star.awt.Toolkit', ctx)
     dm = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialogModel', ctx)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Субвизард условия выполнения шага (колонка D / E)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.780"
+MACRO_VERSION = "3.10.781"
 try:
     unicode
 except NameError:
@@ -47,13 +47,22 @@ def _get_text(ctl):
 
 
 def _set_visible(ctl, vis):
+    """Скрыть/показать; Enable=False у невидимых — иначе перекрывают ComboBox в AO."""
     if ctl is None:
         return
+    vis = bool(vis)
     try:
-        ctl.setVisible(bool(vis))
+        ctl.setVisible(vis)
     except Exception:
         try:
-            ctl.Model.EnableVisible = bool(vis)
+            ctl.Model.EnableVisible = vis
+        except Exception:
+            pass
+    try:
+        ctl.setEnable(vis)
+    except Exception:
+        try:
+            ctl.Model.Enabled = vis
         except Exception:
             pass
 
@@ -226,12 +235,24 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         dm.insertByName(name, model)
 
     def _combo(name, x, y, w, h):
+        # ReadOnly=True в VCL отключает кнопку dropdown — списки не открываются.
         if add_combo is not None:
             add_combo(dm, name, x, y, w, h)
             try:
                 cm = dm.getByName(name)
                 cm.Dropdown = True
-                cm.ReadOnly = True
+                try:
+                    cm.ReadOnly = False
+                except Exception:
+                    pass
+                try:
+                    cm.Autocomplete = False
+                except Exception:
+                    pass
+                try:
+                    cm.LineCount = 12
+                except Exception:
+                    pass
             except Exception:
                 pass
             return
@@ -243,7 +264,11 @@ def show_step_condition_dialog( parent_dialog=None, initial_text=u"", doc=None, 
         model.Height = h
         model.Dropdown = True
         try:
-            model.ReadOnly = True
+            model.ReadOnly = False
+        except Exception:
+            pass
+        try:
+            model.Autocomplete = False
         except Exception:
             pass
         try:
