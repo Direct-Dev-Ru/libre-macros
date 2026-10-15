@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.777"
+MACRO_VERSION = "3.10.778"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -196,8 +196,61 @@ def _add_edit(dm, name, x, y, w, h, multiline=False, readonly=False):
             ed.ReadOnly = True
         except Exception:
             pass
+    try:
+        from libre_macros_ui_theme import apply_edit_font
+
+        apply_edit_font(ed)
+    except Exception:
+        pass
     dm.insertByName(name, ed)
     return ed
+
+
+def _add_combo(dm, name, x, y, w, h, items=None, editable=True, font_h=None):
+    """ComboBox: список + ручной ввод (editable=True)."""
+    cb = dm.createInstance(u"com.sun.star.awt.UnoControlComboBoxModel")
+    cb.Name = name
+    cb.PositionX = int(x)
+    cb.PositionY = int(y)
+    cb.Width = int(w)
+    cb.Height = int(h)
+    try:
+        cb.Dropdown = True
+        cb.LineCount = 12
+    except Exception:
+        pass
+    try:
+        cb.ReadOnly = not bool(editable)
+    except Exception:
+        pass
+    if items:
+        try:
+            cb.StringItemList = tuple(unicode(x) for x in items)
+        except Exception:
+            pass
+    try:
+        from libre_macros_ui_theme import apply_edit_font
+
+        apply_edit_font(cb, height=font_h)
+    except Exception:
+        if font_h is not None:
+            try:
+                cb.FontHeight = int(font_h)
+            except Exception:
+                pass
+    dm.insertByName(name, cb)
+    return cb
+
+
+def _set_combo_items(dialog, name, items, select_text=None):
+    try:
+        ctl = dialog.getControl(name)
+        mdl = ctl.Model
+        mdl.StringItemList = tuple(unicode(x) for x in (items or ()))
+    except Exception:
+        return
+    if select_text is not None:
+        _set_text(dialog, name, unicode(select_text or u""))
 
 
 def _add_listbox(dm, name, x, y, w, h):
@@ -316,10 +369,10 @@ def _create_peer(dialog, toolkit, doc=None, parent_dialog=None):
 
 
 def _entry_caption(entry, index, sheet):
-    """Подпись шага в ListBox (короткая — список узкий, ~40%)."""
+    """Подпись шага в ListBox."""
     pw = _pw()
-    max_len = int(getattr(_acfg, "ALL_PARAMS_CAPTION_MAX", 48))
-    b_max = int(getattr(_acfg, "ALL_PARAMS_CAPTION_B_MAX", 24))
+    max_len = int(getattr(_acfg, "ALL_PARAMS_CAPTION_MAX", 120))
+    b_max = int(getattr(_acfg, "ALL_PARAMS_CAPTION_B_MAX", 56))
     name = unicode(entry.get(u"sheet_name") or entry.get(u"name") or u"")
     disabled = bool(entry.get(u"disabled"))
     prefix = unicode(getattr(_acfg, "ALL_PARAMS_DISABLED_PREFIX", u"[откл] ")) if disabled else u""
@@ -329,9 +382,7 @@ def _entry_caption(entry, index, sheet):
         b = pw._cell_string(sheet.getCellByPosition(1, row))
         if b:
             detail = b.replace(u"\n", u" ").strip()
-            if detail.startswith(u"{") or detail.startswith(u"["):
-                detail = u"JSON"
-            elif len(detail) > b_max:
+            if len(detail) > b_max:
                 detail = detail[: b_max - 1] + u"…"
     except Exception:
         detail = u""
@@ -382,7 +433,8 @@ def _detail_snapshot(dialog):
     except Exception:
         disabled = 0
     return (
-        _get_text(dialog, u"ValueEd"),
+        _get_text(dialog, u"NameCombo"),
+        _get_text(dialog, u"ValueCombo"),
         _get_text(dialog, u"ExtraEd"),
         disabled,
     )
@@ -483,8 +535,8 @@ def _clear_detail(state):
     was_loading = bool(state.get(u"form_loading"))
     state[u"form_loading"] = True
     try:
-        _set_text(dialog, u"NameEd", u"")
-        _set_text(dialog, u"ValueEd", u"")
+        _set_text(dialog, u"NameCombo", u"")
+        _set_text(dialog, u"ValueCombo", u"")
         _set_text(dialog, u"ExtraEd", u"")
         _set_text(dialog, u"CondEd", u"")
         _set_text(dialog, u"DescEd", u"")
@@ -492,6 +544,8 @@ def _clear_detail(state):
             dialog.getControl(u"DisabledChk").Model.State = 0
         except Exception:
             pass
+        _set_enabled(dialog, u"NameCombo", False)
+        _set_enabled(dialog, u"ValueCombo", False)
         _set_enabled(dialog, u"ExtraParamsBtn", False)
         _set_enabled(dialog, u"CondBtn", False)
         _set_enabled(dialog, u"ApplyBtn", False)
@@ -545,6 +599,47 @@ def _row_can_open_col_c(pw, spec, primary):
     return False
 
 
+def _catalog_name_choices(catalog, current_name=None):
+    names = []
+    seen = set()
+    i = 0
+    while catalog is not None and i < len(catalog):
+        nm = unicode((catalog[i] or {}).get(u"name") or u"").strip()
+        if nm and nm.casefold() not in seen:
+            names.append(nm)
+            seen.add(nm.casefold())
+        i = i + 1
+    cur = unicode(current_name or u"").strip()
+    if cur:
+        # без префикса отключения
+        try:
+            pw = _pw()
+            cur = pw._param_canonical_sheet_name(cur)
+        except Exception:
+            pass
+        if cur and cur.casefold() not in seen:
+            names.insert(0, cur)
+    return names
+
+
+def _value_b_choices(spec, primary):
+    """Варианты для combo B (из choices спецификации + текущее значение)."""
+    choices = []
+    seen = set()
+    raw = (spec or {}).get(u"choices") or ()
+    i = 0
+    while i < len(raw):
+        item = unicode(raw[i] or u"").strip()
+        if item and item.casefold() not in seen:
+            choices.append(item)
+            seen.add(item.casefold())
+        i = i + 1
+    cur = unicode(primary or u"").strip()
+    if cur and cur.casefold() not in seen:
+        choices.insert(0, cur)
+    return choices
+
+
 def _condition_text_for_row(sheet, row):
     pw = _pw()
     fn_b = pw._cell_string(sheet.getCellByPosition(1, int(row)))
@@ -569,16 +664,28 @@ def _load_detail(state, idx):
     try:
         primary, extra, plugin_ref = pw._read_values_at_row(sheet, spec, row)
         name = unicode(entry.get(u"sheet_name") or entry.get(u"name") or u"")
-        _set_text(dialog, u"NameEd", name)
-        _set_text(dialog, u"ValueEd", unicode(primary or u""))
+        try:
+            name_show = pw._param_canonical_sheet_name(name)
+        except Exception:
+            name_show = name
+        _set_combo_items(
+            dialog,
+            u"NameCombo",
+            _catalog_name_choices(state.get(u"catalog"), name_show),
+            select_text=name_show,
+        )
+        _set_combo_items(
+            dialog,
+            u"ValueCombo",
+            _value_b_choices(spec, primary),
+            select_text=unicode(primary or u""),
+        )
         # Колонка C: для постобработки — extra (JSON); для плагина JSON/extra
         # уже в extra; plugin_ref — отдельное поле C в модели чтения.
         mode = spec.get(u"mode")
         if mode in (u"postprocess_range", u"postprocess_row") and pw._pp_is_plugin_primary(primary):
             c_text = unicode(plugin_ref or u"")
             d_extra = unicode(extra or u"")
-            # ExtraEd показываем как C (ref); CondEd — условие из E; D extra
-            # дописываем в ExtraEd вторым блоком, если есть.
             if d_extra:
                 c_text = c_text + (u"\n---\n" + d_extra if c_text else d_extra)
             _set_text(dialog, u"ExtraEd", c_text)
@@ -596,6 +703,8 @@ def _load_detail(state, idx):
         except Exception:
             pass
         can_c = _row_can_open_col_c(pw, spec, primary)
+        _set_enabled(dialog, u"NameCombo", True)
+        _set_enabled(dialog, u"ValueCombo", True)
         _set_enabled(dialog, u"ExtraParamsBtn", can_c)
         _set_enabled(dialog, u"CondBtn", can_cond and unicode(primary or u"").strip() != u"")
         _set_enabled(dialog, u"ApplyBtn", True)
@@ -628,7 +737,18 @@ def _save_detail_to_sheet(state, force=False):
     entry = entries[si]
     spec = entry.get(u"spec") or {}
     row = int(entry.get(u"row"))
-    primary = _get_text(dialog, u"ValueEd").strip()
+    name_raw = _get_text(dialog, u"NameCombo").strip()
+    try:
+        name_canon = pw._param_canonical_sheet_name(name_raw) if name_raw else unicode(entry.get(u"name") or u"")
+    except Exception:
+        name_canon = name_raw or unicode(entry.get(u"name") or u"")
+    if name_canon:
+        found = pw._find_catalog_spec(catalog, name_canon)
+        if found is not None:
+            spec = found
+            entry[u"spec"] = found
+            entry[u"name"] = found.get(u"name") or name_canon
+    primary = _get_text(dialog, u"ValueCombo").strip()
     extra = _get_text(dialog, u"ExtraEd").strip()
     plugin_ref = None
     mode = spec.get(u"mode")
@@ -661,7 +781,8 @@ def _save_detail_to_sheet(state, force=False):
                 sheet, spec, primary, extra, target_row=row, catalog=catalog, doc=doc,
                 plugin_ref=plugin_ref,
             )
-        pw._write_param_row_sheet_name(sheet, row, spec[u"name"], disabled, catalog=catalog)
+        save_name = unicode(spec.get(u"name") or name_canon or entry.get(u"name") or u"")
+        pw._write_param_row_sheet_name(sheet, row, save_name, disabled, catalog=catalog)
     except Exception as exc:
         try:
             pw._show_message(u"Не удалось сохранить строку:\n%s" % exc, dialog=dialog, doc=doc)
@@ -842,97 +963,100 @@ def _move_selected(state, direction):
     _refresh_list(state, keep_row=new_start)
 
 
-def _detail_chrome_height(row_h, lbl_h, gap, sec):
-    """Высота подписей/отступов/кнопок без полей B/C/D/описание."""
-    # DetailLbl + NameLbl + NameEd + DisabledChk
-    # + ValueLbl + ExtraLbl + CondLbl + DescLbl + ApplyBtn
-    # + промежутки вокруг четырёх полей (value/extra/cond/desc)
+def _detail_chrome_height(combo_h, row_h, lbl_h, gap, sec, btn_row_h):
+    """Высота подписей/отступов/кнопок без полей C/D/описание (B — фикс. combo)."""
+    # DetailLbl + NameLbl + NameCombo + DisabledChk
+    # + ValueLbl + ValueCombo
+    # + ExtraLbl + CondLbl + DescLbl + ApplyBtn
+    # + ряд кнопок C/D между ExtraEd и Cond
     return (
         (lbl_h + 2) * 2
-        + row_h
+        + combo_h
         + gap
         + lbl_h
         + sec
-        + (lbl_h + 2) * 4
-        + sec * 3
+        + (lbl_h + 2)
+        + combo_h
+        + sec
+        + (lbl_h + 2)
+        + sec
+        + btn_row_h
+        + gap
+        + (lbl_h + 2)
+        + sec
+        + (lbl_h + 2)
         + gap
         + row_h
     )
 
 
 def _detail_field_heights(avail_h):
-    """Распределить высоту между B/C/D/описанием так, чтобы всё влезло."""
-    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 22))
+    """Распределить высоту между C / D / описанием (B — фиксированный combo)."""
+    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 18))
+    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 20))
     lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
     gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
     sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
-    chrome = _detail_chrome_height(row_h, lbl_h, gap, sec)
+    btn_row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_ROW_H", 22))
+    chrome = _detail_chrome_height(combo_h, row_h, lbl_h, gap, sec, btn_row_h)
     rest = max(80, int(avail_h) - chrome)
-    vmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_MIN_H", 40))
     emin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_MIN_H", 56))
-    cmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 36))
-    dmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_MIN_H", 36))
-    mins = (vmin, emin, cmin, dmin)
-    need = vmin + emin + cmin + dmin
+    cmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 40))
+    dmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_MIN_H", 48))
+    need = emin + cmin + dmin
     if rest <= need:
-        # Ужимаем пропорционально минимумам.
         scale = float(rest) / float(need) if need > 0 else 1.0
-        out = []
-        i = 0
-        while i < len(mins):
-            out.append(max(24, int(mins[i] * scale)))
-            i = i + 1
-        # Подправить сумму до rest.
-        s = out[0] + out[1] + out[2] + out[3]
-        out[1] = max(24, out[1] + (rest - s))
-        return out[0], out[1], out[2], out[3]
+        eh = max(28, int(emin * scale))
+        ch = max(24, int(cmin * scale))
+        dh = max(24, int(dmin * scale))
+        s = eh + ch + dh
+        eh = max(28, eh + (rest - s))
+        return eh, ch, dh
     free = rest - need
-    shares = (
-        float(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_SHARE", 0.28)),
-        float(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_SHARE", 0.40)),
-        float(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_SHARE", 0.16)),
-        float(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_SHARE", 0.16)),
-    )
     return (
-        vmin + int(free * shares[0]),
-        emin + int(free * shares[1]),
-        cmin + int(free * shares[2]),
-        dmin + int(free * shares[3]),
+        emin + int(free * float(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_SHARE", 0.48))),
+        cmin + int(free * float(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_SHARE", 0.24))),
+        dmin + int(free * float(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_SHARE", 0.28))),
     )
 
 
 def _create_detail_panel(dm, rx, ry, rw):
-    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 22))
+    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 18))
+    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 20))
     lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
     gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
     sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
     btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 118))
-    value_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_MIN_H", 40))
+    btn_row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_ROW_H", 22))
+    name_font = int(getattr(_acfg, "ALL_PARAMS_NAME_FONT_H", 12))
+    value_font = int(getattr(_acfg, "ALL_PARAMS_VALUE_FONT_H", 10))
     extra_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_MIN_H", 56))
-    cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 36))
-    desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_MIN_H", 36))
+    cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 40))
+    desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_MIN_H", 48))
     y = int(ry)
     _add_label(dm, u"DetailLbl", u"Параметры шага:", rx, y, rw, lbl_h)
     y += lbl_h + 2
     _add_label(dm, u"NameLbl", u"Имя (A):", rx, y, rw, lbl_h)
     y += lbl_h + 2
-    _add_edit(dm, u"NameEd", rx, y, rw, row_h, readonly=True)
-    y += row_h + gap
+    _add_combo(dm, u"NameCombo", rx, y, rw, combo_h, editable=True, font_h=name_font)
+    y += combo_h + gap
     _add_checkbox(dm, u"DisabledChk", u"Отключить параметр (__ в колонке A)", rx, y, rw, lbl_h)
     y += lbl_h + sec
     _add_label(dm, u"ValueLbl", u"Значение (B):", rx, y, rw, lbl_h)
     y += lbl_h + 2
-    _add_edit(dm, u"ValueEd", rx, y, rw, value_h, multiline=True)
-    y += value_h + sec
+    _add_combo(dm, u"ValueCombo", rx, y, rw, combo_h, editable=True, font_h=value_font)
+    y += combo_h + sec
     c_btn = unicode(getattr(_acfg, "ALL_PARAMS_BTN_C_LABEL", u"Параметры C…"))
     d_btn = unicode(getattr(_acfg, "ALL_PARAMS_BTN_D_LABEL", u"Параметры D…"))
-    _add_label(dm, u"ExtraLbl", u"Колонка C (JSON / доп. аргументы):", rx, y, max(40, rw - btn_w - 6), lbl_h)
-    _add_button(dm, u"ExtraParamsBtn", c_btn, rx + rw - btn_w, y - 2, btn_w, row_h)
+    _add_label(dm, u"ExtraLbl", u"Колонка C (JSON / доп. аргументы):", rx, y, rw, lbl_h)
     y += lbl_h + 2
     _add_edit(dm, u"ExtraEd", rx, y, rw, extra_h, multiline=True)
     y += extra_h + sec
-    _add_label(dm, u"CondLbl", u"Колонка D/E (условие шага):", rx, y, max(40, rw - btn_w - 6), lbl_h)
-    _add_button(dm, u"CondBtn", d_btn, rx + rw - btn_w, y - 2, btn_w, row_h)
+    # Кнопки C и D — в промежутке между полями C и D.
+    _add_button(dm, u"ExtraParamsBtn", c_btn, rx, y, btn_w, btn_row_h)
+    _add_button(dm, u"CondBtn", d_btn, rx + btn_w + gap, y, btn_w, btn_row_h)
+    y += btn_row_h + gap
+    _add_label(dm, u"CondLbl", u"Колонка D/E (условие шага):", rx, y, rw, lbl_h)
     y += lbl_h + 2
     _add_edit(dm, u"CondEd", rx, y, rw, cond_h, multiline=True, readonly=True)
     y += cond_h + sec
@@ -945,14 +1069,16 @@ def _create_detail_panel(dm, rx, ry, rw):
 
 
 def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
-    """Все блоки B/C/D/описание/Apply укладываются в [ry .. bottom_y]."""
-    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 22))
+    """A/B — компактные combo; кнопки C/D между ExtraEd и CondEd."""
+    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 18))
+    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 20))
     lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
     gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
     sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
     btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 118))
+    btn_row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_ROW_H", 22))
     avail = max(120, int(bottom_y) - int(ry))
-    value_h, extra_h, cond_h, desc_h = _detail_field_heights(avail)
+    extra_h, cond_h, desc_h = _detail_field_heights(avail)
     y = int(ry)
     specs = (
         (u"DetailLbl", rx, y, rw, lbl_h),
@@ -960,25 +1086,24 @@ def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
     y += lbl_h + 2
     specs += ((u"NameLbl", rx, y, rw, lbl_h),)
     y += lbl_h + 2
-    specs += ((u"NameEd", rx, y, rw, row_h),)
-    y += row_h + gap
+    specs += ((u"NameCombo", rx, y, rw, combo_h),)
+    y += combo_h + gap
     specs += ((u"DisabledChk", rx, y, rw, lbl_h),)
     y += lbl_h + sec
     specs += ((u"ValueLbl", rx, y, rw, lbl_h),)
     y += lbl_h + 2
-    specs += ((u"ValueEd", rx, y, rw, value_h),)
-    y += value_h + sec
-    specs += (
-        (u"ExtraLbl", rx, y, max(40, rw - btn_w - 6), lbl_h),
-        (u"ExtraParamsBtn", rx + rw - btn_w, y - 2, btn_w, row_h),
-    )
+    specs += ((u"ValueCombo", rx, y, rw, combo_h),)
+    y += combo_h + sec
+    specs += ((u"ExtraLbl", rx, y, rw, lbl_h),)
     y += lbl_h + 2
     specs += ((u"ExtraEd", rx, y, rw, extra_h),)
     y += extra_h + sec
     specs += (
-        (u"CondLbl", rx, y, max(40, rw - btn_w - 6), lbl_h),
-        (u"CondBtn", rx + rw - btn_w, y - 2, btn_w, row_h),
+        (u"ExtraParamsBtn", rx, y, btn_w, btn_row_h),
+        (u"CondBtn", rx + btn_w + gap, y, btn_w, btn_row_h),
     )
+    y += btn_row_h + gap
+    specs += ((u"CondLbl", rx, y, rw, lbl_h),)
     y += lbl_h + 2
     specs += ((u"CondEd", rx, y, rw, cond_h),)
     y += cond_h + sec
@@ -1329,6 +1454,25 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
                 src_name = u""
             if src_name == u"DisabledChk":
                 return
+            if src_name == u"NameCombo":
+                # Сменили тип параметра A — обновить список B по новой спецификации.
+                try:
+                    pw = _pw()
+                    name_raw = _get_text(dialog, u"NameCombo").strip()
+                    name_canon = pw._param_canonical_sheet_name(name_raw) if name_raw else u""
+                    spec = pw._find_catalog_spec(state.get(u"catalog"), name_canon)
+                    primary = _get_text(dialog, u"ValueCombo")
+                    _set_combo_items(
+                        dialog,
+                        u"ValueCombo",
+                        _value_b_choices(spec or {}, primary),
+                        select_text=primary,
+                    )
+                except Exception:
+                    pass
+                return
+            if src_name == u"ValueCombo":
+                return
             idx = _list_selected_index(dialog)
             prev = int(state.get(u"selected") or -1)
             if idx < 0 or idx == prev:
@@ -1364,6 +1508,10 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         dialog.getControl(u"StepsListBox").addItemListener(handler)
     except Exception as err:
         _log("list listener: %s" % err)
+    try:
+        dialog.getControl(u"NameCombo").addItemListener(handler)
+    except Exception as err:
+        _log("name combo listener: %s" % err)
 
     if select_row is not None:
         _refresh_list(state, keep_row=int(select_row))
