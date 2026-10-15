@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.781"
+MACRO_VERSION = "3.10.782"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -582,6 +582,7 @@ def _clear_detail(state):
         _set_enabled(dialog, u"ExtraParamsBtn", False)
         _set_enabled(dialog, u"CondBtn", False)
         _set_enabled(dialog, u"ApplyBtn", False)
+        _set_enabled(dialog, u"AddBtn", True)
         _set_enabled(dialog, u"DelBtn", False)
         _set_enabled(dialog, u"CopyBtn", False)
         _set_enabled(dialog, u"UpBtn", False)
@@ -751,6 +752,7 @@ def _load_detail(state, idx):
         _set_enabled(dialog, u"ExtraParamsBtn", can_c)
         _set_enabled(dialog, u"CondBtn", can_cond and unicode(primary or u"").strip() != u"")
         _set_enabled(dialog, u"ApplyBtn", True)
+        _set_enabled(dialog, u"AddBtn", True)
         _set_enabled(dialog, u"DelBtn", True)
         _set_enabled(dialog, u"CopyBtn", True)
         _set_enabled(dialog, u"UpBtn", idx > 0)
@@ -758,6 +760,114 @@ def _load_detail(state, idx):
         _remember_loaded_snap(state)
     finally:
         state[u"form_loading"] = was_loading
+
+
+def _default_name_for_add(pw, sheet, catalog):
+    """Имя для новой строки: предпочитаем Постобработка, иначе первый доступный."""
+    prefer = unicode(getattr(_acfg, "ALL_PARAMS_ADD_DEFAULT_NAME", u"Постобработка") or u"").strip()
+    names = []
+    try:
+        names = list(pw._catalog_names_for_new_param(sheet, catalog) or [])
+    except Exception:
+        names = []
+    if not names and catalog is not None:
+        i = 0
+        while i < len(catalog):
+            nm = unicode((catalog[i] or {}).get(u"name") or u"").strip()
+            if nm:
+                names.append(nm)
+            i = i + 1
+    if prefer:
+        prefer_cf = prefer.casefold()
+        i = 0
+        while i < len(names):
+            if unicode(names[i]).casefold() == prefer_cf:
+                return unicode(names[i])
+            i = i + 1
+    if names:
+        return unicode(names[0])
+    return prefer or u"Постобработка"
+
+
+def _add_param_after_cursor(state):
+    """
+    Новая строка параметра сразу после выделенной (в середину списка).
+    Без выделения — в конец. Имя по умолчанию — из каталога (часто Постобработка);
+    дальше меняют через combo A справа.
+    """
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    if sheet is None:
+        return
+    _save_detail_to_sheet(state, force=True)
+    pw = _pw()
+    if 0 <= si < len(entries):
+        insert_at = int(entries[si].get(u"row")) + 1
+    elif entries:
+        insert_at = int(entries[-1].get(u"row")) + 1
+    else:
+        insert_at = 1
+    if insert_at < 1:
+        insert_at = 1
+    name = _default_name_for_add(pw, sheet, catalog)
+    spec = None
+    try:
+        spec = pw._find_catalog_spec(catalog, name)
+    except Exception:
+        spec = None
+    if spec is None:
+        try:
+            pw._show_message(
+                u"Не удалось подобрать имя параметра из каталога.",
+                dialog=dialog,
+                doc=doc,
+                title=u"Добавить",
+            )
+        except Exception:
+            pass
+        return
+    end_col = 5
+    try:
+        from libre_macros_copy_param_rows_lib import _copy_end_col, _count_free_rows, _restore_header_after_copy
+
+        end_col = _copy_end_col(pw, sheet, catalog, [insert_at - 1] if insert_at > 1 else [])
+        free = _count_free_rows(sheet, insert_at, 1, end_col)
+    except Exception:
+        free = 0
+        _restore_header_after_copy = None
+    pw._param_sheet_begin_write(sheet)
+    try:
+        if free < 1:
+            sheet.getRows().insertByIndex(insert_at, 1)
+        try:
+            sheet.getCellByPosition(0, insert_at).String = unicode(name)
+        except Exception:
+            pass
+        try:
+            pw._ensure_param_row_formatting(sheet, insert_at, catalog, spec, True, doc=doc)
+        except Exception:
+            pass
+        if _restore_header_after_copy is not None:
+            try:
+                _restore_header_after_copy(pw, sheet, catalog, [insert_at])
+            except Exception:
+                pass
+    except Exception as exc:
+        try:
+            pw._show_message(u"Не удалось добавить строку:\n%s" % exc, dialog=dialog, doc=doc)
+        except Exception:
+            pass
+        return
+    finally:
+        try:
+            pw._param_sheet_end_write(sheet)
+        except Exception:
+            pass
+    _refresh_list(state, keep_row=insert_at)
 
 
 def _save_detail_to_sheet(state, force=False):
@@ -1679,7 +1789,10 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
                 except Exception:
                     pass
                 return
-            if name == u"DelBtn":
+            if name == u"AddBtn":
+                _add_param_after_cursor(state)
+                state[u"changed"] = True
+            elif name == u"DelBtn":
                 _delete_selected(state)
                 state[u"changed"] = True
             elif name == u"CopyBtn":
@@ -1754,6 +1867,7 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
     handler = _Handler()
     for btn in (
         u"CloseBtn",
+        u"AddBtn",
         u"DelBtn",
         u"CopyBtn",
         u"UpBtn",

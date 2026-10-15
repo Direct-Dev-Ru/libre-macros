@@ -2,14 +2,14 @@
 """Константы полноэкранного визарда «Все параметры» (пайплайн листа)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.781"
+MACRO_VERSION = "3.10.782"
 ALL_PARAMS_BTN_LABEL = u"Все параметры"
 ALL_PARAMS_WIZARD_TITLE = u"Все параметры — пайплайн обработки"
 ALL_PARAMS_WIZARD_HINT = (
     u"Слева — все шаги листа параметров (порядок сверху вниз). "
-    u"Сверху списка: Удалить / Скопировать / ↑ / ↓. "
-    u"Справа — поля A/B/C/D выбранной строки; "
-    u"кнопки «Параметры C…» и «Параметры D…» — между полями C и D."
+    u"Сверху списка: Добавить / Удалить / Скопировать / ↑ / ↓. "
+    u"«Добавить» — новая строка сразу после выделенной. "
+    u"Справа — поля A/B/C/D; кнопки «Параметры C…» / «Параметры D…» — между C и D."
 )
 
 ALL_PARAMS_BTN_C_LABEL = u"Параметры C…"
@@ -54,10 +54,14 @@ ALL_PARAMS_CAPTION_MAX = 120
 ALL_PARAMS_CAPTION_B_MAX = 56
 
 ALL_PARAMS_TOOLBAR_BTNS = (
+    (u"AddBtn", u"Добавить", 90),
     (u"DelBtn", u"Удалить", 84),
     (u"CopyBtn", u"Скопировать", 100),
     (u"UpBtn", u"↑", 36),
     (u"DownBtn", u"↓", 36),
 )
+
+# Имя по умолчанию для новой строки (если есть в каталоге и доступно).
+ALL_PARAMS_ADD_DEFAULT_NAME = u"Постобработка"
 
 ALL_PARAMS_DISABLED_PREFIX = u"[откл] "
