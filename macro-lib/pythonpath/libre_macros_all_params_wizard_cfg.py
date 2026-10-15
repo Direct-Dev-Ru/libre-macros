@@ -2,7 +2,7 @@
 """Константы полноэкранного визарда «Все параметры» (пайплайн листа)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.778"
+MACRO_VERSION = "3.10.779"
 ALL_PARAMS_BTN_LABEL = u"Все параметры"
 ALL_PARAMS_WIZARD_TITLE = u"Все параметры — пайплайн обработки"
 ALL_PARAMS_WIZARD_HINT = (
@@ -27,26 +27,29 @@ ALL_PARAMS_LIST_MIN_H = 80
 ALL_PARAMS_LIST_BOTTOM_GAP = 6
 ALL_PARAMS_STATUS_H = 18
 ALL_PARAMS_FOOTER_BTN_W = 110
-ALL_PARAMS_DETAIL_BTN_W = 118
+ALL_PARAMS_DETAIL_BTN_W = 130
 ALL_PARAMS_LIST_TOOLBAR_GAP = 4
 ALL_PARAMS_DETAIL_ROW_H = 20
 ALL_PARAMS_DETAIL_COMBO_H = 18
 ALL_PARAMS_DETAIL_LBL_H = 14
 ALL_PARAMS_DETAIL_GAP = 4
 ALL_PARAMS_DETAIL_SECTION_GAP = 6
-ALL_PARAMS_DETAIL_BTN_ROW_H = 22
-# Шрифт combo A (pt), крупнее обычного edit.
+# Кнопки C/D между полями — выше + жирный шрифт.
+ALL_PARAMS_DETAIL_BTN_ROW_H = 30
+ALL_PARAMS_DETAIL_BTN_FONT_H = 11
+# Нижняя «Применить» — крупная, прижата к низу панели.
+ALL_PARAMS_APPLY_BTN_H = 36
+ALL_PARAMS_APPLY_BTN_W = 200
+# Шрифт combo A (pt).
 ALL_PARAMS_NAME_FONT_H = 12
 ALL_PARAMS_VALUE_FONT_H = 10
-# Минимальные высоты полей C / D / описание (B — фиксированный combo).
-ALL_PARAMS_DETAIL_EXTRA_MIN_H = 56
-ALL_PARAMS_DETAIL_COND_MIN_H = 40
-ALL_PARAMS_DETAIL_DESC_MIN_H = 48
-# Доли остатка высоты: C / D / описание.
-ALL_PARAMS_DETAIL_EXTRA_SHARE = 0.48
-ALL_PARAMS_DETAIL_COND_SHARE = 0.24
-ALL_PARAMS_DETAIL_DESC_SHARE = 0.28
-# Подписи в списке шагов (влезают в ~40% ширины на типичном FullHD).
+# C на ~20% ниже прежнего минимума/доли; место уходит вниз (D/описание/Apply).
+ALL_PARAMS_DETAIL_EXTRA_MIN_H = 45
+ALL_PARAMS_DETAIL_COND_MIN_H = 44
+ALL_PARAMS_DETAIL_DESC_MIN_H = 56
+ALL_PARAMS_DETAIL_EXTRA_SHARE = 0.38
+ALL_PARAMS_DETAIL_COND_SHARE = 0.28
+ALL_PARAMS_DETAIL_DESC_SHARE = 0.34
 ALL_PARAMS_CAPTION_MAX = 120
 ALL_PARAMS_CAPTION_B_MAX = 56
 
