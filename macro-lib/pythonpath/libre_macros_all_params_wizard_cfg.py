@@ -2,7 +2,7 @@
 """Константы полноэкранного визарда «Все параметры» (пайплайн листа)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.784"
+MACRO_VERSION = "3.10.785"
 ALL_PARAMS_BTN_LABEL = u"Все параметры"
 ALL_PARAMS_WIZARD_TITLE = u"Все параметры — пайплайн обработки"
 ALL_PARAMS_WIZARD_HINT = (
@@ -15,7 +15,10 @@ ALL_PARAMS_WIZARD_HINT = (
 ALL_PARAMS_BTN_C_LABEL = u"Параметры C…"
 ALL_PARAMS_BTN_D_LABEL = u"Параметры D…"
 
-ALL_PARAMS_TOOLBAR_BTN_H = 28
+# Все кнопки — одна высота, жирный шрифт.
+ALL_PARAMS_BTN_H = 30
+ALL_PARAMS_BTN_FONT_H = 11
+ALL_PARAMS_TOOLBAR_BTN_H = ALL_PARAMS_BTN_H
 ALL_PARAMS_HINT_H = 28
 ALL_PARAMS_HINT_TOP_GAP = 4
 ALL_PARAMS_TOOLBAR_GAP = 6
@@ -30,19 +33,18 @@ ALL_PARAMS_FOOTER_BTN_W = 110
 ALL_PARAMS_DETAIL_BTN_W = 130
 ALL_PARAMS_LIST_TOOLBAR_GAP = 4
 ALL_PARAMS_DETAIL_ROW_H = 20
-ALL_PARAMS_DETAIL_COMBO_H = 18
+# Combo A/B повыше (было 18).
+ALL_PARAMS_DETAIL_COMBO_H = 28
 ALL_PARAMS_DETAIL_LBL_H = 14
 ALL_PARAMS_DETAIL_GAP = 4
 ALL_PARAMS_DETAIL_SECTION_GAP = 6
-# Кнопки C/D между полями — выше + жирный шрифт.
-ALL_PARAMS_DETAIL_BTN_ROW_H = 30
-ALL_PARAMS_DETAIL_BTN_FONT_H = 11
-# Нижняя «Применить» — крупная, прижата к низу панели.
-ALL_PARAMS_APPLY_BTN_H = 36
+ALL_PARAMS_DETAIL_BTN_ROW_H = ALL_PARAMS_BTN_H
+ALL_PARAMS_DETAIL_BTN_FONT_H = ALL_PARAMS_BTN_FONT_H
+ALL_PARAMS_APPLY_BTN_H = ALL_PARAMS_BTN_H
 ALL_PARAMS_APPLY_BTN_W = 200
-# Шрифт combo A (pt).
+# Шрифт combo A/B (pt).
 ALL_PARAMS_NAME_FONT_H = 12
-ALL_PARAMS_VALUE_FONT_H = 10
+ALL_PARAMS_VALUE_FONT_H = 11
 # C на ~20% ниже прежнего минимума/доли; место уходит вниз (D/описание/Apply).
 ALL_PARAMS_DETAIL_EXTRA_MIN_H = 45
 ALL_PARAMS_DETAIL_COND_MIN_H = 44

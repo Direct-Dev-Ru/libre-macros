@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.784"
+MACRO_VERSION = "3.10.785"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -412,11 +412,20 @@ def _entry_caption(entry, index, sheet):
     detail = u""
     try:
         row = int(entry.get(u"row"))
-        b = pw._cell_string(sheet.getCellByPosition(1, row))
-        if b:
-            detail = b.replace(u"\n", u" ").strip()
-            if len(detail) > b_max:
-                detail = detail[: b_max - 1] + u"…"
+        mode = (entry.get(u"spec") or {}).get(u"mode")
+        if mode in (u"vlookup", u"merge_sheets", u"split_sheets"):
+            # JSON в C — в подписи списка не тащим dict/весь JSON.
+            c = pw._cell_string(sheet.getCellByPosition(2, row))
+            if c:
+                detail = c.replace(u"\n", u" ").strip()
+                if len(detail) > b_max:
+                    detail = detail[: b_max - 1] + u"…"
+        else:
+            b = pw._cell_string(sheet.getCellByPosition(1, row))
+            if b:
+                detail = b.replace(u"\n", u" ").strip()
+                if len(detail) > b_max:
+                    detail = detail[: b_max - 1] + u"…"
     except Exception:
         detail = u""
     body = u"%03d  %s" % (int(index) + 1, name)
@@ -702,6 +711,52 @@ def _load_detail(state, idx):
             name_show = pw._param_canonical_sheet_name(name)
         except Exception:
             name_show = name
+        mode = spec.get(u"mode")
+        see_c = u"смотри в С"
+        try:
+            import libre_macros_param_wizard_cfg as _pw_cfg
+
+            see_c = unicode(getattr(_pw_cfg, u"_PARAM_B_SEE_COLUMN_C", see_c) or see_c)
+        except Exception:
+            pass
+        # ВПР / объединить / разделить: содержимое — JSON в C; B не редактируется текстом.
+        # _read_values_at_row для ВПР возвращает dict в primary — его нельзя класть в B.
+        c_only_modes = (u"vlookup", u"merge_sheets", u"split_sheets")
+        b_text = u""
+        c_text = u""
+        value_editable = True
+        if mode in c_only_modes:
+            value_editable = False
+            try:
+                c_text = pw._cell_string(sheet.getCellByPosition(2, row))
+            except Exception:
+                c_text = u""
+            if mode == u"vlookup" and isinstance(primary, dict):
+                if primary.get(u"save_as_json") or primary.get(u"json_c"):
+                    c_text = unicode(primary.get(u"json_c") or c_text or u"")
+                b_text = see_c
+            elif mode in (u"merge_sheets", u"split_sheets"):
+                # primary у _read_values_at_row — уже текст C
+                if not c_text and primary is not None and not isinstance(primary, dict):
+                    c_text = unicode(primary or u"")
+                b_text = see_c
+            else:
+                b_cell = u""
+                try:
+                    b_cell = pw._cell_string(sheet.getCellByPosition(1, row))
+                except Exception:
+                    b_cell = u""
+                b_text = b_cell if b_cell else see_c
+            primary_for_ui = b_text
+        elif mode in (u"postprocess_range", u"postprocess_row") and pw._pp_is_plugin_primary(primary):
+            primary_for_ui = unicode(primary or u"")
+            c_text = unicode(plugin_ref or u"")
+            d_extra = unicode(extra or u"")
+            if d_extra:
+                c_text = c_text + (u"\n---\n" + d_extra if c_text else d_extra)
+        else:
+            primary_for_ui = unicode(primary or u"")
+            c_text = unicode(extra or u"")
         _set_combo_items(
             dialog,
             u"NameCombo",
@@ -711,20 +766,10 @@ def _load_detail(state, idx):
         _set_combo_items(
             dialog,
             u"ValueCombo",
-            _value_b_choices(spec, primary),
-            select_text=unicode(primary or u""),
+            _value_b_choices(spec, primary_for_ui) if value_editable else (primary_for_ui,),
+            select_text=primary_for_ui,
         )
-        # Колонка C: для постобработки — extra (JSON); для плагина JSON/extra
-        # уже в extra; plugin_ref — отдельное поле C в модели чтения.
-        mode = spec.get(u"mode")
-        if mode in (u"postprocess_range", u"postprocess_row") and pw._pp_is_plugin_primary(primary):
-            c_text = unicode(plugin_ref or u"")
-            d_extra = unicode(extra or u"")
-            if d_extra:
-                c_text = c_text + (u"\n---\n" + d_extra if c_text else d_extra)
-            _set_text(dialog, u"ExtraEd", c_text)
-        else:
-            _set_text(dialog, u"ExtraEd", unicode(extra or u""))
+        _set_text(dialog, u"ExtraEd", c_text)
         cond = u""
         can_cond = mode in (u"postprocess_range", u"postprocess_row")
         if can_cond:
@@ -736,21 +781,15 @@ def _load_detail(state, idx):
             dialog.getControl(u"DisabledChk").Model.State = 1 if entry.get(u"disabled") else 0
         except Exception:
             pass
-        can_c = _row_can_open_col_c(pw, spec, primary)
-        # Для постобработки/ВПР кнопка C всегда активна, если в B есть функция —
-        # сам визард откроется через _show_inner_codec_param_dialog.
-        if (not can_c) and mode in (
-            u"postprocess_range",
-            u"postprocess_row",
-            u"vlookup",
-            u"merge_sheets",
-            u"split_sheets",
-        ):
-            can_c = unicode(primary or u"").strip() != u""
+        can_c = _row_can_open_col_c(pw, spec, primary_for_ui)
+        if mode in c_only_modes:
+            can_c = True
+        elif (not can_c) and mode in (u"postprocess_range", u"postprocess_row"):
+            can_c = unicode(primary_for_ui or u"").strip() != u""
         _set_enabled(dialog, u"NameCombo", True)
-        _set_enabled(dialog, u"ValueCombo", True)
+        _set_enabled(dialog, u"ValueCombo", value_editable)
         _set_enabled(dialog, u"ExtraParamsBtn", can_c)
-        _set_enabled(dialog, u"CondBtn", can_cond and unicode(primary or u"").strip() != u"")
+        _set_enabled(dialog, u"CondBtn", can_cond and unicode(primary_for_ui or u"").strip() != u"")
         _set_enabled(dialog, u"ApplyBtn", True)
         _set_enabled(dialog, u"AddBtn", True)
         _set_enabled(dialog, u"DelBtn", True)
@@ -1486,12 +1525,13 @@ def _detail_chrome_height(combo_h, apply_h, lbl_h, gap, sec, btn_row_h):
 
 def _detail_field_heights(avail_h):
     """Распределить высоту между C / D / описанием (B — combo; Apply — фикс снизу)."""
-    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 18))
-    apply_h = int(getattr(_acfg, "ALL_PARAMS_APPLY_BTN_H", 36))
+    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 28))
+    btn_h = int(getattr(_acfg, "ALL_PARAMS_BTN_H", 30))
+    apply_h = btn_h
     lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
     gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
     sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
-    btn_row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_ROW_H", 30))
+    btn_row_h = btn_h
     chrome = _detail_chrome_height(combo_h, apply_h, lbl_h, gap, sec, btn_row_h)
     rest = max(80, int(avail_h) - chrome)
     emin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_MIN_H", 45))
@@ -1515,17 +1555,18 @@ def _detail_field_heights(avail_h):
 
 
 def _create_detail_panel(dm, rx, ry, rw):
-    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 18))
+    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 28))
     lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
     gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
     sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
     btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 130))
-    btn_row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_ROW_H", 30))
-    btn_font = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_FONT_H", 11))
-    apply_h = int(getattr(_acfg, "ALL_PARAMS_APPLY_BTN_H", 36))
+    btn_h = int(getattr(_acfg, "ALL_PARAMS_BTN_H", 30))
+    btn_row_h = btn_h
+    btn_font = int(getattr(_acfg, "ALL_PARAMS_BTN_FONT_H", 11))
+    apply_h = btn_h
     apply_w = int(getattr(_acfg, "ALL_PARAMS_APPLY_BTN_W", 200))
     name_font = int(getattr(_acfg, "ALL_PARAMS_NAME_FONT_H", 12))
-    value_font = int(getattr(_acfg, "ALL_PARAMS_VALUE_FONT_H", 10))
+    value_font = int(getattr(_acfg, "ALL_PARAMS_VALUE_FONT_H", 11))
     extra_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_MIN_H", 45))
     cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 44))
     desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_MIN_H", 56))
@@ -1580,13 +1621,14 @@ def _create_detail_panel(dm, rx, ry, rw):
 
 def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
     """A/B — combo; C −20%; кнопки C/D между C и D; Apply прижата к низу."""
-    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 18))
+    combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 28))
     lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
     gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
     sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
     btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 130))
-    btn_row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_ROW_H", 30))
-    apply_h = int(getattr(_acfg, "ALL_PARAMS_APPLY_BTN_H", 36))
+    btn_h = int(getattr(_acfg, "ALL_PARAMS_BTN_H", 30))
+    btn_row_h = btn_h
+    apply_h = btn_h
     apply_w = int(getattr(_acfg, "ALL_PARAMS_APPLY_BTN_W", 200))
     avail = max(120, int(bottom_y) - int(ry))
     extra_h, cond_h, desc_h = _detail_field_heights(avail)
@@ -1843,6 +1885,7 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         hint_h,
         multiline=True,
     )
+    btn_font = int(getattr(_acfg, "ALL_PARAMS_BTN_FONT_H", 11))
     _add_button(
         dm,
         u"CloseBtn",
@@ -1852,6 +1895,8 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         footer_btn_w,
         toolbar_h,
         default=True,
+        bold=True,
+        font_h=btn_font,
     )
     y += max(hint_h, toolbar_h) + gap
 
@@ -1868,7 +1913,10 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
     toolbar_y = y
     x = m
     for spec in getattr(_acfg, "ALL_PARAMS_TOOLBAR_BTNS", ()) or ():
-        _add_button(dm, spec[0], spec[1], x, toolbar_y, int(spec[2]), toolbar_h)
+        _add_button(
+            dm, spec[0], spec[1], x, toolbar_y, int(spec[2]), toolbar_h,
+            bold=True, font_h=btn_font,
+        )
         x += int(spec[2]) + 4
     y_list = toolbar_y + toolbar_h + list_tb_gap
     list_top = y_list + list_lbl_h + 2
