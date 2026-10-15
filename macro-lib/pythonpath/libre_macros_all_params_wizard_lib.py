@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.776"
+MACRO_VERSION = "3.10.777"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -316,9 +316,10 @@ def _create_peer(dialog, toolkit, doc=None, parent_dialog=None):
 
 
 def _entry_caption(entry, index, sheet):
-    """Подпись шага в ListBox."""
+    """Подпись шага в ListBox (короткая — список узкий, ~40%)."""
     pw = _pw()
-    max_len = int(getattr(_acfg, "ALL_PARAMS_CAPTION_MAX", 72))
+    max_len = int(getattr(_acfg, "ALL_PARAMS_CAPTION_MAX", 48))
+    b_max = int(getattr(_acfg, "ALL_PARAMS_CAPTION_B_MAX", 24))
     name = unicode(entry.get(u"sheet_name") or entry.get(u"name") or u"")
     disabled = bool(entry.get(u"disabled"))
     prefix = unicode(getattr(_acfg, "ALL_PARAMS_DISABLED_PREFIX", u"[откл] ")) if disabled else u""
@@ -328,8 +329,10 @@ def _entry_caption(entry, index, sheet):
         b = pw._cell_string(sheet.getCellByPosition(1, row))
         if b:
             detail = b.replace(u"\n", u" ").strip()
-            if len(detail) > 40:
-                detail = detail[:39] + u"…"
+            if detail.startswith(u"{") or detail.startswith(u"["):
+                detail = u"JSON"
+            elif len(detail) > b_max:
+                detail = detail[: b_max - 1] + u"…"
     except Exception:
         detail = u""
     body = u"%03d  %s" % (int(index) + 1, name)
@@ -839,16 +842,75 @@ def _move_selected(state, direction):
     _refresh_list(state, keep_row=new_start)
 
 
+def _detail_chrome_height(row_h, lbl_h, gap, sec):
+    """Высота подписей/отступов/кнопок без полей B/C/D/описание."""
+    # DetailLbl + NameLbl + NameEd + DisabledChk
+    # + ValueLbl + ExtraLbl + CondLbl + DescLbl + ApplyBtn
+    # + промежутки вокруг четырёх полей (value/extra/cond/desc)
+    return (
+        (lbl_h + 2) * 2
+        + row_h
+        + gap
+        + lbl_h
+        + sec
+        + (lbl_h + 2) * 4
+        + sec * 3
+        + gap
+        + row_h
+    )
+
+
+def _detail_field_heights(avail_h):
+    """Распределить высоту между B/C/D/описанием так, чтобы всё влезло."""
+    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 22))
+    lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
+    gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
+    sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
+    chrome = _detail_chrome_height(row_h, lbl_h, gap, sec)
+    rest = max(80, int(avail_h) - chrome)
+    vmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_MIN_H", 40))
+    emin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_MIN_H", 56))
+    cmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 36))
+    dmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_MIN_H", 36))
+    mins = (vmin, emin, cmin, dmin)
+    need = vmin + emin + cmin + dmin
+    if rest <= need:
+        # Ужимаем пропорционально минимумам.
+        scale = float(rest) / float(need) if need > 0 else 1.0
+        out = []
+        i = 0
+        while i < len(mins):
+            out.append(max(24, int(mins[i] * scale)))
+            i = i + 1
+        # Подправить сумму до rest.
+        s = out[0] + out[1] + out[2] + out[3]
+        out[1] = max(24, out[1] + (rest - s))
+        return out[0], out[1], out[2], out[3]
+    free = rest - need
+    shares = (
+        float(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_SHARE", 0.28)),
+        float(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_SHARE", 0.40)),
+        float(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_SHARE", 0.16)),
+        float(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_SHARE", 0.16)),
+    )
+    return (
+        vmin + int(free * shares[0]),
+        emin + int(free * shares[1]),
+        cmin + int(free * shares[2]),
+        dmin + int(free * shares[3]),
+    )
+
+
 def _create_detail_panel(dm, rx, ry, rw):
-    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 26))
-    lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 16))
-    gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 8))
-    sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 12))
-    btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 110))
-    value_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_H", 48))
-    extra_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_H", 120))
-    cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_H", 56))
-    desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_H", 72))
+    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 22))
+    lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
+    gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
+    sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
+    btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 118))
+    value_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_MIN_H", 40))
+    extra_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_MIN_H", 56))
+    cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 36))
+    desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_MIN_H", 36))
     y = int(ry)
     _add_label(dm, u"DetailLbl", u"Параметры шага:", rx, y, rw, lbl_h)
     y += lbl_h + 2
@@ -883,24 +945,14 @@ def _create_detail_panel(dm, rx, ry, rw):
 
 
 def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
-    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 26))
-    lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 16))
-    gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 8))
-    sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 12))
-    btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 110))
-    value_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_H", 48))
-    cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_H", 56))
-    desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_H", 72))
-    # Extra занимает остаток высоты.
-    fixed = (
-        lbl_h + 2 + lbl_h + 2 + row_h + gap + lbl_h + sec
-        + lbl_h + 2 + value_h + sec
-        + lbl_h + 2
-        + sec + lbl_h + 2 + cond_h + sec
-        + lbl_h + 2 + desc_h + gap + row_h
-    )
-    avail = max(60, int(bottom_y) - int(ry) - fixed)
-    extra_h = max(60, avail)
+    """Все блоки B/C/D/описание/Apply укладываются в [ry .. bottom_y]."""
+    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 22))
+    lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
+    gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
+    sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
+    btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 118))
+    avail = max(120, int(bottom_y) - int(ry))
+    value_h, extra_h, cond_h, desc_h = _detail_field_heights(avail)
     y = int(ry)
     specs = (
         (u"DetailLbl", rx, y, rw, lbl_h),
@@ -942,6 +994,36 @@ def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
             ctl.PositionY = int(yy)
             ctl.Width = int(w)
             ctl.Height = int(h)
+        except Exception:
+            pass
+
+
+def _sync_control_layout(dialog, dm):
+    """Как todo plan: после createPeer/fill применить PosSize из модели ко всем контролам."""
+    if dialog is None or dm is None:
+        return
+    try:
+        from com.sun.star.awt.PosSize import POSSIZE
+    except Exception:
+        POSSIZE = 15
+    skip = {u"SoftGrayTitleBar"}
+    try:
+        names = list(dm.getElementNames())
+    except Exception:
+        names = []
+    for name in names:
+        if name in skip:
+            continue
+        try:
+            mdl = dm.getByName(name)
+            ctl = dialog.getControl(name)
+            ctl.setPosSize(
+                int(mdl.PositionX),
+                int(mdl.PositionY),
+                int(mdl.Width),
+                int(mdl.Height),
+                POSSIZE,
+            )
         except Exception:
             pass
 
@@ -1167,7 +1249,10 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
     dialog.setModel(dm)
     if not _create_peer(dialog, toolkit, doc=doc, parent_dialog=parent_dialog):
         raise RuntimeError(u"Не удалось создать peer диалога «Все параметры».")
+    # После fill workarea — пересчитать модель и жёстко синхронизировать peer-контролы
+    # (иначе ListBox остаётся на начальной ширине и «съедает» правую панель).
     _relayout(dm, dlg_w, screen_h, m, gap, toolbar_h, status_h, hint_h)
+    _sync_control_layout(dialog, dm)
     try:
         try_paint_titlebar(dialog, title_bg=DARK_BLUE_TITLE_BG, title_fg=DARK_BLUE_TITLE_FG)
     except Exception:
@@ -1287,6 +1372,12 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
 
     try:
         toolkit.processEventsToIdle()
+    except Exception:
+        pass
+    # Ещё раз после idle — LO иногда перетирает PosSize при первом показе.
+    try:
+        _relayout(dm, dlg_w, screen_h, m, gap, toolbar_h, status_h, hint_h)
+        _sync_control_layout(dialog, dm)
     except Exception:
         pass
     try:
