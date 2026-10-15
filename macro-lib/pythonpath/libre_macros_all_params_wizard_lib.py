@@ -2,7 +2,8 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.774"
+MACRO_VERSION = "3.10.775"
+import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
 
@@ -63,6 +64,40 @@ def _log(msg):
         sys.stdout.flush()
     except Exception:
         pass
+
+
+def _script_context():
+    """XSCRIPTCONTEXT из entry-макроса (__main__/builtins) — в pythonpath его нет."""
+    try:
+        import __main__
+
+        xsc = getattr(__main__, "XSCRIPTCONTEXT", None)
+        if xsc is not None:
+            return xsc
+    except Exception:
+        pass
+    try:
+        import builtins
+
+        xsc = getattr(builtins, "XSCRIPTCONTEXT", None)
+        if xsc is not None:
+            return xsc
+    except Exception:
+        pass
+    return None
+
+
+def _uno_context():
+    xsc = _script_context()
+    if xsc is not None:
+        try:
+            return xsc.getComponentContext()
+        except Exception:
+            pass
+    try:
+        return uno.getComponentContext()
+    except Exception:
+        return None
 
 
 def _screen_work_area(toolkit):
@@ -936,10 +971,12 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
     """
     pw = _pw()
     if doc is None:
-        try:
-            doc = XSCRIPTCONTEXT.getDocument()
-        except Exception:
-            doc = None
+        xsc = _script_context()
+        if xsc is not None:
+            try:
+                doc = xsc.getDocument()
+            except Exception:
+                doc = None
     if sheet is None:
         try:
             pw._show_message(u"Нет листа параметров для обзора.", doc=doc)
@@ -949,11 +986,7 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
     if catalog is None:
         catalog = pw._build_wizard_catalog()
 
-    ctx = None
-    try:
-        ctx = XSCRIPTCONTEXT.getComponentContext()
-    except Exception:
-        pass
+    ctx = _uno_context()
     if ctx is None:
         raise RuntimeError(u"Нет UNO-контекста.")
     sm = ctx.getServiceManager()
