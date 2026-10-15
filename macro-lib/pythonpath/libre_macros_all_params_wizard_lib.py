@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.775"
+MACRO_VERSION = "3.10.776"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -369,40 +369,90 @@ def _reload_entries(state):
     return entries
 
 
+def _detail_snapshot(dialog):
+    """Снимок полей панели для проверки dirty без записи на лист."""
+    if dialog is None:
+        return None
+    disabled = 0
+    try:
+        disabled = int(dialog.getControl(u"DisabledChk").Model.State or 0)
+    except Exception:
+        disabled = 0
+    return (
+        _get_text(dialog, u"ValueEd"),
+        _get_text(dialog, u"ExtraEd"),
+        disabled,
+    )
+
+
+def _detail_is_dirty(state):
+    snap = state.get(u"loaded_snap")
+    if snap is None:
+        return False
+    return _detail_snapshot(state.get(u"dialog")) != snap
+
+
+def _remember_loaded_snap(state):
+    state[u"loaded_snap"] = _detail_snapshot(state.get(u"dialog"))
+
+
+def _left_panel_width(total_w, m, split_gap):
+    """Ширина списка шагов: ровно ALL_PARAMS_LIST_WIDTH_RATIO от доступной ширины."""
+    avail = max(200, int(total_w) - 2 * int(m) - int(split_gap))
+    ratio = float(getattr(_acfg, "ALL_PARAMS_LIST_WIDTH_RATIO", 0.40) or 0.40)
+    if ratio < 0.2:
+        ratio = 0.2
+    if ratio > 0.6:
+        ratio = 0.6
+    w = int(round(avail * ratio))
+    min_w = int(getattr(_acfg, "ALL_PARAMS_LIST_MIN_W", 220))
+    if w < min_w:
+        w = min(min_w, avail)
+    # справа оставляем место под детали
+    if w > avail - 200:
+        w = max(min_w, avail - 200)
+    return w
+
+
 def _refresh_list(state, keep_row=None, keep_index=-1):
     dialog = state.get(u"dialog")
     sheet = state.get(u"sheet")
-    entries = _reload_entries(state)
-    caps = []
-    i = 0
-    while i < len(entries):
-        caps.append(_entry_caption(entries[i], i, sheet))
-        i = i + 1
+    state[u"form_loading"] = True
     try:
-        lb = dialog.getControl(u"StepsListBox")
-        lb.Model.StringItemList = tuple(caps)
-    except Exception:
-        pass
-    pick = -1
-    if keep_row is not None:
+        entries = _reload_entries(state)
+        caps = []
         i = 0
         while i < len(entries):
-            if int(entries[i].get(u"row", -1)) == int(keep_row):
-                pick = i
-                break
+            caps.append(_entry_caption(entries[i], i, sheet))
             i = i + 1
-    elif keep_index >= 0:
-        pick = min(int(keep_index), len(entries) - 1) if entries else -1
-    elif entries:
-        pick = 0
-    if pick >= 0:
-        _list_select_index(dialog, pick)
-        state[u"selected"] = pick
-        _load_detail(state, pick)
-    else:
-        state[u"selected"] = -1
-        _clear_detail(state)
-    _update_status(state)
+        try:
+            lb = dialog.getControl(u"StepsListBox")
+            lb.Model.StringItemList = tuple(caps)
+        except Exception:
+            pass
+        pick = -1
+        if keep_row is not None:
+            i = 0
+            while i < len(entries):
+                if int(entries[i].get(u"row", -1)) == int(keep_row):
+                    pick = i
+                    break
+                i = i + 1
+        elif keep_index >= 0:
+            pick = min(int(keep_index), len(entries) - 1) if entries else -1
+        elif entries:
+            pick = 0
+        if pick >= 0:
+            _list_select_index(dialog, pick)
+            state[u"selected"] = pick
+            _load_detail(state, pick)
+        else:
+            state[u"selected"] = -1
+            state[u"loaded_snap"] = None
+            _clear_detail(state)
+        _update_status(state)
+    finally:
+        state[u"form_loading"] = False
 
 
 def _update_status(state):
@@ -427,6 +477,7 @@ def _clear_detail(state):
     dialog = state.get(u"dialog")
     if dialog is None:
         return
+    was_loading = bool(state.get(u"form_loading"))
     state[u"form_loading"] = True
     try:
         _set_text(dialog, u"NameEd", u"")
@@ -445,8 +496,50 @@ def _clear_detail(state):
         _set_enabled(dialog, u"CopyBtn", False)
         _set_enabled(dialog, u"UpBtn", False)
         _set_enabled(dialog, u"DownBtn", False)
+        state[u"loaded_snap"] = None
     finally:
-        state[u"form_loading"] = False
+        state[u"form_loading"] = was_loading
+
+
+def _row_can_open_col_c(pw, spec, primary):
+    """Лёгкая проверка кнопки C без сборки субдиалога."""
+    if spec is None:
+        return False
+    mode = spec.get(u"mode")
+    if pw._spec_has_col_c_subdialog(spec):
+        return True
+    if mode in (u"vlookup", u"merge_sheets", u"split_sheets", u"source_extra"):
+        return True
+    if mode in (u"postprocess_range", u"postprocess_row"):
+        try:
+            return bool(pw._param_row_has_subdialog(spec, primary))
+        except Exception:
+            return False
+    name = unicode(spec.get(u"name") or u"").strip()
+    known = (
+        u"Листы",
+        u"Столбцы",
+        u"удаление_верхних_строк",
+        u"Пропуск_строк_источника",
+        u"Предварительный_скрипт",
+        u"Строка_Заголовков",
+        u"Ячейка_В_Столбец",
+        u"Добавить_в_карту_переменных",
+        u"Ручной_ввод_в_карту_переменных",
+        u"Листы_не_удалять",
+        u"Листы_удалить",
+        u"автофильтр_результата",
+        u"закрепить_заголовок",
+    )
+    i = 0
+    while i < len(known):
+        try:
+            if pw._param_match(name, known[i]):
+                return True
+        except Exception:
+            pass
+        i = i + 1
+    return False
 
 
 def _condition_text_for_row(sheet, row):
@@ -468,6 +561,7 @@ def _load_detail(state, idx):
     entry = entries[idx]
     spec = entry.get(u"spec") or {}
     row = int(entry.get(u"row"))
+    was_loading = bool(state.get(u"form_loading"))
     state[u"form_loading"] = True
     try:
         primary, extra, plugin_ref = pw._read_values_at_row(sheet, spec, row)
@@ -498,18 +592,7 @@ def _load_detail(state, idx):
             dialog.getControl(u"DisabledChk").Model.State = 1 if entry.get(u"disabled") else 0
         except Exception:
             pass
-        can_c = pw._col_c_subdialog_for_row(sheet, state.get(u"catalog"), row) is not None
-        if not can_c and pw._spec_has_col_c_subdialog(spec):
-            can_c = True
-        if not can_c and mode == u"vlookup":
-            can_c = True
-        if not can_c and mode in (u"merge_sheets", u"split_sheets"):
-            can_c = True
-        if not can_c and mode in (u"postprocess_range", u"postprocess_row"):
-            try:
-                can_c = pw._param_row_has_subdialog(spec, primary)
-            except Exception:
-                can_c = False
+        can_c = _row_can_open_col_c(pw, spec, primary)
         _set_enabled(dialog, u"ExtraParamsBtn", can_c)
         _set_enabled(dialog, u"CondBtn", can_cond and unicode(primary or u"").strip() != u"")
         _set_enabled(dialog, u"ApplyBtn", True)
@@ -517,13 +600,18 @@ def _load_detail(state, idx):
         _set_enabled(dialog, u"CopyBtn", True)
         _set_enabled(dialog, u"UpBtn", idx > 0)
         _set_enabled(dialog, u"DownBtn", idx < len(entries) - 1)
+        _remember_loaded_snap(state)
     finally:
-        state[u"form_loading"] = False
+        state[u"form_loading"] = was_loading
 
 
-def _save_detail_to_sheet(state):
-    """Записать B/C (и disabled) из панели в текущую строку листа."""
+def _save_detail_to_sheet(state, force=False):
+    """Записать B/C (и disabled) из панели в текущую строку листа.
+    Без force пишет только если панель реально менялась (иначе навигация тормозит).
+    """
     if state.get(u"form_loading"):
+        return True
+    if (not force) and (not _detail_is_dirty(state)):
         return True
     dialog = state.get(u"dialog")
     sheet = state.get(u"sheet")
@@ -577,6 +665,7 @@ def _save_detail_to_sheet(state):
         except Exception:
             pass
         return False
+    _remember_loaded_snap(state)
     return True
 
 
@@ -900,10 +989,8 @@ def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
     except Exception:
         pass
     status_y = content_h - m - status_h
-    min_list_w = int(getattr(_acfg, "ALL_PARAMS_LIST_MIN_W", 320))
-    half = max(min_list_w, (total_w - 2 * m - split_gap) // 2)
-    left_w = half
-    right_x = m + half + split_gap
+    left_w = _left_panel_width(total_w, m, split_gap)
+    right_x = m + left_w + split_gap
     right_w = total_w - right_x - m
 
     # Кнопки шагов — строго над списком слева.
@@ -1047,8 +1134,8 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
     )
     y += max(hint_h, toolbar_h) + gap
 
-    half = max(int(getattr(_acfg, "ALL_PARAMS_LIST_MIN_W", 320)), (dlg_w - 2 * m - split_gap) // 2)
-    right_x = m + half + split_gap
+    left_w = _left_panel_width(dlg_w, m, split_gap)
+    right_x = m + left_w + split_gap
     right_w = dlg_w - right_x - m
     content_h = _content_height(screen_h, dm)
     try:
@@ -1065,8 +1152,8 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
     y_list = toolbar_y + toolbar_h + list_tb_gap
     list_top = y_list + list_lbl_h + 2
     list_h = _list_box_height(list_top, status_y, gap=gap)
-    _add_label(dm, u"StepsListLbl", u"Шаги пайплайна:", m, y_list, half, list_lbl_h)
-    _add_listbox(dm, u"StepsListBox", m, list_top, half, list_h)
+    _add_label(dm, u"StepsListLbl", u"Шаги пайплайна:", m, y_list, left_w, list_lbl_h)
+    _add_listbox(dm, u"StepsListBox", m, list_top, left_w, list_h)
     _create_detail_panel(dm, right_x, toolbar_y, right_w)
     _add_label(dm, u"StatusLbl", u"", m, status_y, dlg_w - 2 * m, status_h)
 
@@ -1096,6 +1183,7 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         u"selected": -1,
         u"changed": False,
         u"form_loading": False,
+        u"loaded_snap": None,
     }
 
     class _Handler(unohelper.Base, XActionListener, XItemListener):
@@ -1109,7 +1197,9 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
                 return
             if name == u"CloseBtn":
                 try:
-                    _save_detail_to_sheet(state)
+                    if _detail_is_dirty(state):
+                        _save_detail_to_sheet(state, force=True)
+                        state[u"changed"] = True
                 except Exception:
                     pass
                 try:
@@ -1136,7 +1226,7 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
                 _open_col_d_wizard(state)
                 state[u"changed"] = True
             elif name == u"ApplyBtn":
-                if _save_detail_to_sheet(state):
+                if _save_detail_to_sheet(state, force=True):
                     state[u"changed"] = True
                     row = None
                     entries = state.get(u"entries") or []
@@ -1154,14 +1244,21 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
                 src_name = u""
             if src_name == u"DisabledChk":
                 return
-            prev = int(state.get(u"selected") or -1)
-            if prev >= 0:
-                _save_detail_to_sheet(state)
             idx = _list_selected_index(dialog)
-            if idx >= 0:
+            prev = int(state.get(u"selected") or -1)
+            if idx < 0 or idx == prev:
+                return
+            # Пишем на лист только если поля менялись — иначе Calc зависает.
+            if prev >= 0 and _detail_is_dirty(state):
+                if _save_detail_to_sheet(state, force=True):
+                    state[u"changed"] = True
+            state[u"form_loading"] = True
+            try:
                 state[u"selected"] = idx
                 _load_detail(state, idx)
-            _update_status(state)
+                _update_status(state)
+            finally:
+                state[u"form_loading"] = False
 
     handler = _Handler()
     for btn in (
