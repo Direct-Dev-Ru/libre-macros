@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.779"
+MACRO_VERSION = "3.10.780"
 """
 убрать_объединение — схлопывание хаотичных merge (Word→Calc) в одну физ. строку.
 

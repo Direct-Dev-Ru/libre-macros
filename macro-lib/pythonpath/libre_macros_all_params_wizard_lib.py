@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.779"
+MACRO_VERSION = "3.10.780"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -822,11 +822,43 @@ def _save_detail_to_sheet(state, force=False):
     return True
 
 
+def _suspend_all_params_dialog(state):
+    """
+    Полноэкранный all_params как owner ломает ComboBox во вложенных визардах
+    (списки не открываются) и может прятать диалог C за собой.
+    На время субвизарда отключаем owner и не передаём его в createPeer.
+    """
+    dialog = state.get(u"dialog")
+    if dialog is None:
+        return None
+    try:
+        dialog.setEnable(False)
+    except Exception:
+        pass
+    return dialog
+
+
+def _resume_all_params_dialog(dialog):
+    if dialog is None:
+        return
+    try:
+        dialog.setEnable(True)
+    except Exception:
+        pass
+    try:
+        dialog.setFocus()
+    except Exception:
+        pass
+    try:
+        dialog.toFront()
+    except Exception:
+        pass
+
+
 def _open_col_c_wizard(state):
     """
-    Визард колонки C — как ColC/PivotParams в основном визарде:
-    fn из ValueCombo + JSON из ExtraEd → _show_inner_codec_param_dialog /
-    _col_c_subdialog_for_row.
+    Визард колонки C — как ColC/PivotParams в основном визарде.
+    parent_dialog=None: peer к окну документа, иначе combo/форма не работают.
     """
     dialog = state.get(u"dialog")
     sheet = state.get(u"sheet")
@@ -844,12 +876,19 @@ def _open_col_c_wizard(state):
     primary = _get_text(dialog, u"ValueCombo").strip()
     initial_text = _get_text(dialog, u"ExtraEd").strip()
     mode = spec.get(u"mode")
+    # Не передавать fullscreen all_params как owner.
+    nest_parent = None
 
+    host = _suspend_all_params_dialog(state)
+    err_msg = None
+    info_msg = None
     try:
         # 1) Спецификация с явным col_c_subdialog (Листы, pre_shell, …).
         sub = pw._col_c_subdialog_for_row(sheet, catalog, row)
         if sub is not None and sub.get(u"kind") not in (u"inner_codec", u"pivot", u"plugin"):
-            ok = pw._run_subdialog_and_save(doc, sheet, catalog, sub, parent_dialog=dialog)
+            ok = pw._run_subdialog_and_save(
+                doc, sheet, catalog, sub, parent_dialog=nest_parent,
+            )
             if ok:
                 _refresh_list(state, keep_row=row)
             return
@@ -865,12 +904,7 @@ def _open_col_c_wizard(state):
                 except Exception:
                     fn_key = u""
             if fn_key == u"":
-                pw._show_message(
-                    u"Выберите функцию в поле «Значение (B)».",
-                    dialog=dialog,
-                    doc=doc,
-                    title=u"Параметры C",
-                )
+                info_msg = u"Выберите функцию в поле «Значение (B)»."
                 return
             if initial_text == u"":
                 try:
@@ -897,14 +931,14 @@ def _open_col_c_wizard(state):
                     u"initial_extra": pw._cell_string(sheet.getCellByPosition(3, row)),
                 }
                 ok = pw._run_subdialog_and_save(
-                    doc, sheet, catalog, plugin_sub, parent_dialog=dialog,
+                    doc, sheet, catalog, plugin_sub, parent_dialog=nest_parent,
                 )
                 if ok:
                     _refresh_list(state, keep_row=row)
                 return
             if pw._is_pivot_table_pp_name(fn_key):
                 result = pw.show_pivot_table_param_dialog(
-                    dialog,
+                    nest_parent,
                     initial_text,
                     doc=doc,
                     param_sheet=sheet,
@@ -922,7 +956,7 @@ def _open_col_c_wizard(state):
                         pass
             else:
                 result = pw._show_inner_codec_param_dialog(
-                    dialog, fn_key, initial_text, doc=doc, force_as_values=force_av,
+                    nest_parent, fn_key, initial_text, doc=doc, force_as_values=force_av,
                 )
             if result is None:
                 return
@@ -934,20 +968,26 @@ def _open_col_c_wizard(state):
 
         # 3) Fallback: то, что нашёл _col_c_subdialog_for_row.
         if sub is not None:
-            ok = pw._run_subdialog_and_save(doc, sheet, catalog, sub, parent_dialog=dialog)
+            ok = pw._run_subdialog_and_save(
+                doc, sheet, catalog, sub, parent_dialog=nest_parent,
+            )
             if ok:
                 _refresh_list(state, keep_row=row)
             return
-        pw._show_message(
-            u"Для этой строки нет визарда колонки C.",
-            dialog=dialog,
-            doc=doc,
-            title=u"Параметры C",
-        )
+        info_msg = u"Для этой строки нет визарда колонки C."
     except Exception as exc:
+        err_msg = unicode(exc)
+    finally:
+        _resume_all_params_dialog(host)
+    if info_msg:
+        try:
+            pw._show_message(info_msg, dialog=dialog, doc=doc, title=u"Параметры C")
+        except Exception:
+            pass
+    if err_msg:
         try:
             pw._show_message(
-                u"Ошибка визарда колонки C:\n%s" % exc,
+                u"Ошибка визарда колонки C:\n%s" % err_msg,
                 dialog=dialog,
                 doc=doc,
                 title=u"Параметры C",
@@ -980,9 +1020,29 @@ def _open_col_d_wizard(state):
         except Exception:
             pass
         return
-    ok = pw._run_subdialog_and_save(doc, sheet, catalog, sub, parent_dialog=dialog)
-    if ok:
-        _refresh_list(state, keep_row=row)
+    # parent=None: иначе ComboBox условия/итераций не раскрываются поверх fullscreen.
+    host = _suspend_all_params_dialog(state)
+    err_msg = None
+    try:
+        ok = pw._run_subdialog_and_save(
+            doc, sheet, catalog, sub, parent_dialog=None,
+        )
+        if ok:
+            _refresh_list(state, keep_row=row)
+    except Exception as exc:
+        err_msg = unicode(exc)
+    finally:
+        _resume_all_params_dialog(host)
+    if err_msg:
+        try:
+            pw._show_message(
+                u"Ошибка визарда условия:\n%s" % err_msg,
+                dialog=dialog,
+                doc=doc,
+                title=u"Условие",
+            )
+        except Exception:
+            pass
 
 
 def _delete_selected(state):

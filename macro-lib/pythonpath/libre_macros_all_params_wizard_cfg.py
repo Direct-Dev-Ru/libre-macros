@@ -2,7 +2,7 @@
 """Константы полноэкранного визарда «Все параметры» (пайплайн листа)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.779"
+MACRO_VERSION = "3.10.780"
 ALL_PARAMS_BTN_LABEL = u"Все параметры"
 ALL_PARAMS_WIZARD_TITLE = u"Все параметры — пайплайн обработки"
 ALL_PARAMS_WIZARD_HINT = (

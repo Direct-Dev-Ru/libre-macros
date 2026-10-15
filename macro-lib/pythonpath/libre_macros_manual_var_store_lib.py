@@ -7,7 +7,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.779"
+MACRO_VERSION = "3.10.780"
 import json
 import os
 import re
