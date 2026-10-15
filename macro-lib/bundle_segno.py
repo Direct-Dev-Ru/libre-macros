@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-MACRO_VERSION = "3.10.783"
+MACRO_VERSION = "3.10.784"
 import sys
 from pathlib import Path
 

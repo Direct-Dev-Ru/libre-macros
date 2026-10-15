@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """План выполнения задачи: хранение, рабочие дни, пересчёт (todo_task_plan)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.783"
+MACRO_VERSION = "3.10.784"
 import re
 
 import todo_task_cfg as _tcfg

@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.783"
+MACRO_VERSION = "3.10.784"
 import ast
 import glob
 import json
@@ -3144,7 +3144,7 @@ def _wp_doc_parent_window(doc=None):
     return _wp_dialog_parent()
 
 def _wp_message_box_execute(doc, dialog, box_type, buttons, title, text):
-    """MessageBox с перебором родителей (окно документа — первым: работает поверх модального визарда)."""
+    """MessageBox: peer модального dialog — первым (иначе уходит за fullscreen/modal)."""
     toolkit = None
     try:
         toolkit = XSCRIPTCONTEXT.getDesktop().getToolkit()
@@ -3157,21 +3157,29 @@ def _wp_message_box_execute(doc, dialog, box_type, buttons, title, text):
         except Exception:
             toolkit = None
     if toolkit is None:
+        try:
+            toolkit = uno.getComponentContext().ServiceManager.createInstanceWithContext(
+                'com.sun.star.awt.Toolkit', uno.getComponentContext()
+            )
+        except Exception:
+            toolkit = None
+    if toolkit is None:
         return None
     parents = []
+    # Peer текущего модального диалога — первым: иначе confirm «моргает» за fullscreen.
+    if dialog is not None:
+        try:
+            peer = dialog.getPeer()
+            if peer is not None:
+                parents.append(peer)
+        except Exception:
+            pass
     parent_doc = _wp_doc_parent_window(doc)
-    if parent_doc is not None:
+    if parent_doc is not None and parent_doc not in parents:
         parents.append(parent_doc)
     parent_desk = _wp_dialog_parent()
     if parent_desk is not None and parent_desk not in parents:
         parents.append(parent_desk)
-    if dialog is not None:
-        try:
-            peer = dialog.getPeer()
-            if peer is not None and peer not in parents:
-                parents.append(peer)
-        except Exception:
-            pass
     title_u = unicode(title)
     text_u = unicode(text)
     i = 0

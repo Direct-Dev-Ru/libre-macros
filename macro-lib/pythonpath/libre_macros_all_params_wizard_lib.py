@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.783"
+MACRO_VERSION = "3.10.784"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -792,15 +792,16 @@ def _default_name_for_add(pw, sheet, catalog):
 def _add_param_after_cursor(state):
     """
     Новая строка параметра сразу после выделенной (в середину списка).
-    Без выделения — в конец. Имя по умолчанию — из каталога (часто Постобработка);
-    дальше меняют через combo A справа.
+    Всегда insertByIndex — не «заполняем дыру» и не даём apply уехать в конец.
     """
     dialog = state.get(u"dialog")
     sheet = state.get(u"sheet")
     catalog = state.get(u"catalog")
     doc = state.get(u"doc")
     entries = state.get(u"entries") or []
-    si = int(state.get(u"selected") or -1)
+    si = _list_selected_index(dialog)
+    if si < 0:
+        si = int(state.get(u"selected") or -1)
     if sheet is None:
         return
     _save_detail_to_sheet(state, force=True)
@@ -830,23 +831,16 @@ def _add_param_after_cursor(state):
         except Exception:
             pass
         return
-    end_col = 5
     try:
-        from libre_macros_copy_param_rows_lib import _copy_end_col, _count_free_rows, _restore_header_after_copy
-
-        end_col = _copy_end_col(pw, sheet, catalog, [insert_at - 1] if insert_at > 1 else [])
-        free = _count_free_rows(sheet, insert_at, 1, end_col)
+        from libre_macros_copy_param_rows_lib import _restore_header_after_copy
     except Exception:
-        free = 0
         _restore_header_after_copy = None
     pw._param_sheet_begin_write(sheet)
     try:
-        if free < 1:
-            sheet.getRows().insertByIndex(insert_at, 1)
-        try:
-            sheet.getCellByPosition(0, insert_at).String = unicode(name)
-        except Exception:
-            pass
+        # Всегда физическая вставка после курсора (иначе при Apply multi_row
+        # может уехать в _first_empty_row в конец листа).
+        sheet.getRows().insertByIndex(insert_at, 1)
+        sheet.getCellByPosition(0, insert_at).String = unicode(name)
         try:
             pw._ensure_param_row_formatting(sheet, insert_at, catalog, spec, True, doc=doc)
         except Exception:
@@ -914,7 +908,12 @@ def _save_detail_to_sheet(state, force=False):
         disabled = bool(dialog.getControl(u"DisabledChk").Model.State)
     except Exception:
         disabled = bool(entry.get(u"disabled"))
+    save_name = unicode(spec.get(u"name") or name_canon or entry.get(u"name") or u"")
     try:
+        # Сначала A на этой строке: иначе apply_param_value при смене имени
+        # (rname != new name) уходит в multi_row → _first_empty_row (конец листа).
+        if save_name:
+            pw._write_param_row_sheet_name(sheet, row, save_name, disabled, catalog=catalog)
         if mode == u"vlookup":
             # B не редактируем текстом — только через визард C
             pass
@@ -934,8 +933,11 @@ def _save_detail_to_sheet(state, force=False):
                 sheet, spec, primary, extra, target_row=row, catalog=catalog, doc=doc,
                 plugin_ref=plugin_ref,
             )
-        save_name = unicode(spec.get(u"name") or name_canon or entry.get(u"name") or u"")
-        pw._write_param_row_sheet_name(sheet, row, save_name, disabled, catalog=catalog)
+        # Повторно закрепить A (apply мог тронуть только B/C).
+        if save_name:
+            pw._write_param_row_sheet_name(sheet, row, save_name, disabled, catalog=catalog)
+        entry[u"row"] = int(row)
+        entry[u"sheet_name"] = save_name
     except Exception as exc:
         try:
             pw._show_message(u"Не удалось сохранить строку:\n%s" % exc, dialog=dialog, doc=doc)
@@ -1203,6 +1205,115 @@ def _open_col_d_wizard(state):
             pass
 
 
+def _confirm_yes_no(state, title, message):
+    """
+    Да/Нет поверх fullscreen: MessageBox за модальным all_params не виден.
+    Свой Uno-диалог, parent скрыт на время execute.
+    """
+    ctx = _uno_context()
+    if ctx is None:
+        return False
+    sm = ctx.getServiceManager()
+    toolkit = sm.createInstanceWithContext(u"com.sun.star.awt.Toolkit", ctx)
+    dm = sm.createInstanceWithContext(u"com.sun.star.awt.UnoControlDialogModel", ctx)
+    m = 12
+    dw = 360
+    btn_w = 90
+    btn_h = 24
+    msg = unicode(message or u"")
+    lines = max(2, msg.count(u"\n") + 1 + (len(msg) // 48))
+    msg_h = max(40, min(120, lines * 14 + 8))
+    dm.PositionX = 160
+    dm.PositionY = 140
+    dm.Width = dw
+    dm.Height = m + msg_h + 12 + btn_h + m
+    dm.Title = unicode(title or u"Подтверждение")
+    lbl = dm.createInstance(u"com.sun.star.awt.UnoControlFixedTextModel")
+    lbl.Name = u"MsgLbl"
+    lbl.Label = msg
+    lbl.PositionX = m
+    lbl.PositionY = m
+    lbl.Width = dw - 2 * m
+    lbl.Height = msg_h
+    try:
+        lbl.MultiLine = True
+    except Exception:
+        pass
+    dm.insertByName(u"MsgLbl", lbl)
+    yes = dm.createInstance(u"com.sun.star.awt.UnoControlButtonModel")
+    yes.Name = u"YesBtn"
+    yes.Label = u"Да"
+    yes.PositionX = dw - m - btn_w * 2 - 8
+    yes.PositionY = m + msg_h + 12
+    yes.Width = btn_w
+    yes.Height = btn_h
+    try:
+        yes.DefaultButton = True
+        yes.PushButtonType = 1
+    except Exception:
+        pass
+    dm.insertByName(u"YesBtn", yes)
+    no = dm.createInstance(u"com.sun.star.awt.UnoControlButtonModel")
+    no.Name = u"NoBtn"
+    no.Label = u"Нет"
+    no.PositionX = dw - m - btn_w
+    no.PositionY = m + msg_h + 12
+    no.Width = btn_w
+    no.Height = btn_h
+    try:
+        no.PushButtonType = 2
+    except Exception:
+        pass
+    dm.insertByName(u"NoBtn", no)
+    dlg = sm.createInstanceWithContext(u"com.sun.star.awt.UnoControlDialog", ctx)
+    dlg.setModel(dm)
+    host = _suspend_all_params_dialog(state)
+    result = False
+    try:
+        try:
+            prepare_dialog_soft_gray(dlg)
+        except Exception:
+            pass
+        # Без _create_peer: он растягивает на весь экран (для all_params).
+        parents = []
+        doc = state.get(u"doc")
+        try:
+            if doc is not None:
+                peer = doc.getCurrentController().getFrame().getContainerWindow()
+                if peer is not None:
+                    parents.append(peer)
+        except Exception:
+            pass
+        parents.append(None)
+        ok_peer = False
+        for p in parents:
+            try:
+                dlg.createPeer(toolkit, p)
+                ok_peer = True
+                break
+            except Exception:
+                pass
+        if not ok_peer:
+            return False
+        try:
+            try_paint_titlebar(dlg)
+        except Exception:
+            pass
+        # PushButtonType 1/2 → execute() вернёт 1 (OK) / 0 (Cancel)
+        rc = dlg.execute()
+        result = int(rc or 0) == 1
+    except Exception as exc:
+        _log(u"confirm_yes_no: %s" % exc)
+        result = False
+    finally:
+        try:
+            dlg.dispose()
+        except Exception:
+            pass
+        _resume_all_params_dialog(host)
+    return result
+
+
 def _delete_selected(state):
     dialog = state.get(u"dialog")
     sheet = state.get(u"sheet")
@@ -1219,22 +1330,19 @@ def _delete_selected(state):
     entry = entries[si]
     row = int(entry.get(u"row"))
     pname = unicode(entry.get(u"name") or entry.get(u"sheet_name") or u"")
-    # Confirm поверх документа: иначе MessageBox уходит за fullscreen all_params.
-    host = _suspend_all_params_dialog(state)
-    confirmed = False
-    try:
-        confirmed = bool(
-            pw._wp_confirm_delete_param_row(pname, row, doc=doc, dialog=None)
-        )
-    except Exception as exc:
-        _log(u"delete confirm: %s" % exc)
-        confirmed = False
-    finally:
-        _resume_all_params_dialog(host)
+    confirmed = _confirm_yes_no(
+        state,
+        u"Удаление параметра",
+        u"Удалить параметр «%s» (строка %d)?" % (pname, int(row) + 1),
+    )
     if not confirmed:
         return
     try:
-        pw._clear_param_sheet_row(sheet, row, catalog, doc)
+        # Удалить строку целиком — иначе остаётся пустая дыра и порядок плывёт.
+        try:
+            sheet.getRows().removeByIndex(int(row), 1)
+        except Exception:
+            pw._clear_param_sheet_row(sheet, row, catalog, doc)
     except Exception as exc:
         try:
             pw._show_message(
