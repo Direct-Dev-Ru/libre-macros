@@ -6,7 +6,7 @@ from __future__ import print_function, unicode_literals
 Один выходной файл на блок строк (block_rows или marker-merge).
 Плейсхолдеры: <<Столбец>>, <<Столбец>>{k}, <<n>>, <<row>>{k}.
 """
-MACRO_VERSION = "3.10.785"
+MACRO_VERSION = "3.10.786"
 import os
 import re
 import subprocess

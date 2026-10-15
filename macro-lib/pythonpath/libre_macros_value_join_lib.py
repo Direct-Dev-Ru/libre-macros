@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Общий разделитель склейки значений в одной ячейке (ВПР / копирование_диапазонов)."""
 from __future__ import unicode_literals
-MACRO_VERSION = "3.10.785"
+MACRO_VERSION = "3.10.786"
 try:
     unicode
 except NameError:

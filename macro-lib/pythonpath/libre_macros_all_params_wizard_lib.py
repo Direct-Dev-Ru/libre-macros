@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.785"
+MACRO_VERSION = "3.10.786"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -989,8 +989,9 @@ def _save_detail_to_sheet(state, force=False):
 
 def _ensure_param_wizard_xscriptcontext(pw):
     """
-    Субвизарды C в param_wizard берут ctx через XSCRIPTCONTEXT;
-    при import param_wizard из pythonpath имени может не быть → диалог C не создаётся.
+    Субвизарды (ВПР, формы C) в param_wizard берут ctx через XSCRIPTCONTEXT;
+    при import из pythonpath имени может не быть → NameError.
+    Если entry-контекста нет — shim на uno.getComponentContext().
     """
     if pw is None:
         return
@@ -998,7 +999,24 @@ def _ensure_param_wizard_xscriptcontext(pw):
         return
     xsc = _script_context()
     if xsc is None:
-        return
+
+        class _XscShim(object):
+            def getComponentContext(self):
+                return uno.getComponentContext()
+
+            def getDesktop(self):
+                ctx = self.getComponentContext()
+                return ctx.getServiceManager().createInstanceWithContext(
+                    u"com.sun.star.frame.Desktop", ctx
+                )
+
+            def getDocument(self):
+                try:
+                    return self.getDesktop().getCurrentComponent()
+                except Exception:
+                    return None
+
+        xsc = _XscShim()
     try:
         pw.XSCRIPTCONTEXT = xsc
     except Exception:

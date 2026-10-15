@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.785"
+MACRO_VERSION = "3.10.786"
 import ast
 import glob
 import json
@@ -3128,6 +3128,45 @@ def _wp_pick_json_file(ctx, save_as=False, suggested_name=u'preset.json', parent
         return path
     except Exception as err:
         print(u'param_wizard pick_json: %s' % err)
+        return None
+
+def _wp_component_context():
+    """
+    UNO ComponentContext: XSCRIPTCONTEXT (entry-макрос) или uno.getComponentContext().
+    Нужен при вызове субвизардов из pythonpath (Все параметры), где XSCRIPTCONTEXT
+    в модуле param_wizard может отсутствовать.
+    """
+    try:
+        return XSCRIPTCONTEXT.getComponentContext()
+    except Exception:
+        pass
+    try:
+        import sys
+        for mod in list(sys.modules.values()):
+            if mod is None:
+                continue
+            try:
+                xsc = getattr(mod, 'XSCRIPTCONTEXT', None)
+            except Exception:
+                xsc = None
+            if xsc is None:
+                continue
+            try:
+                ctx = xsc.getComponentContext()
+                if ctx is not None:
+                    # Закрепить на этом модуле для последующих вызовов.
+                    try:
+                        globals()['XSCRIPTCONTEXT'] = xsc
+                    except Exception:
+                        pass
+                    return ctx
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        return uno.getComponentContext()
+    except Exception:
         return None
 
 def _wp_doc_parent_window(doc=None):
@@ -25436,7 +25475,9 @@ def show_vlookup_param_dialog(parent_dialog=None, initial=None, doc=None):
         _show_message(u'Ошибка разбора JSON ВПР в колонке C:\n%s' % unicode(json_err))
         return None
     try:
-        ctx = XSCRIPTCONTEXT.getComponentContext()
+        ctx = _wp_component_context()
+        if ctx is None:
+            raise RuntimeError(u'нет UNO-контекста')
         sm = ctx.getServiceManager()
         toolkit = sm.createInstanceWithContext('com.sun.star.awt.Toolkit', ctx)
         dm = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialogModel', ctx)
