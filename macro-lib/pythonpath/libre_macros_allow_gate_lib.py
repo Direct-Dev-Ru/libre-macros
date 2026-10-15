@@ -7,7 +7,7 @@
 """
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.782"
+MACRO_VERSION = "3.10.783"
 import os
 import sys
 

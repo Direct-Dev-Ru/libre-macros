@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.782"
+MACRO_VERSION = "3.10.783"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -1209,16 +1209,43 @@ def _delete_selected(state):
     catalog = state.get(u"catalog")
     doc = state.get(u"doc")
     entries = state.get(u"entries") or []
-    si = int(state.get(u"selected") or -1)
+    si = _list_selected_index(dialog)
+    if si < 0:
+        si = int(state.get(u"selected") or -1)
     if si < 0 or si >= len(entries):
         return
     pw = _pw()
+    _ensure_param_wizard_xscriptcontext(pw)
     entry = entries[si]
     row = int(entry.get(u"row"))
-    pname = unicode(entry.get(u"name") or u"")
-    if not pw._wp_confirm_delete_param_row(pname, row, doc=doc, dialog=dialog):
+    pname = unicode(entry.get(u"name") or entry.get(u"sheet_name") or u"")
+    # Confirm поверх документа: иначе MessageBox уходит за fullscreen all_params.
+    host = _suspend_all_params_dialog(state)
+    confirmed = False
+    try:
+        confirmed = bool(
+            pw._wp_confirm_delete_param_row(pname, row, doc=doc, dialog=None)
+        )
+    except Exception as exc:
+        _log(u"delete confirm: %s" % exc)
+        confirmed = False
+    finally:
+        _resume_all_params_dialog(host)
+    if not confirmed:
         return
-    pw._clear_param_sheet_row(sheet, row, catalog, doc)
+    try:
+        pw._clear_param_sheet_row(sheet, row, catalog, doc)
+    except Exception as exc:
+        try:
+            pw._show_message(
+                u"Не удалось удалить строку:\n%s" % exc,
+                dialog=dialog,
+                doc=doc,
+                title=u"Удаление",
+            )
+        except Exception:
+            pass
+        return
     next_idx = si if si < len(entries) - 1 else si - 1
     _refresh_list(state, keep_index=max(0, next_idx))
 
@@ -1229,11 +1256,14 @@ def _copy_selected(state):
     catalog = state.get(u"catalog")
     doc = state.get(u"doc")
     entries = state.get(u"entries") or []
-    si = int(state.get(u"selected") or -1)
+    si = _list_selected_index(dialog)
+    if si < 0:
+        si = int(state.get(u"selected") or -1)
     if si < 0 or si >= len(entries):
         return
     _save_detail_to_sheet(state)
     pw = _pw()
+    _ensure_param_wizard_xscriptcontext(pw)
     entry = entries[si]
     spec = entry.get(u"spec") or {}
     if not spec.get(u"multi_row"):
@@ -1264,7 +1294,11 @@ def _copy_selected(state):
             pass
         return
     n_pp = 1 if _is_pp_or_final_spec(spec) else 0
-    ok, keep_pp = _confirm_copy_dialog(doc, 1, n_pp)
+    host = _suspend_all_params_dialog(state)
+    try:
+        ok, keep_pp = _confirm_copy_dialog(doc, 1, n_pp)
+    finally:
+        _resume_all_params_dialog(host)
     if not ok:
         return
     insert_at = row + 1
