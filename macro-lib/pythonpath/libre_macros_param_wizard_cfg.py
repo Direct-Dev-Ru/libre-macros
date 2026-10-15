@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.773"
+MACRO_VERSION = "3.10.774"
 import re
 
 try:
@@ -31,7 +31,7 @@ _SOFT_GRAY_BTN_BG = 0xD4D4D4
 _SOFT_GRAY_TITLE_H = 28
 def _ui_v(n):
     return max(1, int(round(float(n) * _UI_VSCALE)))
-_DLG_W = 560
+_DLG_W = 600
 _M = 10
 _FIELD_W = _DLG_W - _M * 2
 _BROWSE_W = 92
@@ -41,7 +41,7 @@ _GAP_S = _ui_v(6)
 _GAP_L = _ui_v(10)
 _BTN_H_MAIN = max(1, int(round(_ui_v(28) * 0.7 * 2)))
 _TAB_Y = _ui_v(10)
-_SHEET_COMBO_W = 168
+_SHEET_COMBO_W = 150
 _NEW_MODE_Y = _TAB_Y + _CTRL_H + _GAP_S
 _MODE_ROW_H = _CTRL_H
 _MODE_GAP = _GAP_S
@@ -1359,6 +1359,9 @@ _WIZARD_MAIN_HELP_TEXT = (
     u"Визард параметров листа «Параметры_Объединения*».\n"
     u"\n"
     u"• Выберите параметр в списке — справа описание и поля значения.\n"
+    u"• «Все параметры» — полноэкранный пайплайн шагов (как план todo*:\n"
+    u"  список слева, детали справа; над списком — удалить / скопировать / ↑↓;\n"
+    u"  у полей C и D — кнопки «Параметры C…» / «Параметры D…»).\n"
     u"• «Параметры…» / субвизарды — форма JSON для колонки C (и аналогов).\n"
     u"• Во всех субвизардах кнопка «Справка» — подробности полей.\n"
     u"• «Файлы-Источники»: пути, маски, <<Переменные.Имя>> из карты.\n"

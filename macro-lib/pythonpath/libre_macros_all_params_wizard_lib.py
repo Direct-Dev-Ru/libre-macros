@@ -1,0 +1,1169 @@
+# -*- coding: utf-8 -*-
+"""Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
+from __future__ import print_function, unicode_literals
+
+MACRO_VERSION = "3.10.774"
+import unohelper
+from com.sun.star.awt import XActionListener, XItemListener
+
+import libre_macros_all_params_wizard_cfg as _acfg
+
+try:
+    from libre_macros_ui_theme import (
+        DARK_BLUE_TITLE_BG,
+        DARK_BLUE_TITLE_FG,
+        apply_soft_gray_dark_blue_theme,
+        prepare_dialog_soft_gray,
+        try_paint_titlebar,
+    )
+except Exception:
+    DARK_BLUE_TITLE_BG = 0x0D47A1
+    DARK_BLUE_TITLE_FG = 0xFFFFFF
+
+    def apply_soft_gray_dark_blue_theme(dm, title_text=None):
+        return False
+
+    def prepare_dialog_soft_gray(dlg, title_text=None, title_bg=None, title_fg=None):
+        return False
+
+    def try_paint_titlebar(dlg, title_bg=None, title_fg=None):
+        return False
+
+try:
+    unicode
+except NameError:
+    unicode = str
+
+
+def _ensure_scripts_python_on_path():
+    import os
+    import sys
+
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        scripts = os.path.dirname(here)
+        if scripts and os.path.isdir(scripts) and scripts not in sys.path:
+            sys.path.insert(0, scripts)
+    except Exception:
+        pass
+
+
+def _pw():
+    _ensure_scripts_python_on_path()
+    import param_wizard as pw
+
+    return pw
+
+
+def _log(msg):
+    try:
+        import sys
+
+        sys.stdout.write(u"[all_params] %s\n" % unicode(msg))
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+
+def _screen_work_area(toolkit):
+    if toolkit is None:
+        return 0, 0, 1024, 768
+    for meth in (u"getWorkArea", u"getDisplayWorkArea"):
+        if not hasattr(toolkit, meth):
+            continue
+        try:
+            wa = getattr(toolkit, meth)()
+            if wa is None:
+                continue
+            x = int(getattr(wa, u"X", 0) or 0)
+            y = int(getattr(wa, u"Y", 0) or 0)
+            w = int(getattr(wa, u"Width", 0) or 0)
+            h = int(getattr(wa, u"Height", 0) or 0)
+            if w > 0 and h > 0:
+                return x, y, w, h
+        except Exception:
+            pass
+    return 0, 0, 1024, 768
+
+
+def _title_h(dm=None):
+    try:
+        from libre_macros_ui_theme import SOFT_GRAY_TITLE_H
+
+        return int(SOFT_GRAY_TITLE_H or 28)
+    except Exception:
+        return 28
+
+
+def _content_height(sh, dm=None):
+    return max(400, int(sh) - _title_h(dm))
+
+
+def _list_box_height(list_top, status_y, gap=6):
+    bottom = int(status_y) - int(gap)
+    h = bottom - int(list_top)
+    min_h = int(getattr(_acfg, "ALL_PARAMS_LIST_MIN_H", 80))
+    if h < min_h:
+        h = min_h
+    return h
+
+
+def _add_label(dm, name, label, x, y, w, h, multiline=False):
+    ctl = dm.createInstance(u"com.sun.star.awt.UnoControlFixedTextModel")
+    ctl.Name = name
+    ctl.Label = unicode(label or u"")
+    ctl.PositionX = int(x)
+    ctl.PositionY = int(y)
+    ctl.Width = int(w)
+    ctl.Height = int(h)
+    if multiline:
+        try:
+            ctl.MultiLine = True
+        except Exception:
+            pass
+    dm.insertByName(name, ctl)
+    return ctl
+
+
+def _add_button(dm, name, label, x, y, w, h, default=False):
+    btn = dm.createInstance(u"com.sun.star.awt.UnoControlButtonModel")
+    btn.Name = name
+    btn.Label = unicode(label or u"")
+    btn.PositionX = int(x)
+    btn.PositionY = int(y)
+    btn.Width = int(w)
+    btn.Height = int(h)
+    if default:
+        try:
+            btn.DefaultButton = True
+        except Exception:
+            pass
+    dm.insertByName(name, btn)
+    return btn
+
+
+def _add_edit(dm, name, x, y, w, h, multiline=False, readonly=False):
+    ed = dm.createInstance(u"com.sun.star.awt.UnoControlEditModel")
+    ed.Name = name
+    ed.PositionX = int(x)
+    ed.PositionY = int(y)
+    ed.Width = int(w)
+    ed.Height = int(h)
+    if multiline:
+        try:
+            ed.MultiLine = True
+            ed.VScroll = True
+            ed.HScroll = False
+        except Exception:
+            pass
+    if readonly:
+        try:
+            ed.ReadOnly = True
+        except Exception:
+            pass
+    dm.insertByName(name, ed)
+    return ed
+
+
+def _add_listbox(dm, name, x, y, w, h):
+    lb = dm.createInstance(u"com.sun.star.awt.UnoControlListBoxModel")
+    lb.Name = name
+    lb.PositionX = int(x)
+    lb.PositionY = int(y)
+    lb.Width = int(w)
+    lb.Height = int(h)
+    try:
+        lb.MultiSelection = False
+        lb.VScroll = True
+    except Exception:
+        pass
+    try:
+        from libre_macros_ui_theme import apply_listbox_font
+
+        apply_listbox_font(lb)
+    except Exception:
+        pass
+    dm.insertByName(name, lb)
+    return lb
+
+
+def _add_checkbox(dm, name, label, x, y, w, h):
+    chk = dm.createInstance(u"com.sun.star.awt.UnoControlCheckBoxModel")
+    chk.Name = name
+    chk.Label = unicode(label or u"")
+    chk.PositionX = int(x)
+    chk.PositionY = int(y)
+    chk.Width = int(w)
+    chk.Height = int(h)
+    dm.insertByName(name, chk)
+    return chk
+
+
+def _set_text(dialog, name, text):
+    try:
+        dialog.getControl(name).setText(unicode(text or u""))
+    except Exception:
+        try:
+            dialog.getControl(name).Model.Text = unicode(text or u"")
+        except Exception:
+            pass
+
+
+def _get_text(dialog, name):
+    try:
+        return unicode(dialog.getControl(name).getText() or u"")
+    except Exception:
+        try:
+            return unicode(dialog.getControl(name).Model.Text or u"")
+        except Exception:
+            return u""
+
+
+def _set_enabled(dialog, name, enabled):
+    try:
+        dialog.getControl(name).setEnable(bool(enabled))
+    except Exception:
+        pass
+
+
+def _peer_fill_workarea(dialog, toolkit):
+    sx, sy, sw, sh = _screen_work_area(toolkit)
+    if sw <= 0 or sh <= 0 or dialog is None:
+        return False
+    try:
+        from com.sun.star.awt.PosSize import POSSIZE
+    except Exception:
+        POSSIZE = 15
+    try:
+        peer = dialog.getPeer()
+        if peer is not None:
+            peer.setPosSize(int(sx), int(sy), int(sw), int(sh), POSSIZE)
+            return True
+    except Exception as exc:
+        _log("fill workarea: %s" % exc)
+    return False
+
+
+def _create_peer(dialog, toolkit, doc=None, parent_dialog=None):
+    if dialog is None or toolkit is None:
+        return False
+    try:
+        prepare_dialog_soft_gray(dialog)
+    except Exception:
+        pass
+    parents = []
+    try:
+        if doc is not None:
+            peer = doc.getCurrentController().getFrame().getContainerWindow()
+            if peer is not None:
+                parents.append(peer)
+    except Exception:
+        pass
+    if parent_dialog is not None:
+        try:
+            peer = parent_dialog.getPeer()
+            if peer is not None and peer not in parents:
+                parents.append(peer)
+        except Exception:
+            pass
+    parents.append(None)
+    ok = False
+    for p in parents:
+        try:
+            dialog.createPeer(toolkit, p)
+            ok = True
+            break
+        except Exception:
+            pass
+    if ok:
+        _peer_fill_workarea(dialog, toolkit)
+    return ok
+
+
+def _entry_caption(entry, index, sheet):
+    """Подпись шага в ListBox."""
+    pw = _pw()
+    max_len = int(getattr(_acfg, "ALL_PARAMS_CAPTION_MAX", 72))
+    name = unicode(entry.get(u"sheet_name") or entry.get(u"name") or u"")
+    disabled = bool(entry.get(u"disabled"))
+    prefix = unicode(getattr(_acfg, "ALL_PARAMS_DISABLED_PREFIX", u"[откл] ")) if disabled else u""
+    detail = u""
+    try:
+        row = int(entry.get(u"row"))
+        b = pw._cell_string(sheet.getCellByPosition(1, row))
+        if b:
+            detail = b.replace(u"\n", u" ").strip()
+            if len(detail) > 40:
+                detail = detail[:39] + u"…"
+    except Exception:
+        detail = u""
+    body = u"%03d  %s" % (int(index) + 1, name)
+    if detail:
+        body = u"%s  |  %s" % (body, detail)
+    if len(body) > max_len:
+        body = body[: max_len - 1] + u"…"
+    return prefix + body
+
+
+def _list_selected_index(dialog):
+    try:
+        lb = dialog.getControl(u"StepsListBox")
+        sel = lb.getSelectedItemsPos()
+        if sel and len(sel) > 0:
+            return int(sel[0])
+    except Exception:
+        pass
+    return -1
+
+
+def _list_select_index(dialog, idx):
+    if idx < 0:
+        return
+    try:
+        dialog.getControl(u"StepsListBox").selectItemPos(int(idx), True)
+    except Exception:
+        pass
+
+
+def _reload_entries(state):
+    pw = _pw()
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    entries = pw._scan_sheet_param_entries(sheet, catalog)
+    state[u"entries"] = entries
+    return entries
+
+
+def _refresh_list(state, keep_row=None, keep_index=-1):
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    entries = _reload_entries(state)
+    caps = []
+    i = 0
+    while i < len(entries):
+        caps.append(_entry_caption(entries[i], i, sheet))
+        i = i + 1
+    try:
+        lb = dialog.getControl(u"StepsListBox")
+        lb.Model.StringItemList = tuple(caps)
+    except Exception:
+        pass
+    pick = -1
+    if keep_row is not None:
+        i = 0
+        while i < len(entries):
+            if int(entries[i].get(u"row", -1)) == int(keep_row):
+                pick = i
+                break
+            i = i + 1
+    elif keep_index >= 0:
+        pick = min(int(keep_index), len(entries) - 1) if entries else -1
+    elif entries:
+        pick = 0
+    if pick >= 0:
+        _list_select_index(dialog, pick)
+        state[u"selected"] = pick
+        _load_detail(state, pick)
+    else:
+        state[u"selected"] = -1
+        _clear_detail(state)
+    _update_status(state)
+
+
+def _update_status(state):
+    dialog = state.get(u"dialog")
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    msg = u"Шагов: %d" % len(entries)
+    if 0 <= si < len(entries):
+        e = entries[si]
+        msg = u"%s  ·  выбрано: %s (стр. %d)" % (
+            msg,
+            unicode(e.get(u"name") or u""),
+            int(e.get(u"row", 0)) + 1,
+        )
+    try:
+        dialog.getControl(u"StatusLbl").Model.Label = msg
+    except Exception:
+        pass
+
+
+def _clear_detail(state):
+    dialog = state.get(u"dialog")
+    if dialog is None:
+        return
+    state[u"form_loading"] = True
+    try:
+        _set_text(dialog, u"NameEd", u"")
+        _set_text(dialog, u"ValueEd", u"")
+        _set_text(dialog, u"ExtraEd", u"")
+        _set_text(dialog, u"CondEd", u"")
+        _set_text(dialog, u"DescEd", u"")
+        try:
+            dialog.getControl(u"DisabledChk").Model.State = 0
+        except Exception:
+            pass
+        _set_enabled(dialog, u"ExtraParamsBtn", False)
+        _set_enabled(dialog, u"CondBtn", False)
+        _set_enabled(dialog, u"ApplyBtn", False)
+        _set_enabled(dialog, u"DelBtn", False)
+        _set_enabled(dialog, u"CopyBtn", False)
+        _set_enabled(dialog, u"UpBtn", False)
+        _set_enabled(dialog, u"DownBtn", False)
+    finally:
+        state[u"form_loading"] = False
+
+
+def _condition_text_for_row(sheet, row):
+    pw = _pw()
+    fn_b = pw._cell_string(sheet.getCellByPosition(1, int(row)))
+    is_plugin = pw._pp_is_plugin_primary(fn_b)
+    col = 4 if is_plugin else 3
+    return pw._cell_string(sheet.getCellByPosition(col, int(row)))
+
+
+def _load_detail(state, idx):
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    entries = state.get(u"entries") or []
+    if dialog is None or idx < 0 or idx >= len(entries):
+        _clear_detail(state)
+        return
+    pw = _pw()
+    entry = entries[idx]
+    spec = entry.get(u"spec") or {}
+    row = int(entry.get(u"row"))
+    state[u"form_loading"] = True
+    try:
+        primary, extra, plugin_ref = pw._read_values_at_row(sheet, spec, row)
+        name = unicode(entry.get(u"sheet_name") or entry.get(u"name") or u"")
+        _set_text(dialog, u"NameEd", name)
+        _set_text(dialog, u"ValueEd", unicode(primary or u""))
+        # Колонка C: для постобработки — extra (JSON); для плагина JSON/extra
+        # уже в extra; plugin_ref — отдельное поле C в модели чтения.
+        mode = spec.get(u"mode")
+        if mode in (u"postprocess_range", u"postprocess_row") and pw._pp_is_plugin_primary(primary):
+            c_text = unicode(plugin_ref or u"")
+            d_extra = unicode(extra or u"")
+            # ExtraEd показываем как C (ref); CondEd — условие из E; D extra
+            # дописываем в ExtraEd вторым блоком, если есть.
+            if d_extra:
+                c_text = c_text + (u"\n---\n" + d_extra if c_text else d_extra)
+            _set_text(dialog, u"ExtraEd", c_text)
+        else:
+            _set_text(dialog, u"ExtraEd", unicode(extra or u""))
+        cond = u""
+        can_cond = mode in (u"postprocess_range", u"postprocess_row")
+        if can_cond:
+            cond = _condition_text_for_row(sheet, row)
+        _set_text(dialog, u"CondEd", cond)
+        hint = unicode(spec.get(u"hint") or u"")
+        _set_text(dialog, u"DescEd", hint)
+        try:
+            dialog.getControl(u"DisabledChk").Model.State = 1 if entry.get(u"disabled") else 0
+        except Exception:
+            pass
+        can_c = pw._col_c_subdialog_for_row(sheet, state.get(u"catalog"), row) is not None
+        if not can_c and pw._spec_has_col_c_subdialog(spec):
+            can_c = True
+        if not can_c and mode == u"vlookup":
+            can_c = True
+        if not can_c and mode in (u"merge_sheets", u"split_sheets"):
+            can_c = True
+        if not can_c and mode in (u"postprocess_range", u"postprocess_row"):
+            try:
+                can_c = pw._param_row_has_subdialog(spec, primary)
+            except Exception:
+                can_c = False
+        _set_enabled(dialog, u"ExtraParamsBtn", can_c)
+        _set_enabled(dialog, u"CondBtn", can_cond and unicode(primary or u"").strip() != u"")
+        _set_enabled(dialog, u"ApplyBtn", True)
+        _set_enabled(dialog, u"DelBtn", True)
+        _set_enabled(dialog, u"CopyBtn", True)
+        _set_enabled(dialog, u"UpBtn", idx > 0)
+        _set_enabled(dialog, u"DownBtn", idx < len(entries) - 1)
+    finally:
+        state[u"form_loading"] = False
+
+
+def _save_detail_to_sheet(state):
+    """Записать B/C (и disabled) из панели в текущую строку листа."""
+    if state.get(u"form_loading"):
+        return True
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    if dialog is None or sheet is None or si < 0 or si >= len(entries):
+        return False
+    pw = _pw()
+    entry = entries[si]
+    spec = entry.get(u"spec") or {}
+    row = int(entry.get(u"row"))
+    primary = _get_text(dialog, u"ValueEd").strip()
+    extra = _get_text(dialog, u"ExtraEd").strip()
+    plugin_ref = None
+    mode = spec.get(u"mode")
+    if mode in (u"postprocess_range", u"postprocess_row") and pw._pp_is_plugin_primary(primary):
+        # ExtraEd: ref и опционально --- + D extra
+        parts = extra.split(u"\n---\n", 1)
+        plugin_ref = parts[0].strip()
+        extra = parts[1].strip() if len(parts) > 1 else u""
+    try:
+        disabled = bool(dialog.getControl(u"DisabledChk").Model.State)
+    except Exception:
+        disabled = bool(entry.get(u"disabled"))
+    try:
+        if mode == u"vlookup":
+            # B не редактируем текстом — только через визард C
+            pass
+        elif mode in (u"merge_sheets", u"split_sheets"):
+            pw.apply_param_value(
+                sheet, spec, extra, None, target_row=row, target_col=2, catalog=catalog, doc=doc,
+            )
+        elif pw._spec_has_col_c_subdialog(spec) and (not pw._spec_col_c_keeps_b(spec)) and mode != u"choice":
+            import libre_macros_param_wizard_cfg as _pw_cfg
+
+            pw.apply_param_value(
+                sheet, spec, _pw_cfg._PARAM_B_SEE_COLUMN_C, extra,
+                target_row=row, catalog=catalog, doc=doc,
+            )
+        else:
+            pw.apply_param_value(
+                sheet, spec, primary, extra, target_row=row, catalog=catalog, doc=doc,
+                plugin_ref=plugin_ref,
+            )
+        pw._write_param_row_sheet_name(sheet, row, spec[u"name"], disabled, catalog=catalog)
+    except Exception as exc:
+        try:
+            pw._show_message(u"Не удалось сохранить строку:\n%s" % exc, dialog=dialog, doc=doc)
+        except Exception:
+            pass
+        return False
+    return True
+
+
+def _open_col_c_wizard(state):
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    if si < 0 or si >= len(entries):
+        return
+    _save_detail_to_sheet(state)
+    pw = _pw()
+    row = int(entries[si].get(u"row"))
+    sub = pw._col_c_subdialog_for_row(sheet, catalog, row)
+    if sub is None:
+        try:
+            pw._show_message(
+                u"Для этой строки нет визарда колонки C.",
+                dialog=dialog,
+                doc=doc,
+                title=u"Параметры",
+            )
+        except Exception:
+            pass
+        return
+    ok = pw._run_subdialog_and_save(doc, sheet, catalog, sub, parent_dialog=dialog)
+    if ok:
+        _refresh_list(state, keep_row=row)
+
+
+def _open_col_d_wizard(state):
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    if si < 0 or si >= len(entries):
+        return
+    _save_detail_to_sheet(state)
+    pw = _pw()
+    row = int(entries[si].get(u"row"))
+    sub = pw._col_d_condition_subdialog_for_row(sheet, catalog, row)
+    if sub is None:
+        try:
+            pw._show_message(
+                u"Условие задаётся для шагов постобработки (колонка D/E).",
+                dialog=dialog,
+                doc=doc,
+                title=u"Условие",
+            )
+        except Exception:
+            pass
+        return
+    ok = pw._run_subdialog_and_save(doc, sheet, catalog, sub, parent_dialog=dialog)
+    if ok:
+        _refresh_list(state, keep_row=row)
+
+
+def _delete_selected(state):
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    if si < 0 or si >= len(entries):
+        return
+    pw = _pw()
+    entry = entries[si]
+    row = int(entry.get(u"row"))
+    pname = unicode(entry.get(u"name") or u"")
+    if not pw._wp_confirm_delete_param_row(pname, row, doc=doc, dialog=dialog):
+        return
+    pw._clear_param_sheet_row(sheet, row, catalog, doc)
+    next_idx = si if si < len(entries) - 1 else si - 1
+    _refresh_list(state, keep_index=max(0, next_idx))
+
+
+def _copy_selected(state):
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    if si < 0 or si >= len(entries):
+        return
+    _save_detail_to_sheet(state)
+    pw = _pw()
+    entry = entries[si]
+    spec = entry.get(u"spec") or {}
+    if not spec.get(u"multi_row"):
+        try:
+            pw._show_message(
+                u"Параметр «%s» должен быть в одном экземпляре — копирование невозможно."
+                % unicode(entry.get(u"name") or u""),
+                dialog=dialog,
+                doc=doc,
+            )
+        except Exception:
+            pass
+        return
+    row = int(entry.get(u"row"))
+    try:
+        from libre_macros_copy_param_rows_lib import (
+            _clear_pp_params_on_row,
+            _confirm_copy_dialog,
+            _copy_end_col,
+            _count_free_rows,
+            _is_pp_or_final_spec,
+            _restore_header_after_copy,
+        )
+    except Exception as exc:
+        try:
+            pw._show_message(u"Копирование недоступно: %s" % exc, dialog=dialog, doc=doc)
+        except Exception:
+            pass
+        return
+    n_pp = 1 if _is_pp_or_final_spec(spec) else 0
+    ok, keep_pp = _confirm_copy_dialog(doc, 1, n_pp)
+    if not ok:
+        return
+    insert_at = row + 1
+    end_col = _copy_end_col(pw, sheet, catalog, [row])
+    free = _count_free_rows(sheet, insert_at, 1, end_col)
+    pw._param_sheet_begin_write(sheet)
+    try:
+        if free < 1:
+            sheet.getRows().insertByIndex(insert_at, 1)
+        pw._copy_sheet_row(sheet, row, insert_at, end_col)
+        if (not keep_pp) and n_pp > 0:
+            _clear_pp_params_on_row(sheet, insert_at, end_col)
+        _restore_header_after_copy(pw, sheet, catalog, [row])
+    except Exception as exc:
+        try:
+            pw._show_message(u"Ошибка копирования: %s" % exc, dialog=dialog, doc=doc)
+        except Exception:
+            pass
+        return
+    finally:
+        try:
+            pw._param_sheet_end_write(sheet)
+        except Exception:
+            pass
+    _refresh_list(state, keep_row=insert_at)
+
+
+def _move_selected(state, direction):
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    if si < 0 or si >= len(entries):
+        return
+    _save_detail_to_sheet(state)
+    pw = _pw()
+    row = int(entries[si].get(u"row"))
+    ok, err, new_start, _new_end, _ts, _te = pw._merge_param_move_rows(
+        doc, sheet, row, row, direction, min_row=1,
+    )
+    if not ok:
+        try:
+            pw._show_message(err or u"Не удалось переместить.", dialog=dialog, doc=doc)
+        except Exception:
+            pass
+        return
+    _refresh_list(state, keep_row=new_start)
+
+
+def _create_detail_panel(dm, rx, ry, rw):
+    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 26))
+    lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 16))
+    gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 8))
+    sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 12))
+    btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 110))
+    value_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_H", 48))
+    extra_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_H", 120))
+    cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_H", 56))
+    desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_H", 72))
+    y = int(ry)
+    _add_label(dm, u"DetailLbl", u"Параметры шага:", rx, y, rw, lbl_h)
+    y += lbl_h + 2
+    _add_label(dm, u"NameLbl", u"Имя (A):", rx, y, rw, lbl_h)
+    y += lbl_h + 2
+    _add_edit(dm, u"NameEd", rx, y, rw, row_h, readonly=True)
+    y += row_h + gap
+    _add_checkbox(dm, u"DisabledChk", u"Отключить параметр (__ в колонке A)", rx, y, rw, lbl_h)
+    y += lbl_h + sec
+    _add_label(dm, u"ValueLbl", u"Значение (B):", rx, y, rw, lbl_h)
+    y += lbl_h + 2
+    _add_edit(dm, u"ValueEd", rx, y, rw, value_h, multiline=True)
+    y += value_h + sec
+    c_btn = unicode(getattr(_acfg, "ALL_PARAMS_BTN_C_LABEL", u"Параметры C…"))
+    d_btn = unicode(getattr(_acfg, "ALL_PARAMS_BTN_D_LABEL", u"Параметры D…"))
+    _add_label(dm, u"ExtraLbl", u"Колонка C (JSON / доп. аргументы):", rx, y, max(40, rw - btn_w - 6), lbl_h)
+    _add_button(dm, u"ExtraParamsBtn", c_btn, rx + rw - btn_w, y - 2, btn_w, row_h)
+    y += lbl_h + 2
+    _add_edit(dm, u"ExtraEd", rx, y, rw, extra_h, multiline=True)
+    y += extra_h + sec
+    _add_label(dm, u"CondLbl", u"Колонка D/E (условие шага):", rx, y, max(40, rw - btn_w - 6), lbl_h)
+    _add_button(dm, u"CondBtn", d_btn, rx + rw - btn_w, y - 2, btn_w, row_h)
+    y += lbl_h + 2
+    _add_edit(dm, u"CondEd", rx, y, rw, cond_h, multiline=True, readonly=True)
+    y += cond_h + sec
+    _add_label(dm, u"DescLbl", u"Описание:", rx, y, rw, lbl_h)
+    y += lbl_h + 2
+    _add_edit(dm, u"DescEd", rx, y, rw, desc_h, multiline=True, readonly=True)
+    y += desc_h + gap
+    _add_button(dm, u"ApplyBtn", u"Применить к строке", rx, y, min(160, rw), row_h)
+    return y + row_h
+
+
+def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
+    row_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_ROW_H", 26))
+    lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 16))
+    gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 8))
+    sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 12))
+    btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 110))
+    value_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_VALUE_H", 48))
+    cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_H", 56))
+    desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_H", 72))
+    # Extra занимает остаток высоты.
+    fixed = (
+        lbl_h + 2 + lbl_h + 2 + row_h + gap + lbl_h + sec
+        + lbl_h + 2 + value_h + sec
+        + lbl_h + 2
+        + sec + lbl_h + 2 + cond_h + sec
+        + lbl_h + 2 + desc_h + gap + row_h
+    )
+    avail = max(60, int(bottom_y) - int(ry) - fixed)
+    extra_h = max(60, avail)
+    y = int(ry)
+    specs = (
+        (u"DetailLbl", rx, y, rw, lbl_h),
+    )
+    y += lbl_h + 2
+    specs += ((u"NameLbl", rx, y, rw, lbl_h),)
+    y += lbl_h + 2
+    specs += ((u"NameEd", rx, y, rw, row_h),)
+    y += row_h + gap
+    specs += ((u"DisabledChk", rx, y, rw, lbl_h),)
+    y += lbl_h + sec
+    specs += ((u"ValueLbl", rx, y, rw, lbl_h),)
+    y += lbl_h + 2
+    specs += ((u"ValueEd", rx, y, rw, value_h),)
+    y += value_h + sec
+    specs += (
+        (u"ExtraLbl", rx, y, max(40, rw - btn_w - 6), lbl_h),
+        (u"ExtraParamsBtn", rx + rw - btn_w, y - 2, btn_w, row_h),
+    )
+    y += lbl_h + 2
+    specs += ((u"ExtraEd", rx, y, rw, extra_h),)
+    y += extra_h + sec
+    specs += (
+        (u"CondLbl", rx, y, max(40, rw - btn_w - 6), lbl_h),
+        (u"CondBtn", rx + rw - btn_w, y - 2, btn_w, row_h),
+    )
+    y += lbl_h + 2
+    specs += ((u"CondEd", rx, y, rw, cond_h),)
+    y += cond_h + sec
+    specs += ((u"DescLbl", rx, y, rw, lbl_h),)
+    y += lbl_h + 2
+    specs += ((u"DescEd", rx, y, rw, desc_h),)
+    y += desc_h + gap
+    specs += ((u"ApplyBtn", rx, y, min(160, rw), row_h),)
+    for name, x, yy, w, h in specs:
+        try:
+            ctl = dm.getByName(name)
+            ctl.PositionX = int(x)
+            ctl.PositionY = int(yy)
+            ctl.Width = int(w)
+            ctl.Height = int(h)
+        except Exception:
+            pass
+
+
+def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
+    """
+    Раскладка как у todo plan (split): hint + Close сверху;
+    слева над списком — Удалить/Скопировать/↑/↓; справа — детали C/D.
+    """
+    title_h = _title_h(dm)
+    total_h = int(sh)
+    total_w = int(sw)
+    hint_top = int(getattr(_acfg, "ALL_PARAMS_HINT_TOP_GAP", 8))
+    list_tb_gap = int(getattr(_acfg, "ALL_PARAMS_LIST_TOOLBAR_GAP", 4))
+    split_gap = int(getattr(_acfg, "ALL_PARAMS_SPLIT_GAP", 8))
+    footer_btn_w = int(getattr(_acfg, "ALL_PARAMS_FOOTER_BTN_W", 110))
+    list_lbl_h = int(getattr(_acfg, "ALL_PARAMS_LIST_LBL_H", 18))
+    try:
+        dm.Width = total_w
+        dm.Height = total_h
+    except Exception:
+        pass
+    y = title_h + m + hint_top
+    try:
+        hint = dm.getByName(u"HintLbl")
+        hint.PositionX = m
+        hint.PositionY = y
+        hint.Width = max(40, total_w - 2 * m - footer_btn_w - gap)
+        hint.Height = hint_h
+    except Exception:
+        pass
+    try:
+        close = dm.getByName(u"CloseBtn")
+        close.PositionY = y
+        close.Height = toolbar_h
+        close.Width = footer_btn_w
+        close.PositionX = total_w - m - footer_btn_w
+    except Exception:
+        pass
+    y += max(hint_h, toolbar_h) + gap
+
+    content_h = _content_height(total_h, dm)
+    try:
+        dm.Height = content_h
+    except Exception:
+        pass
+    status_y = content_h - m - status_h
+    min_list_w = int(getattr(_acfg, "ALL_PARAMS_LIST_MIN_W", 320))
+    half = max(min_list_w, (total_w - 2 * m - split_gap) // 2)
+    left_w = half
+    right_x = m + half + split_gap
+    right_w = total_w - right_x - m
+
+    # Кнопки шагов — строго над списком слева.
+    toolbar_y = y
+    x = m
+    for spec in getattr(_acfg, "ALL_PARAMS_TOOLBAR_BTNS", ()) or ():
+        name = spec[0]
+        bw = int(spec[2])
+        try:
+            btn = dm.getByName(name)
+            btn.PositionX = x
+            btn.PositionY = toolbar_y
+            btn.Width = bw
+            btn.Height = toolbar_h
+        except Exception:
+            pass
+        x += bw + 4
+    y_list = toolbar_y + toolbar_h + list_tb_gap
+    try:
+        ll = dm.getByName(u"StepsListLbl")
+        ll.PositionX = m
+        ll.PositionY = y_list
+        ll.Width = left_w
+        ll.Height = list_lbl_h
+    except Exception:
+        pass
+    list_top = y_list + list_lbl_h + 2
+    list_h = _list_box_height(list_top, status_y, gap=gap)
+    try:
+        lb = dm.getByName(u"StepsListBox")
+        lb.PositionX = m
+        lb.PositionY = list_top
+        lb.Width = left_w
+        lb.Height = list_h
+    except Exception:
+        pass
+    # Детали справа — с верхней линии тулбара списка.
+    _layout_detail_panel(dm, right_x, toolbar_y, right_w, status_y - gap)
+    try:
+        st = dm.getByName(u"StatusLbl")
+        st.PositionX = m
+        st.PositionY = status_y
+        st.Width = total_w - 2 * m
+        st.Height = status_h
+    except Exception:
+        pass
+
+
+def _selected_sheet_row(state):
+    entries = state.get(u"entries") or []
+    si = int(state.get(u"selected") or -1)
+    if 0 <= si < len(entries):
+        try:
+            return int(entries[si].get(u"row"))
+        except Exception:
+            return None
+    return None
+
+
+def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=None, select_row=None):
+    """
+    Полноэкранный обзор всех параметров листа (пайплайн).
+    Возвращает (changed, selected_row): changed — были правки листа;
+    selected_row — номер строки выбранного шага или None.
+    """
+    pw = _pw()
+    if doc is None:
+        try:
+            doc = XSCRIPTCONTEXT.getDocument()
+        except Exception:
+            doc = None
+    if sheet is None:
+        try:
+            pw._show_message(u"Нет листа параметров для обзора.", doc=doc)
+        except Exception:
+            pass
+        return (False, None)
+    if catalog is None:
+        catalog = pw._build_wizard_catalog()
+
+    ctx = None
+    try:
+        ctx = XSCRIPTCONTEXT.getComponentContext()
+    except Exception:
+        pass
+    if ctx is None:
+        raise RuntimeError(u"Нет UNO-контекста.")
+    sm = ctx.getServiceManager()
+    toolkit = sm.createInstanceWithContext(u"com.sun.star.awt.Toolkit", ctx)
+    sx, sy, sw, sh = _screen_work_area(toolkit)
+    title_reserve = _title_h()
+    dlg_w = max(640, int(sw))
+    screen_h = max(480, int(sh))
+    dlg_h = max(400, screen_h - title_reserve)
+    m = 8
+    gap = 4
+    toolbar_h = int(getattr(_acfg, "ALL_PARAMS_TOOLBAR_BTN_H", 28))
+    status_h = int(getattr(_acfg, "ALL_PARAMS_STATUS_H", 18))
+    hint_h = int(getattr(_acfg, "ALL_PARAMS_HINT_H", 40))
+    footer_btn_w = int(getattr(_acfg, "ALL_PARAMS_FOOTER_BTN_W", 110))
+    split_gap = int(getattr(_acfg, "ALL_PARAMS_SPLIT_GAP", 8))
+    list_lbl_h = int(getattr(_acfg, "ALL_PARAMS_LIST_LBL_H", 18))
+    list_tb_gap = int(getattr(_acfg, "ALL_PARAMS_LIST_TOOLBAR_GAP", 4))
+
+    dm = sm.createInstanceWithContext(u"com.sun.star.awt.UnoControlDialogModel", ctx)
+    title = unicode(getattr(_acfg, "ALL_PARAMS_WIZARD_TITLE", u"Все параметры"))
+    try:
+        sn = unicode(sheet.Name)
+        if sn:
+            title = u"%s — %s" % (title, sn)
+    except Exception:
+        pass
+    dm.Title = title
+    dm.Width = dlg_w
+    dm.Height = dlg_h
+    dm.PositionX = int(sx)
+    dm.PositionY = int(sy)
+    try:
+        dm.Sizeable = True
+    except Exception:
+        pass
+
+    y = m
+    _add_label(
+        dm,
+        u"HintLbl",
+        unicode(getattr(_acfg, "ALL_PARAMS_WIZARD_HINT", u"")),
+        m,
+        y,
+        max(40, dlg_w - 2 * m - footer_btn_w - gap),
+        hint_h,
+        multiline=True,
+    )
+    _add_button(
+        dm,
+        u"CloseBtn",
+        u"Закрыть",
+        dlg_w - m - footer_btn_w,
+        y,
+        footer_btn_w,
+        toolbar_h,
+        default=True,
+    )
+    y += max(hint_h, toolbar_h) + gap
+
+    half = max(int(getattr(_acfg, "ALL_PARAMS_LIST_MIN_W", 320)), (dlg_w - 2 * m - split_gap) // 2)
+    right_x = m + half + split_gap
+    right_w = dlg_w - right_x - m
+    content_h = _content_height(screen_h, dm)
+    try:
+        dm.Height = content_h
+    except Exception:
+        pass
+    status_y = content_h - m - status_h
+
+    toolbar_y = y
+    x = m
+    for spec in getattr(_acfg, "ALL_PARAMS_TOOLBAR_BTNS", ()) or ():
+        _add_button(dm, spec[0], spec[1], x, toolbar_y, int(spec[2]), toolbar_h)
+        x += int(spec[2]) + 4
+    y_list = toolbar_y + toolbar_h + list_tb_gap
+    list_top = y_list + list_lbl_h + 2
+    list_h = _list_box_height(list_top, status_y, gap=gap)
+    _add_label(dm, u"StepsListLbl", u"Шаги пайплайна:", m, y_list, half, list_lbl_h)
+    _add_listbox(dm, u"StepsListBox", m, list_top, half, list_h)
+    _create_detail_panel(dm, right_x, toolbar_y, right_w)
+    _add_label(dm, u"StatusLbl", u"", m, status_y, dlg_w - 2 * m, status_h)
+
+    try:
+        apply_soft_gray_dark_blue_theme(dm, title_text=title)
+    except Exception:
+        pass
+    _relayout(dm, dlg_w, screen_h, m, gap, toolbar_h, status_h, hint_h)
+
+    dialog = sm.createInstanceWithContext(u"com.sun.star.awt.UnoControlDialog", ctx)
+    dialog.setModel(dm)
+    if not _create_peer(dialog, toolkit, doc=doc, parent_dialog=parent_dialog):
+        raise RuntimeError(u"Не удалось создать peer диалога «Все параметры».")
+    _relayout(dm, dlg_w, screen_h, m, gap, toolbar_h, status_h, hint_h)
+    try:
+        try_paint_titlebar(dialog, title_bg=DARK_BLUE_TITLE_BG, title_fg=DARK_BLUE_TITLE_FG)
+    except Exception:
+        pass
+
+    state = {
+        u"dialog": dialog,
+        u"dm": dm,
+        u"doc": doc,
+        u"sheet": sheet,
+        u"catalog": catalog,
+        u"entries": [],
+        u"selected": -1,
+        u"changed": False,
+        u"form_loading": False,
+    }
+
+    class _Handler(unohelper.Base, XActionListener, XItemListener):
+        def disposing(self, event):
+            pass
+
+        def actionPerformed(self, event):
+            try:
+                name = str(event.Source.getModel().Name)
+            except Exception:
+                return
+            if name == u"CloseBtn":
+                try:
+                    _save_detail_to_sheet(state)
+                except Exception:
+                    pass
+                try:
+                    dialog.endExecute()
+                except Exception:
+                    pass
+                return
+            if name == u"DelBtn":
+                _delete_selected(state)
+                state[u"changed"] = True
+            elif name == u"CopyBtn":
+                _copy_selected(state)
+                state[u"changed"] = True
+            elif name == u"UpBtn":
+                _move_selected(state, -1)
+                state[u"changed"] = True
+            elif name == u"DownBtn":
+                _move_selected(state, 1)
+                state[u"changed"] = True
+            elif name == u"ExtraParamsBtn":
+                _open_col_c_wizard(state)
+                state[u"changed"] = True
+            elif name == u"CondBtn":
+                _open_col_d_wizard(state)
+                state[u"changed"] = True
+            elif name == u"ApplyBtn":
+                if _save_detail_to_sheet(state):
+                    state[u"changed"] = True
+                    row = None
+                    entries = state.get(u"entries") or []
+                    si = int(state.get(u"selected") or -1)
+                    if 0 <= si < len(entries):
+                        row = int(entries[si].get(u"row"))
+                    _refresh_list(state, keep_row=row)
+
+        def itemStateChanged(self, event):
+            if state.get(u"form_loading"):
+                return
+            try:
+                src_name = str(event.Source.getModel().Name)
+            except Exception:
+                src_name = u""
+            if src_name == u"DisabledChk":
+                return
+            prev = int(state.get(u"selected") or -1)
+            if prev >= 0:
+                _save_detail_to_sheet(state)
+            idx = _list_selected_index(dialog)
+            if idx >= 0:
+                state[u"selected"] = idx
+                _load_detail(state, idx)
+            _update_status(state)
+
+    handler = _Handler()
+    for btn in (
+        u"CloseBtn",
+        u"DelBtn",
+        u"CopyBtn",
+        u"UpBtn",
+        u"DownBtn",
+        u"ExtraParamsBtn",
+        u"CondBtn",
+        u"ApplyBtn",
+    ):
+        try:
+            dialog.getControl(btn).addActionListener(handler)
+        except Exception as err:
+            _log("listener %s: %s" % (btn, err))
+    try:
+        dialog.getControl(u"StepsListBox").addItemListener(handler)
+    except Exception as err:
+        _log("list listener: %s" % err)
+
+    if select_row is not None:
+        _refresh_list(state, keep_row=int(select_row))
+    else:
+        _refresh_list(state, keep_index=0)
+
+    try:
+        toolkit.processEventsToIdle()
+    except Exception:
+        pass
+    try:
+        dialog.execute()
+    finally:
+        try:
+            dialog.dispose()
+        except Exception:
+            pass
+    return (bool(state.get(u"changed")), _selected_sheet_row(state))

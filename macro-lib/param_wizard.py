@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.773"
+MACRO_VERSION = "3.10.774"
 import ast
 import glob
 import json
@@ -6300,7 +6300,136 @@ def _wizard_launch_plan(doc, param_sheet, catalog):
             return {'action': 'subdialog', 'new_param_mode': False, 'initial': None, 'subdialog': sub}
     return {'action': 'main', 'new_param_mode': False, 'initial': _build_initial_from_row(param_sheet, catalog, row, icol), 'subdialog': None}
 
-def _run_subdialog_and_save(doc, sheet, catalog, sub):
+def _col_c_subdialog_for_row(sheet, catalog, row):
+    """
+    Описание субдиалога колонки C для строки параметра (как курсор на C).
+    Возвращает dict для _run_subdialog_and_save или None.
+    """
+    if sheet is None or catalog is None or row is None or int(row) < 1:
+        return None
+    row = int(row)
+    pname = _row_param_name(sheet, row)
+    if pname == u'':
+        return None
+    spec = _find_catalog_spec(catalog, pname)
+    if spec is None:
+        return None
+    mode = spec.get('mode')
+    initial_text = _cell_string(sheet.getCellByPosition(2, row))
+    if mode == 'vlookup':
+        return {'kind': 'vlookup', 'spec': spec, 'row': row, 'initial': _vlookup_read_row_values(sheet, row)}
+    if mode == 'merge_sheets':
+        return {'kind': 'merge_sheets', 'spec': spec, 'row': row, 'initial': initial_text}
+    if mode == 'split_sheets':
+        return {'kind': 'split_sheets', 'spec': spec, 'row': row, 'initial': initial_text}
+    if mode == 'source_extra':
+        return {
+            'kind': 'source_extra',
+            'spec': spec,
+            'row': row,
+            'target_col': 1,
+            'initial_text': _cell_string(sheet.getCellByPosition(1, row)),
+            'source_path': _source_extra_path_for_col(sheet, 1),
+        }
+    if mode in ('postprocess_range', 'postprocess_row'):
+        fn_b = _cell_string(sheet.getCellByPosition(1, row))
+        if _param_match(fn_b, u'объединить_листы_в_один') or _param_match(fn_b, u'разделить_листы'):
+            sub = _try_subdialog_from_row(sheet, catalog, spec, row)
+            if sub is not None:
+                return sub
+        sub = _try_subdialog_from_row(sheet, catalog, spec, row)
+        if sub is not None:
+            return sub
+    if _param_match(pname, u'Листы'):
+        looks_like_filter = False
+        try:
+            from libre_macros_param_codec import sheets_map_is_filter_payload
+            looks_like_filter = sheets_map_is_filter_payload(initial_text)
+        except Exception:
+            lead = unicode(initial_text or u'').strip().lstrip()
+            looks_like_filter = lead.startswith(u'lambda') or lead.startswith(u'def ')
+        if looks_like_filter or _spec_col_c_subdialog_kind(spec) == u'sheets_include_filter':
+            return {'kind': 'sheets_include_filter', 'spec': spec, 'row': row, 'initial_text': initial_text}
+        return {
+            'kind': 'sheets_pick_rename',
+            'spec': spec,
+            'row': row,
+            'target_col': 2,
+            'initial_text': initial_text,
+        }
+    if _param_match(pname, u'Столбцы'):
+        return {
+            'kind': 'columns_pick_rename',
+            'spec': spec,
+            'row': row,
+            'target_col': 2,
+            'initial_text': initial_text,
+        }
+    if _param_match(pname, u'удаление_верхних_строк'):
+        return {'kind': 'delete_top_rows', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'Пропуск_строк_источника'):
+        return {'kind': 'skip_source_rows', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'Предварительный_скрипт'):
+        return {'kind': 'pre_shell', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'Строка_Заголовков'):
+        return {'kind': 'header_row', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'Ячейка_В_Столбец'):
+        return {'kind': 'cell_to_column', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'Добавить_в_карту_переменных'):
+        return {'kind': 'add_to_variables_map', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'Ручной_ввод_в_карту_переменных') or _param_match(pname, u'ручной_ввод') or _param_match(pname, u'manual_variable_input'):
+        return {'kind': 'manual_variable_input', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'Листы_не_удалять'):
+        return {'kind': 'sheets_undelete_filter', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'Листы_удалить'):
+        return {'kind': 'sheets_force_delete_filter', 'spec': spec, 'row': row, 'initial_text': initial_text}
+    if _param_match(pname, u'автофильтр_результата'):
+        return {'kind': 'sheet_list_fn', 'spec': spec, 'row': row, 'fn_key': u'автофильтр', 'initial_text': initial_text}
+    if _param_match(pname, u'закрепить_заголовок'):
+        return {'kind': 'sheet_list_fn', 'spec': spec, 'row': row, 'fn_key': u'закрепить_заголовок', 'initial_text': initial_text}
+    if _spec_has_col_c_subdialog(spec):
+        kind = _spec_col_c_subdialog_kind(spec)
+        if kind == u'sheet_list_fn':
+            return {
+                'kind': 'sheet_list_fn',
+                'spec': spec,
+                'row': row,
+                'fn_key': _spec_col_c_fn_key(spec),
+                'initial_text': initial_text,
+            }
+        if kind:
+            return {'kind': kind, 'spec': spec, 'row': row, 'initial_text': initial_text}
+    return _try_subdialog_from_row(sheet, catalog, spec, row)
+
+
+def _col_d_condition_subdialog_for_row(sheet, catalog, row):
+    """Субдиалог условия выполнения (D обычный / E плагин) для постобработки."""
+    if sheet is None or catalog is None or row is None or int(row) < 1:
+        return None
+    row = int(row)
+    pname = _row_param_name(sheet, row)
+    if pname == u'':
+        return None
+    spec = _find_catalog_spec(catalog, pname)
+    if spec is None:
+        return None
+    if spec.get('mode') not in ('postprocess_range', 'postprocess_row'):
+        return None
+    fn_b = _cell_string(sheet.getCellByPosition(1, row))
+    if fn_b == u'':
+        return None
+    is_plugin = _pp_is_plugin_primary(fn_b)
+    col = 4 if is_plugin else 3
+    return {
+        'kind': 'step_condition',
+        'spec': spec,
+        'row': row,
+        'is_plugin': bool(is_plugin),
+        'initial_text': _cell_string(sheet.getCellByPosition(col, row)),
+    }
+
+
+def _run_subdialog_and_save(doc, sheet, catalog, sub, parent_dialog=None):
     """Открыть субдиалог и записать результат в строку параметра."""
     if sub is None:
         return False
@@ -6309,28 +6438,37 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
     row = int(sub.get('row', -1))
     if spec is None or row < 1:
         return False
+    parent = parent_dialog
     if kind == 'vlookup':
-        result = show_vlookup_param_dialog(None, sub.get('initial'), doc=doc)
+        result = show_vlookup_param_dialog(parent, sub.get('initial'), doc=doc)
         if result is None:
             return False
         row = apply_param_value(sheet, spec, result, None, target_row=row, target_col=2, catalog=catalog, doc=doc)
     elif kind == 'merge_sheets':
-        result = show_merge_sheets_param_dialog(None, sub.get('initial'), doc=doc)
+        result = show_merge_sheets_param_dialog(parent, sub.get('initial'), doc=doc)
         if result is None:
             return False
         row = apply_param_value(sheet, spec, result, None, target_row=row, target_col=2, catalog=catalog, doc=doc)
     elif kind == 'split_sheets':
-        result = show_split_sheets_param_dialog(None, sub.get('initial'), doc=doc)
+        result = show_split_sheets_param_dialog(parent, sub.get('initial'), doc=doc)
         if result is None:
             return False
         row = apply_param_value(sheet, spec, result, None, target_row=row, target_col=2, catalog=catalog, doc=doc)
     elif kind == 'pivot':
-        pivot_json = show_pivot_table_param_dialog(None, sub.get('initial_text'), doc=doc, param_sheet=sheet, param_row=row, param_primary=sub.get('fn_key'), force_as_values=_spec_is_postprocess_xml(spec))
+        pivot_json = show_pivot_table_param_dialog(parent, sub.get('initial_text'), doc=doc, param_sheet=sheet, param_row=row, param_primary=sub.get('fn_key'), force_as_values=_spec_is_postprocess_xml(spec))
         if pivot_json is None:
             return False
+        try:
+            from libre_macros_param_codec import param_decode, param_encode
+            blocks = param_decode(u'сводная_таблица', pivot_json)
+            result = param_encode(u'сводная_таблица', blocks)
+        except Exception:
+            result = unicode(pivot_json or u'').strip()
+        primary = _cell_string(sheet.getCellByPosition(1, row)) or sub.get('fn_key') or u'сводная_таблица'
+        row = apply_param_value(sheet, spec, primary, result, target_row=row, catalog=catalog, doc=doc)
     elif kind == 'inner_codec':
         result = _show_inner_codec_param_dialog(
-            None,
+            parent,
             sub.get('fn_key'),
             sub.get('initial_text'),
             doc=doc,
@@ -6342,7 +6480,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         row = apply_param_value(sheet, spec, primary, result, target_row=row, catalog=catalog, doc=doc)
     elif kind == 'plugin':
         result = _show_plugin_function_dialog(
-            None,
+            parent,
             spec,
             sub.get('initial_ref') or u'',
             sub.get('initial_extra') or u'',
@@ -6360,7 +6498,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
     elif kind == 'step_condition':
         try:
             result_text = show_step_condition_param_dialog(
-                None,
+                parent,
                 sub.get('initial_text') or u'',
                 doc=doc,
                 is_plugin=bool(sub.get('is_plugin')),
@@ -6372,7 +6510,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
             return False
         _apply_step_condition_to_row(sheet, row, result_text, catalog=catalog, doc=doc)
     elif kind == 'delete_top_rows':
-        result_text = show_delete_top_rows_param_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_delete_top_rows_param_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6384,7 +6522,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             sheet.getCellByPosition(2, row).String = u''
     elif kind == 'skip_source_rows':
-        result_text = show_skip_source_rows_param_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_skip_source_rows_param_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6396,7 +6534,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             sheet.getCellByPosition(2, row).String = u''
     elif kind == 'header_row':
-        result_text = show_header_row_param_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_header_row_param_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6412,7 +6550,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         if target_col < 1:
             target_col = 1
         result_text = show_source_extra_param_dialog(
-            None,
+            parent,
             sub.get('initial_text'),
             doc=doc,
             source_path=sub.get('source_path'),
@@ -6432,7 +6570,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
             sheet.getCellByPosition(target_col, row).String = u''
         _ensure_param_row_formatting(sheet, row, catalog, spec, False, doc=doc)
     elif kind == 'pre_shell':
-        result_text = show_pre_shell_param_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_pre_shell_param_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6450,7 +6588,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
             sheet.getCellByPosition(2, row).String = u''
         _ensure_param_row_formatting(sheet, row, catalog, spec, False, doc=doc)
     elif kind == 'cell_to_column':
-        result_text = show_cell_to_column_param_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_cell_to_column_param_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6462,7 +6600,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             sheet.getCellByPosition(2, row).String = u''
     elif kind == 'add_to_variables_map':
-        result_text = show_add_to_variables_map_param_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_add_to_variables_map_param_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6474,7 +6612,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             sheet.getCellByPosition(2, row).String = u''
     elif kind == 'manual_variable_input':
-        result_text = show_manual_variable_input_param_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_manual_variable_input_param_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6487,7 +6625,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
             sheet.getCellByPosition(2, row).String = u''
     elif kind == 'sheet_list_fn':
         fn_key = sub.get('fn_key')
-        result_text = _show_sheet_list_panel_dialog(None, fn_key, sub.get('initial_text'), doc=doc)
+        result_text = _show_sheet_list_panel_dialog(parent, fn_key, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         if spec.get('mode') != 'choice':
@@ -6500,7 +6638,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             sheet.getCellByPosition(2, row).String = u''
     elif kind == 'sheets_undelete_filter':
-        result_text = show_sheets_undelete_filter_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_sheets_undelete_filter_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         # B не трогаем — там шаблоны имён листов
@@ -6509,7 +6647,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             sheet.getCellByPosition(2, row).String = u''
     elif kind == 'sheets_force_delete_filter':
-        result_text = show_sheets_force_delete_filter_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_sheets_force_delete_filter_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6517,7 +6655,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             sheet.getCellByPosition(2, row).String = u''
     elif kind == 'sheets_include_filter':
-        result_text = show_sheets_include_filter_dialog(None, sub.get('initial_text'), doc=doc)
+        result_text = show_sheets_include_filter_dialog(parent, sub.get('initial_text'), doc=doc)
         if result_text is None:
             return False
         try:
@@ -6534,7 +6672,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             source_path = u''
         result_text = show_sheets_pick_rename_dialog(
-            None, sub.get('initial_text'), doc=doc, source_path=source_path,
+            parent, sub.get('initial_text'), doc=doc, source_path=source_path,
         )
         if result_text is None:
             return False
@@ -6552,7 +6690,7 @@ def _run_subdialog_and_save(doc, sheet, catalog, sub):
         except Exception:
             source_path = u''
         result_text = show_columns_pick_rename_dialog(
-            None, sub.get('initial_text'), doc=doc, source_path=source_path,
+            parent, sub.get('initial_text'), doc=doc, source_path=source_path,
         )
         if result_text is None:
             return False
@@ -27101,6 +27239,13 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         _wizard_dlg_add_button(dialog_model, 'TabBtnParam', u'Параметр', tab_x, _pw_cfg._TAB_Y, tab_w, _pw_cfg._CTRL_H)
         _wizard_dlg_add_button(dialog_model, 'TabBtnPresets', u'Пресеты', tab_x + tab_w + g, _pw_cfg._TAB_Y, tab_w, _pw_cfg._CTRL_H)
         _wizard_dlg_add_button(dialog_model, 'TabBtnGlobal', u'Глобальные', tab_x + 2 * (tab_w + g), _pw_cfg._TAB_Y, tab_w, _pw_cfg._CTRL_H)
+        all_params_btn_x = tab_x + 3 * (tab_w + g)
+        all_params_btn_w = max(90, _pw_cfg._DLG_W - _pw_cfg._M - all_params_btn_x)
+        try:
+            from libre_macros_all_params_wizard_cfg import ALL_PARAMS_BTN_LABEL as _all_params_lbl
+        except Exception:
+            _all_params_lbl = u'Все параметры'
+        _wizard_dlg_add_button(dialog_model, 'AllParamsBtn', _all_params_lbl, all_params_btn_x, _pw_cfg._TAB_Y, all_params_btn_w, _pw_cfg._CTRL_H)
         _wizard_dlg_add_fixed(dialog_model, 'LblNewParamMode', _new_param_mode_status_text(False), _pw_cfg._M, _pw_cfg._NEW_MODE_Y, _pw_cfg._MODE_LBL_W, _pw_cfg._MODE_ROW_H, align=0, vertical_align=VERT_ALIGN_MIDDLE)
         _wizard_dlg_add_button(dialog_model, 'NewParamModeBtn', _pw_cfg._MODE_BTN_LABEL_EDIT, _pw_cfg._MODE_BTN_X, _pw_cfg._NEW_MODE_Y, _pw_cfg._MODE_BTN_W, _pw_cfg._MODE_ROW_H)
         lbl_param = dialog_model.createInstance('com.sun.star.awt.UnoControlFixedTextModel')
@@ -27884,6 +28029,45 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                     self._apply_spec_to_form(cur)
                 self._sync_param_action_buttons()
                 _wp_notify_param_action(u'Параметр «%s» удалён (строка %d).' % (pname, row + 1), doc=self.doc, dialog=self.dialog, title=u'Параметры')
+
+            def _on_all_params_clicked(self):
+                """Полноэкранный обзор пайплайна параметров листа."""
+                try:
+                    from libre_macros_all_params_wizard_lib import show_all_params_wizard
+                except Exception as err:
+                    _show_message(u'Не удалось загрузить визард «Все параметры»:\n%s' % err, dialog=self.dialog, doc=self.doc)
+                    return
+                select_row = None
+                if self.edit_mode:
+                    entry = self._selected_sheet_entry()
+                    if entry is not None:
+                        select_row = int(entry['row'])
+                try:
+                    result = show_all_params_wizard(
+                        doc=self.doc,
+                        sheet=self.sheet,
+                        catalog=self.catalog,
+                        parent_dialog=self.dialog,
+                        select_row=select_row,
+                    )
+                except Exception as err:
+                    _show_message(u'Все параметры:\n%s' % err, dialog=self.dialog, doc=self.doc)
+                    return
+                changed = False
+                keep_row = select_row
+                if isinstance(result, tuple):
+                    changed = bool(result[0]) if len(result) > 0 else False
+                    if len(result) > 1 and result[1] is not None:
+                        keep_row = result[1]
+                else:
+                    changed = bool(result)
+                if changed or keep_row != select_row:
+                    self.initial = None
+                    self._reload_param_combo(select_row=keep_row)
+                    cur = self._current_spec()
+                    if cur is not None:
+                        self._apply_spec_to_form(cur)
+                    self._sync_param_action_buttons()
 
             def _refresh_sheet_combo(self, select_name=None):
                 if self.sheet_combo is None:
@@ -29248,6 +29432,9 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                 if btn == 'DeleteParamBtn':
                     self._delete_current_param_row()
                     return
+                if btn == 'AllParamsBtn':
+                    self._on_all_params_clicked()
+                    return
                 if btn == 'CancelButton':
                     self.result = ('cancel', None)
                     self.dialog.endExecute()
@@ -29725,7 +29912,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                 preset_name_edit.addTextListener(handler)
             except Exception:
                 pass
-        for ctl_name in ('BrowseButton', 'FilesClearLastBtn', 'FilesClearAllBtn', 'PivotParamsBtn', 'ColCParamsBtn', 'SourceExtraParamsBtn', 'ConditionBtn', 'PluginEditorBtn', 'OkButton', 'CancelButton', 'SaveParamBtn', 'DeleteParamBtn', 'TabBtnParam', 'TabBtnPresets', 'TabBtnGlobal', 'NewParamModeBtn', 'SavePresetBtn', 'DeletePresetBtn', 'ExportPresetBtn', 'ImportPresetBtn', 'ApplyPresetBtn', 'ClearAllPresetsBtn', 'SaveGlobalSettingsBtn', 'ResetGlobalSettingsBtn', 'GlobalMirrorBrowseBtn', 'GlobalVariablesBtn', 'GlobalFlagsBtn'):
+        for ctl_name in ('BrowseButton', 'FilesClearLastBtn', 'FilesClearAllBtn', 'PivotParamsBtn', 'ColCParamsBtn', 'SourceExtraParamsBtn', 'ConditionBtn', 'PluginEditorBtn', 'OkButton', 'CancelButton', 'SaveParamBtn', 'DeleteParamBtn', 'AllParamsBtn', 'TabBtnParam', 'TabBtnPresets', 'TabBtnGlobal', 'NewParamModeBtn', 'SavePresetBtn', 'DeletePresetBtn', 'ExportPresetBtn', 'ImportPresetBtn', 'ApplyPresetBtn', 'ClearAllPresetsBtn', 'SaveGlobalSettingsBtn', 'ResetGlobalSettingsBtn', 'GlobalMirrorBrowseBtn', 'GlobalVariablesBtn', 'GlobalFlagsBtn'):
             ctl = _dlg_control(dialog, ctl_name)
             if ctl is not None:
                 ctl.addActionListener(handler)
