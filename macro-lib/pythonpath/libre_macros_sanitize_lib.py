@@ -13,7 +13,7 @@ from __future__ import print_function, unicode_literals
 
 См. docs/16_CODE_SANITIZE.md.
 """
-MACRO_VERSION = "3.10.787"
+MACRO_VERSION = "3.10.788"
 import ast
 import os
 import re

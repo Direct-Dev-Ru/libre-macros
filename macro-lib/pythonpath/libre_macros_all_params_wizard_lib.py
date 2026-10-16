@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.787"
+MACRO_VERSION = "3.10.788"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -509,6 +509,364 @@ def _left_panel_width(total_w, m, split_gap):
     if w > avail - 200:
         w = max(min_w, avail - 200)
     return w
+
+
+def _pq_act_slot_count():
+    rows = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_ROWS", 2) or 2)
+    cols = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_COLS", 6) or 6)
+    return max(1, rows * cols)
+
+
+def _pq_band_height(content_h):
+    """~25% высоты окна под ленту Power Query (с clamp)."""
+    ratio = float(getattr(_acfg, "ALL_PARAMS_PQ_BAND_RATIO", 0.25) or 0.25)
+    h = int(round(float(content_h) * ratio))
+    min_h = int(getattr(_acfg, "ALL_PARAMS_PQ_BAND_MIN_H", 96))
+    max_h = int(getattr(_acfg, "ALL_PARAMS_PQ_BAND_MAX_H", 180))
+    if h < min_h:
+        h = min_h
+    if h > max_h:
+        h = max_h
+    # не съедать больше трети контента
+    cap = max(min_h, int(content_h * 0.32))
+    if h > cap:
+        h = cap
+    return h
+
+
+def _pq_tab_control_name(tab_id):
+    return u"PqTab_%s" % unicode(tab_id or u"")
+
+
+def _pq_act_control_name(idx):
+    return u"PqAct%d" % int(idx)
+
+
+def _create_pq_ribbon(dm, x, y, w, h):
+    """Создать вкладки + слоты действий (подписи заполняются позже)."""
+    gap = int(getattr(_acfg, "ALL_PARAMS_PQ_GAP", 4))
+    tab_h = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_H", 26))
+    act_h = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_H", 26))
+    tab_w = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_W", 118))
+    tab_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_GAP", 3))
+    act_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_GAP", 3))
+    rows = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_ROWS", 2) or 2)
+    cols = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_COLS", 6) or 6)
+    font_h = int(getattr(_acfg, "ALL_PARAMS_PQ_FONT_H", 10))
+    _add_label(dm, u"PqRibbonLbl", u"Добавить шаг (Power Query):", x, y, w, 14)
+    ty = int(y) + 16
+    tx = int(x)
+    for tab_id, lab in getattr(_acfg, "ALL_PARAMS_PQ_TABS", ()) or ():
+        _add_button(
+            dm,
+            _pq_tab_control_name(tab_id),
+            lab,
+            tx,
+            ty,
+            tab_w,
+            tab_h,
+            bold=True,
+            font_h=font_h,
+        )
+        tx += tab_w + tab_gap
+    ay0 = ty + tab_h + gap
+    # высота слотов: оставшееся место в ленте
+    act_area_h = max(act_h, int(y) + int(h) - ay0)
+    row_h = max(act_h, (act_area_h - (rows - 1) * act_gap) // max(1, rows))
+    cell_w = max(72, (int(w) - (cols - 1) * act_gap) // max(1, cols))
+    n = rows * cols
+    i = 0
+    while i < n:
+        r = i // cols
+        c = i % cols
+        ax = int(x) + c * (cell_w + act_gap)
+        ay = ay0 + r * (row_h + act_gap)
+        _add_button(
+            dm,
+            _pq_act_control_name(i),
+            u"",
+            ax,
+            ay,
+            cell_w,
+            min(row_h, act_h + 4),
+            bold=False,
+            font_h=font_h,
+        )
+        i += 1
+    return n
+
+
+def _layout_pq_ribbon(dm, x, y, w, h):
+    gap = int(getattr(_acfg, "ALL_PARAMS_PQ_GAP", 4))
+    tab_h = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_H", 26))
+    act_h = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_H", 26))
+    tab_w = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_W", 118))
+    tab_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_GAP", 3))
+    act_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_GAP", 3))
+    rows = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_ROWS", 2) or 2)
+    cols = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_COLS", 6) or 6)
+    try:
+        lbl = dm.getByName(u"PqRibbonLbl")
+        lbl.PositionX = int(x)
+        lbl.PositionY = int(y)
+        lbl.Width = int(w)
+        lbl.Height = 14
+    except Exception:
+        pass
+    ty = int(y) + 16
+    tx = int(x)
+    for tab_id, _lab in getattr(_acfg, "ALL_PARAMS_PQ_TABS", ()) or ():
+        name = _pq_tab_control_name(tab_id)
+        try:
+            btn = dm.getByName(name)
+            btn.PositionX = tx
+            btn.PositionY = ty
+            btn.Width = tab_w
+            btn.Height = tab_h
+        except Exception:
+            pass
+        tx += tab_w + tab_gap
+    ay0 = ty + tab_h + gap
+    act_area_h = max(act_h, int(y) + int(h) - ay0)
+    row_h = max(act_h, (act_area_h - (rows - 1) * act_gap) // max(1, rows))
+    cell_w = max(72, (int(w) - (cols - 1) * act_gap) // max(1, cols))
+    n = rows * cols
+    i = 0
+    while i < n:
+        r = i // cols
+        c = i % cols
+        name = _pq_act_control_name(i)
+        try:
+            btn = dm.getByName(name)
+            btn.PositionX = int(x) + c * (cell_w + act_gap)
+            btn.PositionY = ay0 + r * (row_h + act_gap)
+            btn.Width = cell_w
+            btn.Height = min(row_h, act_h + 4)
+        except Exception:
+            pass
+        i += 1
+
+
+def _pq_set_button_colors(btn_model, active):
+    if btn_model is None:
+        return
+    bg = int(
+        getattr(
+            _acfg,
+            "ALL_PARAMS_PQ_ACTIVE_BG" if active else "ALL_PARAMS_PQ_IDLE_BG",
+            0x1565C0 if active else 0xE3EAF2,
+        )
+    )
+    fg = int(
+        getattr(
+            _acfg,
+            "ALL_PARAMS_PQ_ACTIVE_FG" if active else "ALL_PARAMS_PQ_IDLE_FG",
+            0xFFFFFF if active else 0x1A237E,
+        )
+    )
+    try:
+        btn_model.BackgroundColor = bg
+    except Exception:
+        pass
+    try:
+        btn_model.TextColor = fg
+    except Exception:
+        pass
+
+
+def _pq_apply_tab_ui(state, tab_id=None):
+    """Подсветить вкладку и заполнить слоты действий."""
+    dialog = state.get(u"dialog")
+    dm = state.get(u"dm")
+    if tab_id is None:
+        tab_id = state.get(u"pq_tab") or getattr(_acfg, "ALL_PARAMS_PQ_DEFAULT_TAB", u"home")
+    tab_id = unicode(tab_id or u"home")
+    state[u"pq_tab"] = tab_id
+    actions = dict(getattr(_acfg, "ALL_PARAMS_PQ_ACTIONS", {}) or {})
+    items = list(actions.get(tab_id) or ())
+    state[u"pq_act_map"] = {}
+    n = _pq_act_slot_count()
+    for tid, _lab in getattr(_acfg, "ALL_PARAMS_PQ_TABS", ()) or ():
+        name = _pq_tab_control_name(tid)
+        try:
+            mdl = dm.getByName(name) if dm is not None else None
+        except Exception:
+            mdl = None
+        _pq_set_button_colors(mdl, unicode(tid) == tab_id)
+        if dialog is not None:
+            try:
+                ctl = dialog.getControl(name)
+                if ctl is not None and hasattr(ctl, u"Model"):
+                    _pq_set_button_colors(ctl.Model, unicode(tid) == tab_id)
+            except Exception:
+                pass
+    i = 0
+    while i < n:
+        name = _pq_act_control_name(i)
+        fn_key = u""
+        lab = u""
+        enable = False
+        if i < len(items):
+            fn_key = unicode(items[i][0] or u"").strip()
+            lab = unicode(items[i][1] or fn_key).strip()
+            enable = bool(fn_key)
+        if enable:
+            state[u"pq_act_map"][name] = fn_key
+        try:
+            mdl = dm.getByName(name) if dm is not None else None
+            if mdl is not None:
+                mdl.Label = lab
+                try:
+                    mdl.Enabled = enable
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if dialog is not None:
+            try:
+                ctl = dialog.getControl(name)
+                if ctl is not None:
+                    try:
+                        ctl.Model.Label = lab
+                    except Exception:
+                        pass
+                    try:
+                        ctl.Model.Enabled = enable
+                    except Exception:
+                        pass
+                    try:
+                        ctl.setEnable(enable)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        i += 1
+
+
+def _pq_step_param_name(pw, sheet, catalog):
+    """Имя A для шага из меню: Постобработка_Диапазон → Постобработка → fallback."""
+    prefer = unicode(getattr(_acfg, "ALL_PARAMS_PQ_STEP_NAME", u"Постобработка_Диапазон") or u"").strip()
+    names = []
+    try:
+        names = list(pw._catalog_names_for_new_param(sheet, catalog) or [])
+    except Exception:
+        names = []
+    if not names and catalog is not None:
+        i = 0
+        while i < len(catalog):
+            nm = unicode((catalog[i] or {}).get(u"name") or u"").strip()
+            if nm:
+                names.append(nm)
+            i += 1
+    for cand in (prefer, u"Постобработка_Диапазон", u"Постобработка"):
+        cf = cand.casefold()
+        for nm in names:
+            if unicode(nm).casefold() == cf:
+                return unicode(nm)
+    return _default_name_for_add(pw, sheet, catalog)
+
+
+def _add_param_step(state, fn_key, param_name=None):
+    """
+    Вставить шаг пайплайна с B=fn_key и минимальным JSON в C.
+    Возвращает номер строки или None.
+    """
+    fn_key = unicode(fn_key or u"").strip()
+    if fn_key == u"":
+        return None
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = _list_selected_index(dialog)
+    if si < 0:
+        si = int(state.get(u"selected") or -1)
+    if sheet is None:
+        return None
+    _save_detail_to_sheet(state, force=True)
+    pw = _pw()
+    if param_name:
+        name = unicode(param_name).strip()
+    else:
+        name = _pq_step_param_name(pw, sheet, catalog)
+    spec = None
+    try:
+        spec = pw._find_catalog_spec(catalog, name)
+    except Exception:
+        spec = None
+    if spec is None:
+        try:
+            pw._show_message(
+                u"Не найден параметр «%s» в каталоге." % name,
+                dialog=dialog,
+                doc=doc,
+                title=u"Добавить шаг",
+            )
+        except Exception:
+            pass
+        return None
+    if 0 <= si < len(entries):
+        insert_at = int(entries[si].get(u"row")) + 1
+    elif entries:
+        insert_at = int(entries[-1].get(u"row")) + 1
+    else:
+        insert_at = 1
+    if insert_at < 1:
+        insert_at = 1
+    extra = u""
+    try:
+        extra = unicode(pw._pp_minimal_json_for_fn(fn_key) or u"").strip()
+    except Exception:
+        extra = u'[{"v":1,"fn":"%s"}]' % fn_key
+    try:
+        from libre_macros_copy_param_rows_lib import _restore_header_after_copy
+    except Exception:
+        _restore_header_after_copy = None
+    pw._param_sheet_begin_write(sheet)
+    try:
+        sheet.getRows().insertByIndex(insert_at, 1)
+        sheet.getCellByPosition(0, insert_at).String = unicode(name)
+        try:
+            pw.apply_param_value(
+                sheet,
+                spec,
+                fn_key,
+                extra,
+                target_row=insert_at,
+                catalog=catalog,
+                doc=doc,
+            )
+        except Exception:
+            sheet.getCellByPosition(1, insert_at).String = fn_key
+            if extra:
+                sheet.getCellByPosition(2, insert_at).String = extra
+        try:
+            pw._ensure_param_row_formatting(sheet, insert_at, catalog, spec, True, doc=doc)
+        except Exception:
+            pass
+        if _restore_header_after_copy is not None:
+            try:
+                _restore_header_after_copy(pw, sheet, catalog, [insert_at])
+            except Exception:
+                pass
+    except Exception as exc:
+        try:
+            pw._show_message(u"Не удалось добавить шаг:\n%s" % exc, dialog=dialog, doc=doc)
+        except Exception:
+            pass
+        return None
+    finally:
+        try:
+            pw._param_sheet_end_write(sheet)
+        except Exception:
+            pass
+    _refresh_list(state, keep_row=insert_at)
+    try:
+        _update_status(state)
+    except Exception:
+        pass
+    return insert_at
 
 
 def _refresh_list(state, keep_row=None, keep_index=-1):
@@ -1729,8 +2087,8 @@ def _sync_control_layout(dialog, dm):
 
 def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
     """
-    Раскладка как у todo plan (split): hint + Close сверху;
-    слева над списком — Удалить/Скопировать/↑/↓; справа — детали C/D.
+    Раскладка: hint + Close → лента Power Query (~25%) →
+    слева тулбар/список; справа детали A/B/C/D (A/B не сжимаем).
     """
     title_h = _title_h(dm)
     total_h = int(sh)
@@ -1773,6 +2131,11 @@ def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
     left_w = _left_panel_width(total_w, m, split_gap)
     right_x = m + left_w + split_gap
     right_w = total_w - right_x - m
+
+    # Лента PQ — ~25% высоты окна, на всю ширину.
+    pq_h = _pq_band_height(content_h)
+    _layout_pq_ribbon(dm, m, y, total_w - 2 * m, pq_h)
+    y += pq_h + gap
 
     # Кнопки шагов — строго над списком слева.
     toolbar_y = y
@@ -1928,6 +2291,11 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         pass
     status_y = content_h - m - status_h
 
+    # Лента Power Query (~25% высоты) — до тулбара/списка.
+    pq_h = _pq_band_height(content_h)
+    _create_pq_ribbon(dm, m, y, dlg_w - 2 * m, pq_h)
+    y += pq_h + gap
+
     toolbar_y = y
     x = m
     for spec in getattr(_acfg, "ALL_PARAMS_TOOLBAR_BTNS", ()) or ():
@@ -1974,6 +2342,8 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         u"changed": False,
         u"form_loading": False,
         u"loaded_snap": None,
+        u"pq_tab": unicode(getattr(_acfg, "ALL_PARAMS_PQ_DEFAULT_TAB", u"home")),
+        u"pq_act_map": {},
     }
 
     class _Handler(unohelper.Base, XActionListener, XItemListener):
@@ -1996,6 +2366,17 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
                     dialog.endExecute()
                 except Exception:
                     pass
+                return
+            # Вкладки / действия Power Query
+            if name.startswith(u"PqTab_"):
+                tab_id = name[len(u"PqTab_"):]
+                _pq_apply_tab_ui(state, tab_id)
+                return
+            if name.startswith(u"PqAct"):
+                fn_key = (state.get(u"pq_act_map") or {}).get(name) or u""
+                if fn_key:
+                    if _add_param_step(state, fn_key) is not None:
+                        state[u"changed"] = True
                 return
             if name == u"AddBtn":
                 _add_param_after_cursor(state)
@@ -2088,6 +2469,18 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
             dialog.getControl(btn).addActionListener(handler)
         except Exception as err:
             _log("listener %s: %s" % (btn, err))
+    for tid, _lab in getattr(_acfg, "ALL_PARAMS_PQ_TABS", ()) or ():
+        try:
+            dialog.getControl(_pq_tab_control_name(tid)).addActionListener(handler)
+        except Exception as err:
+            _log("pq tab listener %s: %s" % (tid, err))
+    i = 0
+    while i < _pq_act_slot_count():
+        try:
+            dialog.getControl(_pq_act_control_name(i)).addActionListener(handler)
+        except Exception as err:
+            _log("pq act listener %d: %s" % (i, err))
+        i += 1
     try:
         dialog.getControl(u"StepsListBox").addItemListener(handler)
     except Exception as err:
@@ -2096,6 +2489,8 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         dialog.getControl(u"NameCombo").addItemListener(handler)
     except Exception as err:
         _log("name combo listener: %s" % err)
+
+    _pq_apply_tab_ui(state, state.get(u"pq_tab"))
 
     if select_row is not None:
         _refresh_list(state, keep_row=int(select_row))

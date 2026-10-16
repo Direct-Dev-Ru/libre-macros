@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.787"
+MACRO_VERSION = "3.10.788"
 import ast
 import glob
 import json
@@ -27290,7 +27290,7 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
         _wp_message_box_execute(doc, parent_dialog, MESSAGEBOX, MSG_BUTTONS.BUTTONS_OK, u'Ошибка', u'Ошибка диалога сводной таблицы: %s' % exc)
         return None
 
-def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=None):
+def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=None, auto_open_all_params=False):
     try:
         ctx = XSCRIPTCONTEXT.getComponentContext()
         sm = ctx.getServiceManager()
@@ -29999,6 +29999,23 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         else:
             handler._apply_spec_to_form(init_spec)
         handler._sync_param_action_buttons()
+        # Не из C/D: сразу открыть «Все параметры», как по кнопке.
+        if auto_open_all_params:
+            try:
+                dialog.setVisible(True)
+            except Exception:
+                pass
+            try:
+                toolkit.processEventsToIdle()
+            except Exception:
+                pass
+            try:
+                handler._on_all_params_clicked()
+            except Exception as _ap_err:
+                try:
+                    print(u'param_wizard: auto AllParams: %s' % _ap_err)
+                except Exception:
+                    pass
         dialog.execute()
         return handler.result
     except Exception as e:
@@ -30180,7 +30197,15 @@ def set_merge_param(*args):
             else:
                 main_initial = dict(main_initial)
                 main_initial['new_param_mode'] = True
-        result = create_param_wizard_dialog(doc, sheet, catalog, main_initial, _list_param_sheet_names_for_wizard(doc))
+        # Главный визард (не C/D) — сразу открыть и «Все параметры».
+        result = create_param_wizard_dialog(
+            doc,
+            sheet,
+            catalog,
+            main_initial,
+            _list_param_sheet_names_for_wizard(doc),
+            auto_open_all_params=True,
+        )
         if result is None or result[0] != 'ok':
             return
         _ok, spec, primary, extra, row, ctx_col = result[:6]
