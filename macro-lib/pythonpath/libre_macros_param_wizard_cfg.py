@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.786"
+MACRO_VERSION = "3.10.787"
 import re
 
 try:
@@ -396,8 +396,8 @@ _FALLBACK_FINAL_REST_HINTS = {
         u"#Путь,3,A,Коммент*",
     ),
     u"конкатенация_столбцов": (
-        u"имя_нового_столбца, разделитель, индексы 1-based; без разделителя — индексы",
-        u"Полный_Код,|,1,3,5",
+        u"JSON: new_column, separator, columns; trim_values; empty_subst+empty_value; reuse если имя∈columns",
+        u'[{"v":1,"fn":"конкатенация_столбцов","new_column":"ФИО","separator":" / ","columns":[1,3],"trim_values":true,"empty_subst":true,"empty_value":"_ПУСТО_"}]',
     ),
     u"разделить_по_столбцам": (
         u"JSON: column, delimiter, position, source_policy, new_names, create_missing_columns; «Параметры…»",
@@ -536,8 +536,8 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u"#Путь,3,A,Коммент*",
     ),
     u"конкатенация_столбцов": (
-        u"имя_нового_столбца, разделитель, индексы 1-based (1=A); без разделителя — индексы",
-        u"Полный_Код,|,1,3,5",
+        u"JSON: new_column, separator, columns; trim_values; empty_subst+empty_value; reuse если имя∈columns",
+        u'[{"v":1,"fn":"конкатенация_столбцов","new_column":"ФИО","separator":" / ","columns":[1,3],"trim_values":true,"empty_subst":true,"empty_value":"_ПУСТО_"}]',
     ),
     u"разделить_по_столбцам": (
         u"JSON: column, delimiter, position, source_policy, new_names, create_missing_columns; «Параметры…»",
@@ -1612,6 +1612,20 @@ ADD_COLUMN_DATA_TYPE_LABEL = {c: l for c, l in ADD_COLUMN_DATA_TYPE_CHOICES}
 ADD_COLUMN_DATA_TYPE_CODE = {l.casefold(): c for c, l in ADD_COLUMN_DATA_TYPE_CHOICES}
 for _ac_code, _ac_lab in ADD_COLUMN_DATA_TYPE_CHOICES:
     ADD_COLUMN_DATA_TYPE_CODE[_ac_code.casefold()] = _ac_code
+# Конкатенация столбцов: подстановка вместо пустой ячейки (код = текст в JSON).
+CONCAT_EMPTY_VALUE_CHOICES = (
+    (u"_ПУСТО_", u"_ПУСТО_"),
+    (u"_EMPTY_", u"_EMPTY_"),
+    (u"__ПУСТО__", u"__ПУСТО__"),
+    (u"(пусто)", u"(пусто)"),
+    (u"N/A", u"N/A"),
+    (u"#Н/Д", u"#Н/Д"),
+    (u"-", u"-"),
+)
+CONCAT_EMPTY_VALUE_LABEL = {c: l for c, l in CONCAT_EMPTY_VALUE_CHOICES}
+CONCAT_EMPTY_VALUE_CODE = {l.casefold(): c for c, l in CONCAT_EMPTY_VALUE_CHOICES}
+for _cev_code, _cev_lab in CONCAT_EMPTY_VALUE_CHOICES:
+    CONCAT_EMPTY_VALUE_CODE[_cev_code.casefold()] = _cev_code
 
 # Вид индекса для data_type=index (доступен только при «Индекс»).
 ADD_COLUMN_INDEX_STYLE_CHOICES = (
@@ -3043,13 +3057,16 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"конкатенация_столбцов": {
         "title": u"Конкатенация столбцов",
         "hint": (
-            u"Имя нового столбца, разделитель (пусто = склейка без разделителя).\n"
-            u"Столбцы — выбор из заголовков листа (накопление через запятую; имена с «,» "
-            u"в 'кавычках'; × / ××). Допустимы также индексы 1-based и буквы (A, C)."
+            u"Имя результата, разделитель (пусто = склейка без разделителя).\n"
+            u"Столбцы — заголовки / индексы 1-based / буквы (A, C); × / ××.\n"
+            u"Если имя результата совпадает с одним из склеиваемых (в т.ч. по индексу) — "
+            u"запись в этот столбец, без нового.\n"
+            u"«Сжать пробелы» — trim слева/справа у каждой части. "
+            u"«Подстановка для пустого» — вместо пустой ячейки подставить выбранный/свой текст."
         ),
-        "hint_lines": 3,
+        "hint_lines": 5,
         "fields": (
-            {"id": "new_column", "label": u"Имя столбца", "default": u"Полный_Код"},
+            {"id": "new_column", "label": u"Имя столбца (результат)", "default": u"Полный_Код"},
             {"id": "separator", "label": u"Разделитель", "default": u"|"},
             {
                 "id": "columns",
@@ -3057,6 +3074,27 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "type": "columns_pick",
                 "choices_from_headers": True,
                 "default": u"1,3,5",
+            },
+            {
+                "id": "trim_values",
+                "label": u"Сжать пробелы (слева/справа у каждой части)",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "empty_value",
+                "label": u"Чем заменить пустое (список или свой текст)",
+                "type": "combo",
+                "choices": tuple(lab for _c, lab in CONCAT_EMPTY_VALUE_CHOICES),
+                "default": u"_ПУСТО_",
+                "with_auto_check": u"empty_subst",
+            },
+            {
+                "id": "empty_subst",
+                "label": u"Подстановка для пустого",
+                "type": "bool",
+                "default": False,
+                "pair_after": u"empty_value",
             },
         ),
     },

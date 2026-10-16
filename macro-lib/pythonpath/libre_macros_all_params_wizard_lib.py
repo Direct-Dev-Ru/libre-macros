@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.786"
+MACRO_VERSION = "3.10.787"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener

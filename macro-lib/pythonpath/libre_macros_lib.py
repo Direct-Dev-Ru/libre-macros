@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.786"
+MACRO_VERSION = "3.10.787"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -11693,7 +11693,10 @@ def lm_pp_range_concat_columns(doc, sheet, data_range, header_row_range, *extra_
         doc, sheet, data_range, header_row_range — стандартные range
         *extra_args — dict-блок JSON (param_decode)
 
-    JSON колонки C: [{"v":1,"fn":"конкатенация_столбцов","new_column":"ФИО","separator":" / ","columns":[1,3]}].
+    JSON колонки C:
+        new_column, separator, columns; trim_values; empty_subst + empty_value.
+        Если new_column совпадает с одним из columns (имя/индекс/буква) — запись
+        в этот столбец без создания нового.
 
     Карта: «конкатенация_столбцов».
 
@@ -11702,8 +11705,8 @@ def lm_pp_range_concat_columns(doc, sheet, data_range, header_row_range, *extra_
 
     Что меняет:
         Новый или существующий столбец с заголовком col_name и текстом в строках данных.
-        Формат клонируется поддиапазонами с последнего столбца data_range: отдельно строка
-        заголовка и блок данных; ширина — OptimalWidth; end_col контекста расширяется.
+        Формат клонируется поддиапазонами с последнего столбца data_range (если новый);
+        ширина — OptimalWidth; end_col контекста расширяется.
     """
     sheet_name = sheet.Name if sheet is not None else ""
     if _lm_pp_param_skip_sheet("конкатенация_столбцов", extra_args, doc, sheet):
@@ -11735,6 +11738,21 @@ def lm_pp_range_concat_columns(doc, sheet, data_range, header_row_range, *extra_
         )
         return
     col_name, delim, indices = parsed
+    trim_values = False
+    empty_subst = False
+    empty_value = ""
+    if block is not None:
+        try:
+            trim_values = bool(lm_parse_bool_param(block.get("trim_values"), default=False))
+        except Exception:
+            trim_values = bool(block.get("trim_values", False))
+        try:
+            empty_subst = bool(lm_parse_bool_param(block.get("empty_subst"), default=False))
+        except Exception:
+            empty_subst = bool(block.get("empty_subst", False))
+        empty_value = str(block.get("empty_value") or "").strip()
+        if empty_subst and empty_value == "":
+            empty_value = "_ПУСТО_"
     # columns: поддерживаем индексы (1-based), буквы (A, AA) и заголовки
     resolved = []
     sc, sr, ec, er = _lm_pp_range_address(data_range)
@@ -11775,28 +11793,53 @@ def lm_pp_range_concat_columns(doc, sheet, data_range, header_row_range, *extra_
             seen.add(c)
             resolved2.append(c)
     indices = resolved2
-    loc = _lm_pp_resolve_derived_column(
-        sheet, data_range, header_row_range, col_name
+    sc2, sr, ec2, er = _lm_pp_range_address(data_range)
+    h_sc, h_sr, h_ec, h_er = _lm_pp_range_address(header_row_range)
+    ref_col = ec2 if ec2 >= h_sc else h_sc
+    # Если результат = один из склеиваемых (имя/индекс/буква) — пишем туда,
+    # не вызывая find_or_append (иначе «1» создаст новый столбец с заголовком «1»).
+    reuse_src = False
+    target_col = -1
+    name_key = lm_identity_key(col_name)
+    tok_idx = _lm_pp_resolve_column_token(
+        col_name, sheet, header_row_range, sc, ec
     )
-    if loc is None:
-        _lm_log_postprocess(
-            doc,
-            sheet_name,
-            "диапазон",
-            "конкатенация_столбцов",
-            "ошибка",
-            "не удалось добавить столбец «%s»" % col_name,
+    if tok_idx is not None and int(tok_idx) in indices:
+        target_col = int(tok_idx)
+        reuse_src = True
+    else:
+        for c in indices:
+            try:
+                hdr = cell_text(sheet.getCellByPosition(c, h_sr)).strip()
+            except Exception:
+                hdr = ""
+            if hdr != "" and lm_identity_key(hdr) == name_key:
+                target_col = int(c)
+                reuse_src = True
+                break
+    if not reuse_src:
+        loc = _lm_pp_resolve_derived_column(
+            sheet, data_range, header_row_range, col_name
         )
-        return
-    sr = loc["sr"]
-    er = loc["er"]
-    h_sr = loc["h_sr"]
-    ref_col = loc["ref_col"]
-    target_col = loc["target_col"]
-    _lm_pp_clone_concat_column_formats(
-        sheet, ref_col, target_col, h_sr, sr, er
-    )
-    sheet.getCellByPosition(target_col, h_sr).String = col_name
+        if loc is None:
+            _lm_log_postprocess(
+                doc,
+                sheet_name,
+                "диапазон",
+                "конкатенация_столбцов",
+                "ошибка",
+                "не удалось добавить столбец «%s»" % col_name,
+            )
+            return
+        sr = loc["sr"]
+        er = loc["er"]
+        h_sr = loc["h_sr"]
+        ref_col = loc["ref_col"]
+        target_col = loc["target_col"]
+        _lm_pp_clone_concat_column_formats(
+            sheet, ref_col, target_col, h_sr, sr, er
+        )
+        sheet.getCellByPosition(target_col, h_sr).String = col_name
     r = sr
     n = 0
     while r <= er:
@@ -11809,7 +11852,12 @@ def lm_pp_range_concat_columns(doc, sheet, data_range, header_row_range, *extra_
                 continue
             if c < 0:
                 continue
-            parts.append(cell_text(sheet.getCellByPosition(c, r)))
+            part = cell_text(sheet.getCellByPosition(c, r))
+            if trim_values:
+                part = part.strip()
+            if empty_subst and part == "":
+                part = empty_value
+            parts.append(part)
         sheet.getCellByPosition(target_col, r).String = delim.join(parts)
         n = n + 1
         if _lm_ui_should_update_status(n, is_last=(r == er)):
@@ -11822,15 +11870,30 @@ def lm_pp_range_concat_columns(doc, sheet, data_range, header_row_range, *extra_
             )
         _lm_ui_yield(counter=n)
         r = r + 1
-    _lm_pp_finalize_derived_column(sheet, ref_col, target_col, h_sr, sr)
+    if not reuse_src:
+        _lm_pp_finalize_derived_column(sheet, ref_col, target_col, h_sr, sr)
+    else:
+        try:
+            _lm_pp_autofit_columns(None, sheet, [target_col])
+        except Exception:
+            pass
     _lm_log_postprocess(
         doc,
         sheet_name,
         "диапазон",
         "конкатенация_столбцов",
         "ok",
-        "столбец %d «%s», образец %d, индексы %s, разделитель «%s»"
-        % (target_col, col_name, ref_col, ",".join(str(i) for i in indices), delim),
+        "столбец %d «%s»%s, образец %d, индексы %s, разделитель «%s», trim=%s, empty_subst=%s"
+        % (
+            target_col,
+            col_name,
+            " (reuse)" if reuse_src else "",
+            ref_col,
+            ",".join(str(i) for i in indices),
+            delim,
+            trim_values,
+            empty_subst,
+        ),
     )
 
 

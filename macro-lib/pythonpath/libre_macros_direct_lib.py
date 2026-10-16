@@ -10,7 +10,7 @@
 """
 
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.786"
+MACRO_VERSION = "3.10.787"
 import calendar
 import os
 import re
@@ -10152,22 +10152,57 @@ def _direct_pp_file_structural_xlsx(path, sheet_name, fn_key, extra):
             src_cols0 = _direct_pp_resolve_col_tokens(indices, header_h2i, end_col0)
             if not src_cols0:
                 return False, u"столбцы не найдены"
-            target_col0 = _direct_xlsx_header_col_index(
-                ws, col_name, hdr_row_1=hdr_row_1
+            trim_values = bool(block.get("trim_values", False))
+            empty_subst = bool(block.get("empty_subst", False))
+            empty_value = unicode(block.get("empty_value") or u"").strip()
+            if empty_subst and empty_value == u"":
+                empty_value = u"_ПУСТО_"
+            # reuse: имя/индекс результата ∈ склеиваемых
+            reuse_src = False
+            target_col0 = -1
+            name_key = _merge_identity_key(col_name)
+            name_as_src = _direct_pp_resolve_col_tokens(
+                [col_name], header_h2i, end_col0
             )
-            ws.cell(row=hdr_row_1, column=target_col0 + 1).value = col_name
+            if name_as_src and int(name_as_src[0]) in src_cols0:
+                target_col0 = int(name_as_src[0])
+                reuse_src = True
+            else:
+                for c0 in src_cols0:
+                    try:
+                        hv = ws.cell(row=hdr_row_1, column=c0 + 1).value
+                        hdr = unicode(hv if hv is not None else u"").strip()
+                    except Exception:
+                        hdr = u""
+                    if hdr != u"" and _merge_identity_key(hdr) == name_key:
+                        target_col0 = int(c0)
+                        reuse_src = True
+                        break
+            if not reuse_src:
+                target_col0 = _direct_xlsx_header_col_index(
+                    ws, col_name, hdr_row_1=hdr_row_1
+                )
+                ws.cell(row=hdr_row_1, column=target_col0 + 1).value = col_name
             rr = first_data_1
             n = 0
             while rr <= last_data_1:
                 parts = []
                 for c0 in src_cols0:
                     v = ws.cell(row=rr, column=c0 + 1).value
-                    parts.append(u"" if v is None else unicode(v))
+                    part = u"" if v is None else unicode(v)
+                    if trim_values:
+                        part = part.strip()
+                    if empty_subst and part == u"":
+                        part = empty_value
+                    parts.append(part)
                 ws.cell(row=rr, column=target_col0 + 1).value = delim.join(parts)
                 n += 1
                 rr += 1
             wb.save(path)
-            return True, u"столбец %d «%s», строк %d" % (target_col0 + 1, col_name, n)
+            mark = u" (reuse)" if reuse_src else u""
+            return True, u"столбец %d «%s»%s, строк %d" % (
+                target_col0 + 1, col_name, mark, n
+            )
 
         if key == u"замена_значений":
             block = _direct_pp_pick_sheet_block(u"замена_значений", extra, sheet_name)
@@ -11892,10 +11927,36 @@ def _direct_pp_file_structural_ods(path, sheet_name, fn_key, extra):
         src_cols0 = _direct_pp_resolve_col_tokens(indices, header_h2i, end_col0)
         if not src_cols0:
             return False, u"столбцы не найдены"
-        target_col0 = _direct_ods_header_col_index(rows, col_name, hdr_row=hdr_row0)
+        trim_values = bool(block.get("trim_values", False))
+        empty_subst = bool(block.get("empty_subst", False))
+        empty_value = unicode(block.get("empty_value") or u"").strip()
+        if empty_subst and empty_value == u"":
+            empty_value = u"_ПУСТО_"
+        reuse_src = False
+        target_col0 = -1
+        name_key = _merge_identity_key(col_name)
+        name_as_src = _direct_pp_resolve_col_tokens(
+            [col_name], header_h2i, end_col0
+        )
+        if name_as_src and int(name_as_src[0]) in src_cols0:
+            target_col0 = int(name_as_src[0])
+            reuse_src = True
+        else:
+            hdr_by_col = {}
+            if hdr_row0 < len(rows):
+                for cidx, val in _ods_row_col_values(rows[hdr_row0]):
+                    hdr_by_col[int(cidx)] = unicode(val if val is not None else u"").strip()
+            for c0 in src_cols0:
+                hdr = hdr_by_col.get(int(c0), u"")
+                if hdr != u"" and _merge_identity_key(hdr) == name_key:
+                    target_col0 = int(c0)
+                    reuse_src = True
+                    break
+        if not reuse_src:
+            target_col0 = _direct_ods_header_col_index(rows, col_name, hdr_row=hdr_row0)
         need_end = max(end_col0, target_col0, max(src_cols0) if src_cols0 else 0)
-        # заголовок
-        if hdr_row0 < len(rows):
+        # заголовок (только если новый столбец)
+        if (not reuse_src) and hdr_row0 < len(rows):
             _direct_ods_expand_row_to_cols(rows[hdr_row0], need_end)
             _direct_ods_set_cell_at_col(
                 rows[hdr_row0], target_col0, _ods_make_cell(col_name)
@@ -11913,14 +11974,22 @@ def _direct_pp_file_structural_ods(path, sheet_name, fn_key, extra):
             parts = []
             for c0 in src_cols0:
                 v = by_col.get(c0)
-                parts.append(u"" if v is None else unicode(v))
+                part = u"" if v is None else unicode(v)
+                if trim_values:
+                    part = part.strip()
+                if empty_subst and part == u"":
+                    part = empty_value
+                parts.append(part)
             _direct_ods_set_cell_at_col(
                 rows[rr], target_col0, _ods_make_cell(delim.join(parts))
             )
             n += 1
             rr += 1
         doc.save(path)
-        return True, u"столбец %d «%s», строк %d" % (target_col0 + 1, col_name, n)
+        mark = u" (reuse)" if reuse_src else u""
+        return True, u"столбец %d «%s»%s, строк %d" % (
+            target_col0 + 1, col_name, mark, n
+        )
 
     if key == u"замена_значений":
         block = _direct_pp_pick_sheet_block(u"замена_значений", extra, sheet_name)

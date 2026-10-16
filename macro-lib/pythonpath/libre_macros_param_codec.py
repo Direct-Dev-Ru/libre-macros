@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.786"
+MACRO_VERSION = "3.10.787"
 import json
 import re
 
@@ -1689,6 +1689,33 @@ def _normalize_concat_columns_block(block):
     out["separator"] = unicode(out.get("separator") or "")
     # columns: разрешаем индексы (1-based), буквы и заголовки
     out["columns"] = _normalize_column_token_list(out.get("columns"))
+    try:
+        from libre_macros_lib import lm_parse_bool_param
+
+        out["trim_values"] = bool(lm_parse_bool_param(out.get("trim_values"), default=False))
+        out["empty_subst"] = bool(lm_parse_bool_param(out.get("empty_subst"), default=False))
+    except Exception:
+        out["trim_values"] = bool(out.get("trim_values", False))
+        out["empty_subst"] = bool(out.get("empty_subst", False))
+    empty_val = unicode(out.get("empty_value") or "").strip()
+    if out["empty_subst"]:
+        if empty_val == "":
+            empty_val = u"_ПУСТО_"
+        try:
+            from libre_macros_param_wizard_cfg import CONCAT_EMPTY_VALUE_CODE
+
+            code = CONCAT_EMPTY_VALUE_CODE.get(empty_val.casefold())
+            if code is not None:
+                empty_val = code
+        except Exception:
+            pass
+        out["empty_value"] = empty_val
+    else:
+        # Без подстановки — не храним пустой placeholder в JSON.
+        if empty_val != "":
+            out["empty_value"] = empty_val
+        else:
+            out.pop("empty_value", None)
     return _attach_sheet(out, out.get("sheet"))
 
 

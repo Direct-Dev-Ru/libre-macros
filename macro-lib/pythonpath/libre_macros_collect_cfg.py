@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.786"
+MACRO_VERSION = "3.10.787"
 import re
 
 try:
@@ -665,8 +665,9 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         "#Путь,3,A,Коммент*",
     ),
     "конкатенация_столбцов": (
-        "имя_нового_столбца, разделитель, индексы столбцов 1-based (1=A); без разделителя — сразу индексы",
-        "Полный_Код,|,1,3,5",
+        "JSON: new_column, separator, columns; trim_values; empty_subst+empty_value "
+        "(_ПУСТО_/_EMPTY_/свой текст). Если new_column = один из columns (имя/индекс) — запись в него.",
+        '[{"v":1,"fn":"конкатенация_столбцов","new_column":"ФИО","separator":" / ","columns":[1,3],"trim_values":true,"empty_subst":true,"empty_value":"_ПУСТО_"}]',
     ),
     "разделить_по_столбцам": (
         "JSON: column, delimiter, position, source_policy, split_mode, max_columns, new_names, create_missing_columns",
