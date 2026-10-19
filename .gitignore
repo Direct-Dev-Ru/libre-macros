@@ -26,6 +26,10 @@ installer/Macro*.xls*
 
 macro-lib/collect_workbooks_no_docstrings.py
 macro-lib/collect_workbooks_py2.py
+
+# Архивы, собранные create_archive.py (см. .archivelist)
+macro-lib-with-test.zip
+project-archive.zip
 test/collect_workbooks/workbooks/.openpyxl_cache/
 test/collect_workbooks/workbooks/ODF/.openpyxl_cache/
 installer/installer_password.txt
