@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.791"
+MACRO_VERSION = "3.10.795"
 import re
 
 try:
@@ -3979,11 +3979,11 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
             },
         ),
     },
-    u"table_to_form": {"alias_of": u"таблица_в_анкету"},
+    u"table_to_form": {"alias_of": u"таблица_в_анкету"},    
     u"копировать_значения": {
         "title": u"Копировать значения",
         "hint": (
-            u"Столбцы для копирования значений — выбор из заголовков "
+            u"Столбцы для копирования содержимого как значений — выбор из заголовков "
             u"('кавычки', накопление, × / ××).\n"
             u"«Весь лист» — без списка столбцов."
         ),
@@ -3995,7 +3995,7 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "label": u"Столбцы",
                 "type": "columns_pick",
                 "choices_from_headers": True,
-                "default": u"Сумма",
+                "default": u"'Сумма'",
             },
         ),
     },

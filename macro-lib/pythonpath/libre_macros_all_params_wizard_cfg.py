@@ -2,7 +2,7 @@
 """Константы полноэкранного визарда «Все параметры» (пайплайн листа)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.791"
+MACRO_VERSION = "3.10.795"
 ALL_PARAMS_BTN_LABEL = u"Все параметры"
 ALL_PARAMS_WIZARD_TITLE = u"Все параметры — пайплайн обработки"
 ALL_PARAMS_WIZARD_HINT = (
@@ -29,6 +29,17 @@ ALL_PARAMS_LIST_MIN_H = 60
 ALL_PARAMS_LIST_BOTTOM_GAP = 4
 ALL_PARAMS_STATUS_H = 16
 ALL_PARAMS_FOOTER_BTN_W = 110
+# «Применить к строке» — в верхней панели слева от «Закрыть».
+ALL_PARAMS_FOOTER_APPLY_W = 150
+
+# Подписи контролов (labels): жирный шрифт + вертикальные марджины.
+# Сверху — небольшой марджин, снизу — чуть меньше (подпись ближе к своему полю).
+# Полная высота подписи = PAD_TOP + текст + PAD_BOTTOM (libre_macros_all_params_wizard_lib._label_slot_h).
+ALL_PARAMS_LABEL_BOLD = True
+# Высота шрифта подписей (pt); None — оставить шрифт диалога, включив только жирность.
+ALL_PARAMS_LABEL_FONT_H = 10
+ALL_PARAMS_LABEL_PAD_TOP = 5
+ALL_PARAMS_LABEL_PAD_BOTTOM = 5
 ALL_PARAMS_DETAIL_BTN_W = 130
 ALL_PARAMS_LIST_TOOLBAR_GAP = 3
 ALL_PARAMS_DETAIL_ROW_H = 20
@@ -39,8 +50,6 @@ ALL_PARAMS_DETAIL_GAP = 3
 ALL_PARAMS_DETAIL_SECTION_GAP = 4
 ALL_PARAMS_DETAIL_BTN_ROW_H = ALL_PARAMS_BTN_H
 ALL_PARAMS_DETAIL_BTN_FONT_H = ALL_PARAMS_BTN_FONT_H
-ALL_PARAMS_APPLY_BTN_H = ALL_PARAMS_BTN_H
-ALL_PARAMS_APPLY_BTN_W = 200
 # Шрифт combo A/B (pt).
 ALL_PARAMS_NAME_FONT_H = 12
 ALL_PARAMS_VALUE_FONT_H = 11
@@ -70,6 +79,8 @@ ALL_PARAMS_PQ_ACT_GAP = 4
 # Вертикальный просвет между рядами действий — минимальный.
 ALL_PARAMS_PQ_ACT_ROW_GAP = 1
 ALL_PARAMS_PQ_FONT_H = 10
+# Высота подписи ленты («Добавить шаг (Power Query):»).
+ALL_PARAMS_PQ_LBL_H = 14
 ALL_PARAMS_PQ_ACT_FONT_H = 9
 ALL_PARAMS_PQ_ACTIVE_BG = 0x1565C0
 ALL_PARAMS_PQ_ACTIVE_FG = 0xFFFFFF

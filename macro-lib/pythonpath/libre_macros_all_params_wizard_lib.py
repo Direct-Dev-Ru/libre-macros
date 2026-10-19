@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.791"
+MACRO_VERSION = "3.10.795"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -157,19 +157,135 @@ def _list_box_height(list_top, status_y, gap=6):
     return h
 
 
-def _add_label(dm, name, label, x, y, w, h, multiline=False):
+def _font_weight(bold):
+    """Вес шрифта UNO (жирный/обычный) с числовым фоллбэком."""
+    if bold:
+        try:
+            from com.sun.star.awt.FontWeight import BOLD
+
+            return BOLD
+        except Exception:
+            return 150
+    try:
+        from com.sun.star.awt.FontWeight import NORMAL
+
+        return NORMAL
+    except Exception:
+        return 100
+
+
+def _apply_control_font(model, font_h=None, bold=False):
+    """Шрифт контрола: высота (если задана) и жирность."""
+    if model is None:
+        return
+    want_bold = bool(bold)
+    try:
+        fd = model.FontDescriptor
+        if font_h is not None:
+            fd.Height = int(font_h)
+        fd.Weight = _font_weight(want_bold)
+        model.FontDescriptor = fd
+        return
+    except Exception:
+        pass
+    if font_h is not None:
+        try:
+            model.FontHeight = int(font_h)
+        except Exception:
+            pass
+    if want_bold:
+        try:
+            model.FontWeight = _font_weight(True)
+        except Exception:
+            pass
+
+
+def _label_font_px(font_h=None):
+    """Высота текста подписи в пикселях (pt -> px) с запасом на жирный шрифт."""
+    if font_h is None:
+        font_h = getattr(_acfg, "ALL_PARAMS_LABEL_FONT_H", None)
+    try:
+        pt = float(font_h)
+    except Exception:
+        return 0
+    if pt <= 0:
+        return 0
+    return int(pt * 4.0 / 3.0 + 0.5) + 2
+
+
+def _label_box_h(h, font_h=None):
+    """Высота контрола-подписи — не меньше, чем нужно шрифту.
+
+    Иначе текст вылезает за рамку контрола и нижний марджин визуально исчезает.
+    """
+    return max(1, int(h), _label_font_px(font_h))
+
+
+def _label_margins(pad_top=None, pad_bottom=None):
+    """Вертикальные марджины подписи: сверху небольшой, снизу чуть меньше."""
+    top = pad_top if pad_top is not None else int(
+        getattr(_acfg, "ALL_PARAMS_LABEL_PAD_TOP", 3)
+    )
+    bottom = pad_bottom if pad_bottom is not None else int(
+        getattr(_acfg, "ALL_PARAMS_LABEL_PAD_BOTTOM", 2)
+    )
+    top = max(0, int(top))
+    bottom = max(0, int(bottom))
+    if bottom >= top:
+        # «снизу чуть меньше, чем сверху» — даже если константы заданы иначе.
+        bottom = max(0, top - 1)
+    return top, bottom
+
+
+def _label_slot_h(h, pad_top=None, pad_bottom=None):
+    """Полная высота подписи: верхний марджин + текст + нижний марджин."""
+    top, bottom = _label_margins(pad_top, pad_bottom)
+    return _label_box_h(h) + top + bottom
+
+
+def _label_pos_y(y, pad_top=None, pad_bottom=None):
+    """Y контрола-подписи внутри отведённого ей слота."""
+    top, _bottom = _label_margins(pad_top, pad_bottom)
+    return int(y) + top
+
+
+def _label_next_y(y, h, pad_top=None, pad_bottom=None):
+    """Верхняя граница контрола ПОСЛЕ подписи: слот целиком (учтён и нижний марджин).
+
+    Подпись занимает ``_label_pos_y(y) … +h``, а нижележащий контрол начинается
+    на ``pad_bottom`` ниже её текстовой области — то есть ровно на низ слота.
+    """
+    return int(y) + _label_slot_h(h, pad_top, pad_bottom)
+
+
+def _label_spec(name, x, y, w, h, pad_top=None, pad_bottom=None):
+    """Спецификация подписи для _layout_*: y со сдвигом на верхний марджин."""
+    return (name, x, _label_pos_y(y, pad_top, pad_bottom), w, _label_box_h(h))
+
+
+def _add_label(dm, name, label, x, y, w, h, multiline=False, bold=None, font_h=None, pad_top=None, pad_bottom=None):
+    """Подпись контрола: жирный шрифт + марджины (сверху небольшой, снизу чуть меньше).
+
+    ``h`` — высота текстовой области; полная высота подписи — ``_label_slot_h(h)``
+    (раскладка сдвигает y на неё, а не на ``h``).
+    """
+    if bold is None:
+        bold = bool(getattr(_acfg, "ALL_PARAMS_LABEL_BOLD", True))
+    if font_h is None:
+        font_h = getattr(_acfg, "ALL_PARAMS_LABEL_FONT_H", None)
     ctl = dm.createInstance(u"com.sun.star.awt.UnoControlFixedTextModel")
     ctl.Name = name
     ctl.Label = unicode(label or u"")
     ctl.PositionX = int(x)
-    ctl.PositionY = int(y)
+    ctl.PositionY = _label_pos_y(y, pad_top, pad_bottom)
     ctl.Width = int(w)
-    ctl.Height = int(h)
+    ctl.Height = _label_box_h(h, font_h)
     if multiline:
         try:
             ctl.MultiLine = True
         except Exception:
             pass
+    _apply_control_font(ctl, font_h, bold)
     dm.insertByName(name, ctl)
     return ctl
 
@@ -308,14 +424,20 @@ def _add_listbox(dm, name, x, y, w, h):
     return lb
 
 
-def _add_checkbox(dm, name, label, x, y, w, h):
+def _add_checkbox(dm, name, label, x, y, w, h, bold=None, font_h=None, pad_top=None, pad_bottom=None):
+    """Чекбокс с подписью: как метка — верхний марджин внутри слота и жирный текст."""
+    if bold is None:
+        bold = bool(getattr(_acfg, "ALL_PARAMS_LABEL_BOLD", True))
+    if font_h is None:
+        font_h = getattr(_acfg, "ALL_PARAMS_LABEL_FONT_H", None)
     chk = dm.createInstance(u"com.sun.star.awt.UnoControlCheckBoxModel")
     chk.Name = name
     chk.Label = unicode(label or u"")
     chk.PositionX = int(x)
-    chk.PositionY = int(y)
+    chk.PositionY = _label_pos_y(y, pad_top, pad_bottom)
     chk.Width = int(w)
-    chk.Height = int(h)
+    chk.Height = _label_box_h(h, font_h)
+    _apply_control_font(chk, font_h, bold)
     dm.insertByName(name, chk)
     return chk
 
@@ -553,8 +675,13 @@ def _pq_act_layout_metrics(x, y, w, h):
     row_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_ROW_GAP", 1))
     rows = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_ROWS", 2) or 2)
     cols = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_COLS", 6) or 6)
-    ty = int(y) + 16
+    lbl_h = int(getattr(_acfg, "ALL_PARAMS_PQ_LBL_H", 14))
+    ty = int(y) + _label_slot_h(lbl_h)
     ay0 = ty + tab_h + gap
+    # Низкая полоса — поджать кнопки, чтобы ряды действий не вылезали вниз.
+    free = (int(y) + int(h)) - ay0 - (rows - 1) * row_gap
+    if free < rows * act_h:
+        act_h = max(20, free // max(1, rows))
     cell_w = max(72, (int(w) - (cols - 1) * act_gap) // max(1, cols))
     return {
         u"gap": gap,
@@ -574,33 +701,8 @@ def _pq_act_layout_metrics(x, y, w, h):
 
 
 def _pq_style_font(btn_model, font_h, bold=False):
-    if btn_model is None:
-        return
-    try:
-        fd = btn_model.FontDescriptor
-        if font_h is not None:
-            fd.Height = int(font_h)
-        if bold:
-            try:
-                from com.sun.star.awt.FontWeight import BOLD
-
-                fd.Weight = BOLD
-            except Exception:
-                fd.Weight = 150
-        else:
-            try:
-                from com.sun.star.awt.FontWeight import NORMAL
-
-                fd.Weight = NORMAL
-            except Exception:
-                fd.Weight = 100
-        btn_model.FontDescriptor = fd
-    except Exception:
-        if font_h is not None:
-            try:
-                btn_model.FontHeight = int(font_h)
-            except Exception:
-                pass
+    """Шрифт кнопок/подписей ленты (жирность + высота)."""
+    _apply_control_font(btn_model, font_h, bold)
 
 
 def _pq_style_chip(btn_model, enabled=True):
@@ -647,7 +749,15 @@ def _create_pq_ribbon(dm, x, y, w, h):
     """Создать вкладки + слоты действий (подписи заполняются позже)."""
     m = _pq_act_layout_metrics(x, y, w, h)
     font_h = int(getattr(_acfg, "ALL_PARAMS_PQ_FONT_H", 10))
-    _add_label(dm, u"PqRibbonLbl", u"Добавить шаг (Power Query):", x, y, w, 14)
+    _add_label(
+        dm,
+        u"PqRibbonLbl",
+        u"Добавить шаг (Power Query):",
+        x,
+        y,
+        w,
+        int(getattr(_acfg, "ALL_PARAMS_PQ_LBL_H", 14)),
+    )
     tx = int(x)
     for tab_id, lab in getattr(_acfg, "ALL_PARAMS_PQ_TABS", ()) or ():
         btn = _add_button(
@@ -694,9 +804,9 @@ def _layout_pq_ribbon(dm, x, y, w, h):
     try:
         lbl = dm.getByName(u"PqRibbonLbl")
         lbl.PositionX = int(x)
-        lbl.PositionY = int(y)
+        lbl.PositionY = _label_pos_y(y)
         lbl.Width = int(w)
-        lbl.Height = 14
+        lbl.Height = _label_box_h(int(getattr(_acfg, "ALL_PARAMS_PQ_LBL_H", 14)))
     except Exception:
         pass
     tx = int(x)
@@ -2154,43 +2264,42 @@ def _move_selected(state, direction):
     _refresh_list(state, keep_row=new_start)
 
 
-def _detail_chrome_height(combo_h, apply_h, lbl_h, gap, sec, btn_row_h):
+def _detail_chrome_height(combo_h, lbl_h, gap, sec, btn_row_h):
     """Высота подписей/отступов/кнопок без полей C/D/описание (B — фикс. combo)."""
-    # DetailLbl + NameLbl + NameCombo + DisabledChk
+    # DetailLbl + NameCombo + DisabledChk
     # + ValueLbl + ValueCombo
-    # + ExtraLbl + CondLbl + DescLbl
-    # + ряд кнопок C/D + Apply (зарезервирован отдельно в avail)
+    # + ExtraLbl + ряд кнопок C/D + CondLbl + DescLbl
+    # («Применить к строке» — в верхней панели, слева от «Закрыть»)
+    slot = _label_slot_h(lbl_h)
     return (
-        (lbl_h + 2) * 2
+        slot
         + combo_h
         + gap
-        + lbl_h
+        + slot
         + sec
-        + (lbl_h + 2)
+        + slot
         + combo_h
         + sec
-        + (lbl_h + 2)
+        + slot
         + sec
         + btn_row_h
         + gap
-        + (lbl_h + 2)
+        + slot
         + sec
-        + (lbl_h + 2)
+        + slot
         + gap
-        + apply_h
     )
 
 
 def _detail_field_heights(avail_h):
-    """Распределить высоту между C / D / описанием (B — combo; Apply — фикс снизу)."""
+    """Распределить высоту между C / D / описанием (B — combo)."""
     combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 28))
     btn_h = int(getattr(_acfg, "ALL_PARAMS_BTN_H", 30))
-    apply_h = btn_h
     lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
     gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
     sec = int(getattr(_acfg, "ALL_PARAMS_DETAIL_SECTION_GAP", 6))
     btn_row_h = btn_h
-    chrome = _detail_chrome_height(combo_h, apply_h, lbl_h, gap, sec, btn_row_h)
+    chrome = _detail_chrome_height(combo_h, lbl_h, gap, sec, btn_row_h)
     rest = max(80, int(avail_h) - chrome)
     emin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_MIN_H", 45))
     cmin = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 44))
@@ -2221,30 +2330,26 @@ def _create_detail_panel(dm, rx, ry, rw):
     btn_h = int(getattr(_acfg, "ALL_PARAMS_BTN_H", 30))
     btn_row_h = btn_h
     btn_font = int(getattr(_acfg, "ALL_PARAMS_BTN_FONT_H", 11))
-    apply_h = btn_h
-    apply_w = int(getattr(_acfg, "ALL_PARAMS_APPLY_BTN_W", 200))
     name_font = int(getattr(_acfg, "ALL_PARAMS_NAME_FONT_H", 12))
     value_font = int(getattr(_acfg, "ALL_PARAMS_VALUE_FONT_H", 11))
     extra_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_EXTRA_MIN_H", 45))
     cond_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COND_MIN_H", 44))
     desc_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_DESC_MIN_H", 56))
     y = int(ry)
-    _add_label(dm, u"DetailLbl", u"Параметры шага:", rx, y, rw, lbl_h)
-    y += lbl_h + 2
-    _add_label(dm, u"NameLbl", u"Имя (A):", rx, y, rw, lbl_h)
-    y += lbl_h + 2
+    _add_label(dm, u"DetailLbl", u"Параметры шага: Имя параметра(колонка A):", rx, y, rw, lbl_h)
+    y = _label_next_y(y, lbl_h)
     _add_combo(dm, u"NameCombo", rx, y, rw, combo_h, editable=True, font_h=name_font)
     y += combo_h + gap
     _add_checkbox(dm, u"DisabledChk", u"Отключить параметр (__ в колонке A)", rx, y, rw, lbl_h)
-    y += lbl_h + sec
-    _add_label(dm, u"ValueLbl", u"Значение (B):", rx, y, rw, lbl_h)
-    y += lbl_h + 2
+    y = _label_next_y(y, lbl_h) + sec
+    _add_label(dm, u"ValueLbl", u"Значение параметра (колонка B):", rx, y, rw, lbl_h)
+    y = _label_next_y(y, lbl_h)
     _add_combo(dm, u"ValueCombo", rx, y, rw, combo_h, editable=True, font_h=value_font)
     y += combo_h + sec
     c_btn = unicode(getattr(_acfg, "ALL_PARAMS_BTN_C_LABEL", u"Параметры C…"))
     d_btn = unicode(getattr(_acfg, "ALL_PARAMS_BTN_D_LABEL", u"Параметры D…"))
     _add_label(dm, u"ExtraLbl", u"Колонка C (JSON / доп. аргументы):", rx, y, rw, lbl_h)
-    y += lbl_h + 2
+    y = _label_next_y(y, lbl_h)
     _add_edit(dm, u"ExtraEd", rx, y, rw, extra_h, multiline=True)
     y += extra_h + sec
     # Кнопки C и D — выше, жирный шрифт, между полями C и D.
@@ -2256,29 +2361,17 @@ def _create_detail_panel(dm, rx, ry, rw):
     )
     y += btn_row_h + gap
     _add_label(dm, u"CondLbl", u"Колонка D/E (условие шага):", rx, y, rw, lbl_h)
-    y += lbl_h + 2
+    y = _label_next_y(y, lbl_h)
     _add_edit(dm, u"CondEd", rx, y, rw, cond_h, multiline=True, readonly=True)
     y += cond_h + sec
     _add_label(dm, u"DescLbl", u"Описание:", rx, y, rw, lbl_h)
-    y += lbl_h + 2
+    y = _label_next_y(y, lbl_h)
     _add_edit(dm, u"DescEd", rx, y, rw, desc_h, multiline=True, readonly=True)
-    y += desc_h + gap
-    _add_button(
-        dm,
-        u"ApplyBtn",
-        u"Применить к строке",
-        rx,
-        y,
-        min(apply_w, rw),
-        apply_h,
-        bold=True,
-        font_h=btn_font,
-    )
-    return y + apply_h
+    return y + desc_h
 
 
 def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
-    """A/B — combo; C −20%; кнопки C/D между C и D; Apply прижата к низу."""
+    """A/B — combo; C −20%; кнопки C/D между C и D; поля тянутся до низа."""
     combo_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_COMBO_H", 28))
     lbl_h = int(getattr(_acfg, "ALL_PARAMS_DETAIL_LBL_H", 14))
     gap = int(getattr(_acfg, "ALL_PARAMS_DETAIL_GAP", 4))
@@ -2286,27 +2379,22 @@ def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
     btn_w = int(getattr(_acfg, "ALL_PARAMS_DETAIL_BTN_W", 130))
     btn_h = int(getattr(_acfg, "ALL_PARAMS_BTN_H", 30))
     btn_row_h = btn_h
-    apply_h = btn_h
-    apply_w = int(getattr(_acfg, "ALL_PARAMS_APPLY_BTN_W", 200))
     avail = max(120, int(bottom_y) - int(ry))
     extra_h, cond_h, desc_h = _detail_field_heights(avail)
     y = int(ry)
-    specs = (
-        (u"DetailLbl", rx, y, rw, lbl_h),
-    )
-    y += lbl_h + 2
-    specs += ((u"NameLbl", rx, y, rw, lbl_h),)
-    y += lbl_h + 2
+    slot = _label_slot_h(lbl_h)
+    specs = (_label_spec(u"DetailLbl", rx, y, rw, lbl_h),)
+    y += slot
     specs += ((u"NameCombo", rx, y, rw, combo_h),)
     y += combo_h + gap
-    specs += ((u"DisabledChk", rx, y, rw, lbl_h),)
-    y += lbl_h + sec
-    specs += ((u"ValueLbl", rx, y, rw, lbl_h),)
-    y += lbl_h + 2
+    specs += (_label_spec(u"DisabledChk", rx, y, rw, lbl_h),)
+    y += slot + sec
+    specs += (_label_spec(u"ValueLbl", rx, y, rw, lbl_h),)
+    y += slot
     specs += ((u"ValueCombo", rx, y, rw, combo_h),)
     y += combo_h + sec
-    specs += ((u"ExtraLbl", rx, y, rw, lbl_h),)
-    y += lbl_h + 2
+    specs += (_label_spec(u"ExtraLbl", rx, y, rw, lbl_h),)
+    y += slot
     specs += ((u"ExtraEd", rx, y, rw, extra_h),)
     y += extra_h + sec
     specs += (
@@ -2314,18 +2402,13 @@ def _layout_detail_panel(dm, rx, ry, rw, bottom_y):
         (u"CondBtn", rx + btn_w + gap, y, btn_w, btn_row_h),
     )
     y += btn_row_h + gap
-    specs += ((u"CondLbl", rx, y, rw, lbl_h),)
-    y += lbl_h + 2
+    specs += (_label_spec(u"CondLbl", rx, y, rw, lbl_h),)
+    y += slot
     specs += ((u"CondEd", rx, y, rw, cond_h),)
     y += cond_h + sec
-    specs += ((u"DescLbl", rx, y, rw, lbl_h),)
-    y += lbl_h + 2
+    specs += (_label_spec(u"DescLbl", rx, y, rw, lbl_h),)
+    y += slot
     specs += ((u"DescEd", rx, y, rw, desc_h),)
-    # «Применить» — к нижней кромке свободной области.
-    apply_y = int(bottom_y) - apply_h
-    if apply_y < y + gap:
-        apply_y = y + gap
-    specs += ((u"ApplyBtn", rx, apply_y, min(apply_w, rw), apply_h),)
     for name, x, yy, w, h in specs:
         try:
             ctl = dm.getByName(name)
@@ -2379,6 +2462,7 @@ def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
     list_tb_gap = int(getattr(_acfg, "ALL_PARAMS_LIST_TOOLBAR_GAP", 4))
     split_gap = int(getattr(_acfg, "ALL_PARAMS_SPLIT_GAP", 8))
     footer_btn_w = int(getattr(_acfg, "ALL_PARAMS_FOOTER_BTN_W", 110))
+    footer_apply_w = int(getattr(_acfg, "ALL_PARAMS_FOOTER_APPLY_W", 150))
     list_lbl_h = int(getattr(_acfg, "ALL_PARAMS_LIST_LBL_H", 18))
     try:
         dm.Width = total_w
@@ -2389,9 +2473,9 @@ def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
     try:
         hint = dm.getByName(u"HintLbl")
         hint.PositionX = m
-        hint.PositionY = y
-        hint.Width = max(40, total_w - 2 * m - footer_btn_w - gap)
-        hint.Height = hint_h
+        hint.PositionY = _label_pos_y(y)
+        hint.Width = max(40, total_w - 2 * m - footer_btn_w - footer_apply_w - 2 * gap)
+        hint.Height = _label_box_h(hint_h)
     except Exception:
         pass
     try:
@@ -2402,7 +2486,15 @@ def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
         close.PositionX = total_w - m - footer_btn_w
     except Exception:
         pass
-    y += max(hint_h, toolbar_h) + gap
+    try:
+        ap = dm.getByName(u"ApplyBtn")
+        ap.PositionY = y
+        ap.Height = toolbar_h
+        ap.Width = footer_apply_w
+        ap.PositionX = total_w - m - footer_btn_w - gap - footer_apply_w
+    except Exception:
+        pass
+    y += max(_label_slot_h(hint_h), toolbar_h) + gap
 
     content_h = _content_height(total_h, dm)
     try:
@@ -2438,12 +2530,12 @@ def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
     try:
         ll = dm.getByName(u"StepsListLbl")
         ll.PositionX = m
-        ll.PositionY = y_list
+        ll.PositionY = _label_pos_y(y_list)
         ll.Width = left_w
-        ll.Height = list_lbl_h
+        ll.Height = _label_box_h(list_lbl_h)
     except Exception:
         pass
-    list_top = y_list + list_lbl_h + 2
+    list_top = y_list + _label_slot_h(list_lbl_h)
     list_h = _list_box_height(list_top, status_y, gap=gap)
     try:
         lb = dm.getByName(u"StepsListBox")
@@ -2460,7 +2552,7 @@ def _relayout(dm, sw, sh, m, gap, toolbar_h, status_h, hint_h):
         st.PositionX = m
         st.PositionY = status_y
         st.Width = total_w - 2 * m
-        st.Height = status_h
+        st.Height = _label_box_h(status_h)
     except Exception:
         pass
 
@@ -2515,6 +2607,7 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
     status_h = int(getattr(_acfg, "ALL_PARAMS_STATUS_H", 18))
     hint_h = int(getattr(_acfg, "ALL_PARAMS_HINT_H", 40))
     footer_btn_w = int(getattr(_acfg, "ALL_PARAMS_FOOTER_BTN_W", 110))
+    footer_apply_w = int(getattr(_acfg, "ALL_PARAMS_FOOTER_APPLY_W", 150))
     split_gap = int(getattr(_acfg, "ALL_PARAMS_SPLIT_GAP", 8))
     list_lbl_h = int(getattr(_acfg, "ALL_PARAMS_LIST_LBL_H", 18))
     list_tb_gap = int(getattr(_acfg, "ALL_PARAMS_LIST_TOOLBAR_GAP", 4))
@@ -2544,7 +2637,7 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         unicode(getattr(_acfg, "ALL_PARAMS_WIZARD_HINT", u"")),
         m,
         y,
-        max(40, dlg_w - 2 * m - footer_btn_w - gap),
+        max(40, dlg_w - 2 * m - footer_btn_w - footer_apply_w - 2 * gap),
         hint_h,
         multiline=True,
     )
@@ -2561,7 +2654,18 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         bold=True,
         font_h=btn_font,
     )
-    y += max(hint_h, toolbar_h) + gap
+    _add_button(
+        dm,
+        u"ApplyBtn",
+        u"Применить к строке",
+        dlg_w - m - footer_btn_w - gap - footer_apply_w,
+        y,
+        footer_apply_w,
+        toolbar_h,
+        bold=True,
+        font_h=btn_font,
+    )
+    y += max(_label_slot_h(hint_h), toolbar_h) + gap
 
     left_w = _left_panel_width(dlg_w, m, split_gap)
     right_x = m + left_w + split_gap
@@ -2587,12 +2691,13 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
         )
         x += int(spec[2]) + 4
     y_list = toolbar_y + toolbar_h + list_tb_gap
-    list_top = y_list + list_lbl_h + 2
+    list_top = y_list + _label_slot_h(list_lbl_h)
     list_h = _list_box_height(list_top, status_y, gap=gap)
     _add_label(dm, u"StepsListLbl", u"Шаги пайплайна:", m, y_list, left_w, list_lbl_h)
     _add_listbox(dm, u"StepsListBox", m, list_top, left_w, list_h)
     _create_detail_panel(dm, right_x, toolbar_y, right_w)
-    _add_label(dm, u"StatusLbl", u"", m, status_y, dlg_w - 2 * m, status_h)
+    # Статус — строка состояния у нижней кромки: без марджинов подписи.
+    _add_label(dm, u"StatusLbl", u"", m, status_y, dlg_w - 2 * m, status_h, pad_top=0, pad_bottom=0)
 
     try:
         apply_soft_gray_dark_blue_theme(dm, title_text=title)
