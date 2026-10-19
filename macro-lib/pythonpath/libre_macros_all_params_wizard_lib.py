@@ -2,7 +2,7 @@
 """Полноэкранный визард «Все параметры»: ListBox слева + детали B/C/D справа."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.789"
+MACRO_VERSION = "3.10.791"
 import uno
 import unohelper
 from com.sun.star.awt import XActionListener, XItemListener
@@ -542,69 +542,155 @@ def _pq_act_control_name(idx):
     return u"PqAct%d" % int(idx)
 
 
-def _create_pq_ribbon(dm, x, y, w, h):
-    """Создать вкладки + слоты действий (подписи заполняются позже)."""
-    gap = int(getattr(_acfg, "ALL_PARAMS_PQ_GAP", 4))
+def _pq_act_layout_metrics(x, y, w, h):
+    """Плотная сетка кнопок действий (без растягивания рядов по высоте ленты)."""
+    gap = int(getattr(_acfg, "ALL_PARAMS_PQ_GAP", 3))
     tab_h = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_H", 26))
-    act_h = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_H", 26))
+    act_h = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_H", 28))
     tab_w = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_W", 118))
     tab_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_GAP", 3))
-    act_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_GAP", 3))
+    act_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_GAP", 4))
+    row_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_ROW_GAP", 1))
     rows = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_ROWS", 2) or 2)
     cols = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_COLS", 6) or 6)
+    ty = int(y) + 16
+    ay0 = ty + tab_h + gap
+    cell_w = max(72, (int(w) - (cols - 1) * act_gap) // max(1, cols))
+    return {
+        u"gap": gap,
+        u"tab_h": tab_h,
+        u"act_h": act_h,
+        u"tab_w": tab_w,
+        u"tab_gap": tab_gap,
+        u"act_gap": act_gap,
+        u"row_gap": row_gap,
+        u"rows": rows,
+        u"cols": cols,
+        u"ty": ty,
+        u"ay0": ay0,
+        u"cell_w": cell_w,
+        u"n": rows * cols,
+    }
+
+
+def _pq_style_font(btn_model, font_h, bold=False):
+    if btn_model is None:
+        return
+    try:
+        fd = btn_model.FontDescriptor
+        if font_h is not None:
+            fd.Height = int(font_h)
+        if bold:
+            try:
+                from com.sun.star.awt.FontWeight import BOLD
+
+                fd.Weight = BOLD
+            except Exception:
+                fd.Weight = 150
+        else:
+            try:
+                from com.sun.star.awt.FontWeight import NORMAL
+
+                fd.Weight = NORMAL
+            except Exception:
+                fd.Weight = 100
+        btn_model.FontDescriptor = fd
+    except Exception:
+        if font_h is not None:
+            try:
+                btn_model.FontHeight = int(font_h)
+            except Exception:
+                pass
+
+
+def _pq_style_chip(btn_model, enabled=True):
+    """Стиль «чип» для кнопок действий ленты."""
+    if btn_model is None:
+        return
+    if enabled:
+        bg = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_BG", 0xFFE0B2))
+        fg = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_FG", 0x4E342E))
+    else:
+        bg = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_EMPTY_BG", 0xECEFF1))
+        fg = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_EMPTY_FG", 0x90A4AE))
+    try:
+        btn_model.BackgroundColor = bg
+    except Exception:
+        pass
+    try:
+        btn_model.TextColor = fg
+    except Exception:
+        pass
+    try:
+        # Плоский вид (если поддерживается).
+        from com.sun.star.awt.VisualEffect import FLAT
+
+        btn_model.VisualEffect = FLAT
+    except Exception:
+        try:
+            btn_model.VisualEffect = 1
+        except Exception:
+            pass
+    try:
+        btn_model.Border = 1
+    except Exception:
+        pass
+    try:
+        btn_model.FocusOnClick = False
+    except Exception:
+        pass
+    font_h = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_FONT_H", 9))
+    _pq_style_font(btn_model, font_h, bold=True)
+
+
+def _create_pq_ribbon(dm, x, y, w, h):
+    """Создать вкладки + слоты действий (подписи заполняются позже)."""
+    m = _pq_act_layout_metrics(x, y, w, h)
     font_h = int(getattr(_acfg, "ALL_PARAMS_PQ_FONT_H", 10))
     _add_label(dm, u"PqRibbonLbl", u"Добавить шаг (Power Query):", x, y, w, 14)
-    ty = int(y) + 16
     tx = int(x)
     for tab_id, lab in getattr(_acfg, "ALL_PARAMS_PQ_TABS", ()) or ():
-        _add_button(
+        btn = _add_button(
             dm,
             _pq_tab_control_name(tab_id),
             lab,
             tx,
-            ty,
-            tab_w,
-            tab_h,
+            m[u"ty"],
+            m[u"tab_w"],
+            m[u"tab_h"],
             bold=True,
             font_h=font_h,
         )
-        tx += tab_w + tab_gap
-    ay0 = ty + tab_h + gap
-    # высота слотов: оставшееся место в ленте
-    act_area_h = max(act_h, int(y) + int(h) - ay0)
-    row_h = max(act_h, (act_area_h - (rows - 1) * act_gap) // max(1, rows))
-    cell_w = max(72, (int(w) - (cols - 1) * act_gap) // max(1, cols))
-    n = rows * cols
+        try:
+            btn.FocusOnClick = False
+        except Exception:
+            pass
+        tx += m[u"tab_w"] + m[u"tab_gap"]
+    n = int(m[u"n"])
     i = 0
     while i < n:
-        r = i // cols
-        c = i % cols
-        ax = int(x) + c * (cell_w + act_gap)
-        ay = ay0 + r * (row_h + act_gap)
-        _add_button(
+        r = i // m[u"cols"]
+        c = i % m[u"cols"]
+        ax = int(x) + c * (m[u"cell_w"] + m[u"act_gap"])
+        ay = m[u"ay0"] + r * (m[u"act_h"] + m[u"row_gap"])
+        btn = _add_button(
             dm,
             _pq_act_control_name(i),
             u"",
             ax,
             ay,
-            cell_w,
-            min(row_h, act_h + 4),
-            bold=False,
-            font_h=font_h,
+            m[u"cell_w"],
+            m[u"act_h"],
+            bold=True,
+            font_h=int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_FONT_H", 9)),
         )
+        _pq_style_chip(btn, enabled=False)
         i += 1
     return n
 
 
 def _layout_pq_ribbon(dm, x, y, w, h):
-    gap = int(getattr(_acfg, "ALL_PARAMS_PQ_GAP", 4))
-    tab_h = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_H", 26))
-    act_h = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_H", 26))
-    tab_w = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_W", 118))
-    tab_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_TAB_GAP", 3))
-    act_gap = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_GAP", 3))
-    rows = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_ROWS", 2) or 2)
-    cols = int(getattr(_acfg, "ALL_PARAMS_PQ_ACT_COLS", 6) or 6)
+    m = _pq_act_layout_metrics(x, y, w, h)
     try:
         lbl = dm.getByName(u"PqRibbonLbl")
         lbl.PositionX = int(x)
@@ -613,35 +699,30 @@ def _layout_pq_ribbon(dm, x, y, w, h):
         lbl.Height = 14
     except Exception:
         pass
-    ty = int(y) + 16
     tx = int(x)
     for tab_id, _lab in getattr(_acfg, "ALL_PARAMS_PQ_TABS", ()) or ():
         name = _pq_tab_control_name(tab_id)
         try:
             btn = dm.getByName(name)
             btn.PositionX = tx
-            btn.PositionY = ty
-            btn.Width = tab_w
-            btn.Height = tab_h
+            btn.PositionY = m[u"ty"]
+            btn.Width = m[u"tab_w"]
+            btn.Height = m[u"tab_h"]
         except Exception:
             pass
-        tx += tab_w + tab_gap
-    ay0 = ty + tab_h + gap
-    act_area_h = max(act_h, int(y) + int(h) - ay0)
-    row_h = max(act_h, (act_area_h - (rows - 1) * act_gap) // max(1, rows))
-    cell_w = max(72, (int(w) - (cols - 1) * act_gap) // max(1, cols))
-    n = rows * cols
+        tx += m[u"tab_w"] + m[u"tab_gap"]
+    n = int(m[u"n"])
     i = 0
     while i < n:
-        r = i // cols
-        c = i % cols
+        r = i // m[u"cols"]
+        c = i % m[u"cols"]
         name = _pq_act_control_name(i)
         try:
             btn = dm.getByName(name)
-            btn.PositionX = int(x) + c * (cell_w + act_gap)
-            btn.PositionY = ay0 + r * (row_h + act_gap)
-            btn.Width = cell_w
-            btn.Height = min(row_h, act_h + 4)
+            btn.PositionX = int(x) + c * (m[u"cell_w"] + m[u"act_gap"])
+            btn.PositionY = m[u"ay0"] + r * (m[u"act_h"] + m[u"row_gap"])
+            btn.Width = m[u"cell_w"]
+            btn.Height = m[u"act_h"]
         except Exception:
             pass
         i += 1
@@ -672,6 +753,18 @@ def _pq_set_button_colors(btn_model, active):
         btn_model.TextColor = fg
     except Exception:
         pass
+    try:
+        from com.sun.star.awt.VisualEffect import FLAT
+
+        btn_model.VisualEffect = FLAT
+    except Exception:
+        pass
+    try:
+        btn_model.Border = 0 if active else 1
+    except Exception:
+        pass
+    font_h = int(getattr(_acfg, "ALL_PARAMS_PQ_FONT_H", 10))
+    _pq_style_font(btn_model, font_h, bold=True)
 
 
 def _pq_apply_tab_ui(state, tab_id=None):
@@ -720,6 +813,7 @@ def _pq_apply_tab_ui(state, tab_id=None):
                     mdl.Enabled = enable
                 except Exception:
                     pass
+                _pq_style_chip(mdl, enabled=enable)
         except Exception:
             pass
         if dialog is not None:
@@ -736,6 +830,10 @@ def _pq_apply_tab_ui(state, tab_id=None):
                         pass
                     try:
                         ctl.setEnable(enable)
+                    except Exception:
+                        pass
+                    try:
+                        _pq_style_chip(ctl.Model, enabled=enable)
                     except Exception:
                         pass
             except Exception:
@@ -774,6 +872,9 @@ def _add_param_step(state, fn_key, param_name=None):
     fn_key = unicode(fn_key or u"").strip()
     if fn_key == u"":
         return None
+    if _is_standalone_vlookup_key(fn_key):
+        # ВПР — самостоятельный параметр A (B пусто, C — JSON), не функция пайплайна.
+        return _add_vlookup_step(state)
     dialog = state.get(u"dialog")
     sheet = state.get(u"sheet")
     catalog = state.get(u"catalog")
@@ -853,6 +954,187 @@ def _add_param_step(state, fn_key, param_name=None):
     except Exception as exc:
         try:
             pw._show_message(u"Не удалось добавить шаг:\n%s" % exc, dialog=dialog, doc=doc)
+        except Exception:
+            pass
+        return None
+    finally:
+        try:
+            pw._param_sheet_end_write(sheet)
+        except Exception:
+            pass
+    _refresh_list(state, keep_row=insert_at)
+    try:
+        _update_status(state)
+    except Exception:
+        pass
+    return insert_at
+
+
+def _vlookup_param_name():
+    """Имя A самостоятельного параметра ВПР."""
+    name = unicode(getattr(_acfg, "ALL_PARAMS_VLOOKUP_PARAM_NAME", u"ВПР") or u"").strip()
+    return name or u"ВПР"
+
+
+def _is_standalone_vlookup_key(fn_key):
+    """
+    True — действие ленты «ВПР»: самостоятельный параметр листа
+    (A=ВПР, B пусто, C — JSON), а не функция пайплайна постобработки/финала.
+    """
+    key = unicode(fn_key or u"").strip().casefold()
+    if key == u"":
+        return False
+    cands = (_vlookup_param_name().casefold(), u"впр", u"vlookup")
+    i = 0
+    while i < len(cands):
+        if cands[i] and key == cands[i]:
+            return True
+        i = i + 1
+    return False
+
+
+def _standalone_vlookup_spec(pw, catalog):
+    """Спецификация параметра ВПР (mode=vlookup) из каталога или None."""
+    names = (_vlookup_param_name(), u"vlookup")
+    i = 0
+    while i < len(names):
+        spec = None
+        try:
+            spec = pw._find_catalog_spec(catalog, names[i])
+        except Exception:
+            spec = None
+        if spec is not None and spec.get(u"mode") == u"vlookup":
+            return spec
+        i = i + 1
+    return None
+
+
+def _vlookup_json_template(pw):
+    """Заготовка JSON ВПР для колонки C: как у диалога ВПР с пустыми полями."""
+    try:
+        text = unicode(pw._vlookup_pack_json_values({}) or u"").strip()
+        if text:
+            return text
+    except Exception:
+        pass
+    fallback = getattr(_acfg, "ALL_PARAMS_VLOOKUP_JSON_FALLBACK", u"")
+    return unicode(fallback or u'[{"v":1,"fn":"впр"}]').strip()
+
+
+def _cursor_insert_row(entries, si):
+    """Строка вставки: сразу после выделенной (или после последней)."""
+    if 0 <= si < len(entries):
+        insert_at = int(entries[si].get(u"row")) + 1
+    elif entries:
+        insert_at = int(entries[-1].get(u"row")) + 1
+    else:
+        insert_at = 1
+    if insert_at < 1:
+        insert_at = 1
+    return insert_at
+
+
+def _first_row_phase_row(entries):
+    """Строка первого «Постобработка_Строка» (фаза строк) или None."""
+    i = 0
+    while i < len(entries):
+        if (entries[i].get(u"spec") or {}).get(u"mode") == u"postprocess_row":
+            return int(entries[i].get(u"row"))
+        i = i + 1
+    return None
+
+
+def _write_vlookup_step_row(pw, sheet, row, name, json_c):
+    """Fallback: A=name, B..F пусто, C=JSON (если apply_param_value не сработал)."""
+    row = int(row)
+    sheet.getCellByPosition(0, row).String = unicode(name or u"")
+    ci = 1
+    while ci <= 5:
+        sheet.getCellByPosition(ci, row).String = u""
+        ci = ci + 1
+    sheet.getCellByPosition(2, row).String = unicode(json_c or u"")
+    fns = (u"_ensure_vlookup_json_param_headers", u"_ensure_vlookup_json_param_formats")
+    i = 0
+    while i < len(fns):
+        fn = getattr(pw, fns[i], None)
+        if fn is not None:
+            try:
+                fn(sheet)
+            except Exception:
+                pass
+        i = i + 1
+
+
+def _add_vlookup_step(state):
+    """
+    Добавить ВПР как самостоятельный параметр листа: A = «ВПР», B пусто,
+    C — заготовка JSON. Возвращает номер строки или None.
+
+    ВПР не является функцией пайплайна (Постобработка_*), поэтому строка
+    вставляется в фазу диапазона — до первого «Постобработка_Строка»
+    (иначе collect_workbooks ругается на порядок шагов).
+    """
+    dialog = state.get(u"dialog")
+    sheet = state.get(u"sheet")
+    catalog = state.get(u"catalog")
+    doc = state.get(u"doc")
+    entries = state.get(u"entries") or []
+    si = _list_selected_index(dialog)
+    if si < 0:
+        si = int(state.get(u"selected") or -1)
+    if sheet is None:
+        return None
+    _save_detail_to_sheet(state, force=True)
+    pw = _pw()
+    spec = _standalone_vlookup_spec(pw, catalog)
+    if spec is None:
+        try:
+            pw._show_message(
+                u"Не найден параметр «%s» в каталоге." % _vlookup_param_name(),
+                dialog=dialog,
+                doc=doc,
+                title=u"Добавить шаг",
+            )
+        except Exception:
+            pass
+        return None
+    insert_at = _cursor_insert_row(entries, si)
+    row_phase_at = _first_row_phase_row(entries)
+    if row_phase_at is not None and insert_at > row_phase_at:
+        insert_at = row_phase_at
+    json_c = _vlookup_json_template(pw)
+    try:
+        from libre_macros_copy_param_rows_lib import _restore_header_after_copy
+    except Exception:
+        _restore_header_after_copy = None
+    pw._param_sheet_begin_write(sheet)
+    try:
+        sheet.getRows().insertByIndex(insert_at, 1)
+        try:
+            # mode=vlookup: A из спецификации, B..F очищаются, JSON — в C.
+            pw.apply_param_value(
+                sheet,
+                spec,
+                {u"save_as_json": True, u"json_c": json_c},
+                None,
+                target_row=insert_at,
+                catalog=catalog,
+                doc=doc,
+            )
+        except Exception:
+            _write_vlookup_step_row(pw, sheet, insert_at, spec.get(u"name"), json_c)
+        try:
+            pw._ensure_param_row_formatting(sheet, insert_at, catalog, spec, True, doc=doc)
+        except Exception:
+            pass
+        if _restore_header_after_copy is not None:
+            try:
+                _restore_header_after_copy(pw, sheet, catalog, [insert_at])
+            except Exception:
+                pass
+    except Exception as exc:
+        try:
+            pw._show_message(u"Не удалось добавить шаг ВПР:\n%s" % exc, dialog=dialog, doc=doc)
         except Exception:
             pass
         return None
@@ -2375,7 +2657,9 @@ def show_all_params_wizard(doc=None, sheet=None, catalog=None, parent_dialog=Non
             if name.startswith(u"PqAct"):
                 fn_key = (state.get(u"pq_act_map") or {}).get(name) or u""
                 if fn_key:
-                    if _add_param_step(state, fn_key) is not None:
+                    # ВПР — самостоятельный параметр (A), остальные — функции пайплайна.
+                    added = _add_param_step(state, fn_key)
+                    if added is not None:
                         state[u"changed"] = True
                 return
             if name == u"AddBtn":

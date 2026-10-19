@@ -2,7 +2,7 @@
 """Константы полноэкранного визарда «Все параметры» (пайплайн листа)."""
 from __future__ import print_function, unicode_literals
 
-MACRO_VERSION = "3.10.789"
+MACRO_VERSION = "3.10.791"
 ALL_PARAMS_BTN_LABEL = u"Все параметры"
 ALL_PARAMS_WIZARD_TITLE = u"Все параметры — пайплайн обработки"
 ALL_PARAMS_WIZARD_HINT = (
@@ -59,21 +59,44 @@ ALL_PARAMS_PQ_BAND_RATIO = 0.25
 ALL_PARAMS_PQ_BAND_MIN_H = 96
 ALL_PARAMS_PQ_BAND_MAX_H = 106
 ALL_PARAMS_PQ_TAB_H = 26
-ALL_PARAMS_PQ_ACT_H = 26
+ALL_PARAMS_PQ_ACT_H = 28
 ALL_PARAMS_PQ_ACT_ROWS = 2
 ALL_PARAMS_PQ_ACT_COLS = 6
-ALL_PARAMS_PQ_GAP = 4
+ALL_PARAMS_PQ_GAP = 3
 ALL_PARAMS_PQ_TAB_GAP = 3
 ALL_PARAMS_PQ_TAB_W = 250
-ALL_PARAMS_PQ_ACT_GAP = 3
+# Горизонтальный зазор между кнопками действий.
+ALL_PARAMS_PQ_ACT_GAP = 4
+# Вертикальный просвет между рядами действий — минимальный.
+ALL_PARAMS_PQ_ACT_ROW_GAP = 1
 ALL_PARAMS_PQ_FONT_H = 10
+ALL_PARAMS_PQ_ACT_FONT_H = 9
 ALL_PARAMS_PQ_ACTIVE_BG = 0x1565C0
 ALL_PARAMS_PQ_ACTIVE_FG = 0xFFFFFF
 ALL_PARAMS_PQ_IDLE_BG = 0xE3EAF2
 ALL_PARAMS_PQ_IDLE_FG = 0x1A237E
+# Кнопки действий — «чипы» (янтарь / тёмный текст), пустые — бледные.
+ALL_PARAMS_PQ_ACT_BG = 0xFFE0B2
+ALL_PARAMS_PQ_ACT_FG = 0x4E342E
+ALL_PARAMS_PQ_ACT_EMPTY_BG = 0xECEFF1
+ALL_PARAMS_PQ_ACT_EMPTY_FG = 0x90A4AE
 ALL_PARAMS_PQ_DEFAULT_TAB = u"home"
 # Имя A для шагов из PQ-меню (если есть в каталоге).
 ALL_PARAMS_PQ_STEP_NAME = u"Постобработка_Диапазон"
+# ВПР — самостоятельный параметр листа, а не функция пайплайна:
+# A = «ВПР», B пусто, C — заготовка JSON (кнопка «ВПР», вкладка «Объединить данные»).
+ALL_PARAMS_VLOOKUP_PARAM_NAME = u"ВПР"
+# Запасная заготовка колонки C, если диалог ВПР недоступен.
+# Штатно шаблон собирает param_wizard._vlookup_pack_json_values({}).
+ALL_PARAMS_VLOOKUP_JSON_FALLBACK = (
+    u'[{"v":1,"fn":"впр",'
+    u'"left":{"sheet":"","start_row":null,"start_col":null,"header_row":null},'
+    u'"right":{"sheet":"","start_row":null,"start_col":null,"header_row":null},'
+    u'"keys_same":true,"keys_left":[],"keys_right":[],"extract_columns":[],'
+    u'"join_type":"left","highlight_color":null,"fill_duplicates":true,'
+    u'"not_found_fill":"#Н/Д","multi_match_one_cell":false,"multi_match":"all",'
+    u'"trim_keys":false}]'
+)
 # Вкладки и действия: (id, подпись) / (fn_key, подпись кнопки).
 ALL_PARAMS_PQ_TABS = (
     (u"home", u"Основные операции"),
@@ -109,11 +132,11 @@ ALL_PARAMS_PQ_ACTIONS = {
         (u"развернуть_столбцы", u"Развернуть"),
         (u"убрать_объединение", u"Убрать объединение"),
         (u"добавить_объединение", u"Объединить ячейки"),
-        (u"зебра_диапазон", u"Зебра"),
     ),
     u"add_col": (
         (u"условный_столбец", u"Условный столбец"),
         (u"добавить_столбец", u"Добавить столбец"),
+        (u"столбец_по_лямбде", u"Столбец по лямбде"),
         (u"применить_формулу", u"Формула"),
         (u"конкатенация_столбцов", u"Склеить столбцы"),
         (u"количество_значений", u"Количество значений"),
@@ -131,6 +154,7 @@ ALL_PARAMS_PQ_ACTIONS = {
         (u"таблица_в_анкету", u"Таблица → анкета"),
     ),
     u"manage": (
+        (u"зебра_диапазон", u"Зебра"),
         (u"создать_лист", u"Создать лист"),
         (u"переименовать_лист", u"Переименовать лист"),
         (u"копировать_переместить_лист", u"Копировать лист"),
@@ -142,7 +166,6 @@ ALL_PARAMS_PQ_ACTIONS = {
         (u"толстая_сетка", u"Толстая сетка"),
         (u"шрифт", u"Шрифт"),
         (u"перенос", u"Перенос"),
-        (u"левое_выравнивание", u"Выравнивание"),
     ),
 }
 
