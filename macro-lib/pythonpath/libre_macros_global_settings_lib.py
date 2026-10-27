@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.795"
+MACRO_VERSION = "3.10.798"
 """
 Глобальные настройки collect_workbooks (JSON рядом с пресетами).
 
@@ -400,6 +400,7 @@ def default_global_settings():
         "font_size": DEFAULT_FONT_SIZE,
         "param_sheet_prefix": DEFAULT_PARAM_SHEET_PREFIX,
         "suppress_param_action_messages": False,
+        "no_auto_open_all_params": False,
         "merge_flags": {},
         "settings_mirror_path": u"",
         "global_variables": [],
@@ -515,6 +516,8 @@ def normalize_global_settings(obj):
         out["param_sheet_prefix"] = prefix
     if "suppress_param_action_messages" in obj:
         out["suppress_param_action_messages"] = bool(obj.get("suppress_param_action_messages"))
+    if "no_auto_open_all_params" in obj:
+        out["no_auto_open_all_params"] = bool(obj.get("no_auto_open_all_params"))
     raw_flags = obj.get("merge_flags")
     if isinstance(raw_flags, dict):
         flags = {}

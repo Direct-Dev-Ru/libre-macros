@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.795"
+MACRO_VERSION = "3.10.798"
 import ast
 import glob
 import json
@@ -9440,9 +9440,37 @@ def _sheet_block_form_schema(fn_key):
                 for k, v in entry.items():
                     if k != 'alias_of':
                         merged[k] = v
-                return merged
-            return entry
+                return _resolve_sheet_block_form_schema_choices(merged)
+            return _resolve_sheet_block_form_schema_choices(entry)
     return None
+
+
+def _resolve_sheet_block_form_schema_choices(entry):
+    """choices: строка-имя хелпера → результат вызова; строка-имя константы → сама константа."""
+    fields = entry.get('fields')
+    if not fields:
+        return entry
+    changed = False
+    new_fields = []
+    for fld in fields:
+        ch = fld.get('choices') if isinstance(fld, dict) else None
+        if isinstance(ch, (str, unicode)):
+            resolved = getattr(_pw_cfg, ch, None)
+            if callable(resolved):
+                try:
+                    resolved = tuple(resolved())
+                except Exception:
+                    resolved = ()
+            if isinstance(resolved, (list, tuple)):
+                fld = dict(fld)
+                fld['choices'] = tuple(resolved)
+                changed = True
+        new_fields.append(fld)
+    if not changed:
+        return entry
+    entry = dict(entry)
+    entry['fields'] = tuple(new_fields)
+    return entry
 
 def _sheet_list_panel_allows_convert(fn_key):
     try:
@@ -9942,6 +9970,13 @@ def _is_atext_letters_wizard_fn(fn_key):
     )
 
 def _block_field_to_text(block, field_id, fn_key=None):
+    if unicode(fn_key or u'').casefold() == u'стиль_печати'.casefold() and field_id == 'orientation':
+        code = unicode(block.get(field_id) or u'').strip().casefold()
+        if code in (u'портрет', u'portrait', u'книжная'):
+            code = u'portrait'
+        else:
+            code = u'landscape'
+        return _pw_cfg.PRINT_ORIENTATION_LABEL.get(code, _pw_cfg.PRINT_ORIENTATION_LABELS[0])
     if unicode(fn_key or u'').casefold() == u'градиент'.casefold() and field_id == 'sort_dir':
         raw = unicode(block.get(field_id) or u'').strip().casefold()
         if raw in (u'-', u'desc', u'убыв', u'по_убыв'):
@@ -10035,6 +10070,9 @@ def _block_field_to_text(block, field_id, fn_key=None):
     if field_id == 'keep':
         raw = unicode(block.get('keep') or u'first').strip().casefold()
         return _pw_cfg.DEDUP_KEEP_LABEL.get(raw, unicode(block.get('keep') or u'first'))
+    if field_id == 'h_align' and unicode(fn_key or u'').casefold() == u'отступ'.casefold():
+        raw = unicode(block.get('h_align') or u'left').strip().casefold()
+        return _pw_cfg.INDENT_H_ALIGN_LABEL.get(raw, _pw_cfg.INDENT_H_ALIGN_LABEL[u'left'])
     if unicode(fn_key or u'').casefold() == u'убрать_объединение'.casefold():
         if field_id == 'header_mode':
             raw = unicode(block.get('header_mode') or u'').strip().casefold()
@@ -10477,12 +10515,12 @@ def _block_field_to_text(block, field_id, fn_key=None):
             if fill and font:
                 return u'%s/%s' % (fill, font)
             return fill or font
-    if field_id in ('wrap', 'include_header', 'whole_sheet', 'whole_row', 'sort', 'bold', 'italic', 'font_color_auto', 'as_values', 'copy'):
+    if field_id in ('wrap', 'include_header', 'whole_sheet', 'whole_row', 'sort', 'bold', 'italic', 'font_color_auto', 'as_values', 'copy', 'fit_width', 'print_title'):
         return u'1' if block.get(field_id) else u'0'
     val = block.get(field_id)
     if isinstance(val, (list, tuple)):
         return u', '.join((unicode(x) for x in val if unicode(x).strip()))
-    if field_id in ('height_mm', 'width_mm', 'steps', 'fit_pages', 'font_size'):
+    if field_id in ('height_mm', 'width_mm', 'steps', 'fit_pages', 'fit_pages_height', 'font_size'):
         if val is None:
             return u''
         if val == int(val):
@@ -10539,6 +10577,16 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
             return text
         text = unicode(text or u'').strip()
         return text.lower() not in (u'0', u'false', u'нет', u'no', u'-')
+    if field_id == 'orientation' and unicode(fn_key or u'').casefold() == u'стиль_печати'.casefold():
+        t = unicode(text or u'').strip().casefold()
+        code = _pw_cfg.PRINT_ORIENTATION_CODE.get(t, None)
+        if code in (u'landscape', u'portrait'):
+            return code
+        return u'landscape'
+    if field_id == 'h_align' and unicode(fn_key or u'').casefold() == u'отступ'.casefold():
+        t = unicode(text or u'').strip().casefold()
+        code = _pw_cfg.INDENT_H_ALIGN_CODE.get(t, None)
+        return code if code in (u'left', u'center', u'right') else u'left'
     if field_id == 'sort_dir':
         t = unicode(text or u'').strip().casefold()
         if t in (u'-', u'desc', u'убыв', u'по_убыв'):
@@ -11095,6 +11143,15 @@ def _text_to_block_field(field_id, text, field_type=None, fn_key=None):
             return int(text)
         except (TypeError, ValueError):
             return 1
+    if field_id == 'fit_pages_height':
+        if text == u'':
+            return 0
+        try:
+            return max(0, int(text))
+        except (TypeError, ValueError):
+            return 0
+    if field_id == 'print_title_rows':
+        return unicode(text or u'').strip()
     if field_id == 'threshold':
         if text == u'':
             return 1000.0
@@ -11772,6 +11829,11 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
     field_types = {}
     field_col_pick_btns = {}
     field_col_pick_from_headers = set()
+    # columns_pick с источником заголовков в другом поле формы
+    # ("headers_sheet_field": "source_sheet"): fid -> id поля-листа.
+    field_col_pick_sheet_fields = {}
+    field_col_pick_sheet_src_fields = set()
+    field_col_pick_sheet_src_controls = set()
     field_plain_token_picks = set()
     field_header_choice_combos = set()
     field_sheet_choice_combos = set()
@@ -11900,11 +11962,18 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             field_combos[fid] = fid + 'Cb'
             field_choices[fid] = tuple(fld.get('choices') or ())
             field_col_pick_btns[fid] = (fid + 'DelLastBtn', fid + 'DelAllBtn')
+            # Список заголовков можно брать не с листа блока, а с листа из другого поля
+            # (например «Лист-источник» у копировать_переместить_лист).
+            src_field = unicode(fld.get('headers_sheet_field') or u'').strip()
+            if src_field:
+                field_col_pick_sheet_fields[fid] = src_field
+                field_col_pick_sheet_src_fields.add(src_field)
+                field_col_pick_sheet_src_controls.add(src_field + u'Cb')
             # По умолчанию для columns_pick — заголовки листа (если нет явного choices).
             use_headers = fld.get('choices_from_headers')
             if use_headers is None:
                 use_headers = not bool(fld.get('choices'))
-            if use_headers:
+            if use_headers or src_field:
                 field_col_pick_from_headers.add(fid)
             if fld.get('plain_tokens') or fid == 'choices':
                 field_plain_token_picks.add(fid)
@@ -12346,6 +12415,26 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
         _set_form_ctl_enabled(checks.get(u'values_only'), is_sheet)
         _set_form_ctl_enabled(edits.get(u'rows'), is_rows)
 
+    def _sync_print_style_ui():
+        if unicode(fn_key or u'').casefold() != u'стиль_печати'.casefold():
+            return
+        fit_width = False
+        chk = checks.get(u'fit_width')
+        if chk is not None:
+            try:
+                fit_width = bool(chk.getState())
+            except Exception:
+                fit_width = False
+        print_title = False
+        title_chk = checks.get(u'print_title')
+        if title_chk is not None:
+            try:
+                print_title = bool(title_chk.getState())
+            except Exception:
+                print_title = False
+        _set_form_ctl_enabled(edits.get(u'fit_pages'), not fit_width)
+        _set_form_ctl_enabled(edits.get(u'print_title_rows'), print_title)
+
     def _add_column_data_type_code_from_ui():
         ctl = combos.get(u'data_type')
         if ctl is None:
@@ -12577,6 +12666,31 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             except Exception:
                 pass
 
+    def _columns_pick_names_from_field_sheet(fid):
+        """Заголовки с листа, указанного в поле-источнике (headers_sheet_field)."""
+        src_field = field_col_pick_sheet_fields.get(fid)
+        if not src_field:
+            return ()
+        sheet_name = u''
+        try:
+            sheet_name = _combo_resolved_text(combos.get(src_field), prefer_edit=True)
+        except Exception:
+            sheet_name = u''
+        if not unicode(sheet_name or u'').strip():
+            bi = form_block_index[0]
+            blk = norm_blocks[bi] if 0 <= bi < len(norm_blocks) else {}
+            try:
+                sheet_name = _block_field_to_text(blk, src_field, fn_key=fn_key)
+            except Exception:
+                sheet_name = u''
+        sheet_name = unicode(sheet_name or u'').strip()
+        if not sheet_name:
+            return ()
+        try:
+            return tuple(_wp_list_sheet_header_columns(doc, sheet_name) or ())
+        except Exception:
+            return ()
+
     def _refresh_columns_pick_choices():
         if not field_col_pick_btns:
             return
@@ -12604,9 +12718,10 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                         break
         except Exception:
             names = []
-        names_t = tuple(names)
         for fid in field_col_pick_btns:
-            if fid in field_col_pick_from_headers:
+            if fid in field_col_pick_sheet_fields:
+                names_t = _columns_pick_names_from_field_sheet(fid) or tuple(names)
+            elif fid in field_col_pick_from_headers:
                 names_t = tuple(names)
             else:
                 fld = fields_by_id.get(fid) or {}
@@ -13134,6 +13249,7 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
             _sync_add_column_type_ui()
             _sync_create_sheet_name_ui()
             _sync_create_sheet_data_ui()
+            _sync_print_style_ui()
             if forbid_as_values:
                 _sync_forbid_as_values_ui()
             form_loading[0] = False
@@ -13208,10 +13324,10 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                         auto_ctl.setState(1 if b.get('font_color_auto', True) else 0)
                 except Exception:
                     pass
-        if _has_columns_pick():
-            _refresh_columns_pick_choices()
         _refresh_sheet_choice_combos()
         _refresh_header_choice_combos()
+        if _has_columns_pick():
+            _refresh_columns_pick_choices()
         if unicode(fn_key or u'').casefold() in (u'удаление_строк'.casefold(), u'пропуск_пустых_строк'.casefold()):
             mode_text = unicode(b.get('mode') or u'columns')
             if combos.get('mode') is not None:
@@ -13238,6 +13354,7 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
         _sync_add_column_type_ui()
         _sync_create_sheet_name_ui()
         _sync_create_sheet_data_ui()
+        _sync_print_style_ui()
         form_loading[0] = False
 
     def _sync_header_height_font_color_ui(clear_color=False, disable_auto=False):
@@ -13458,7 +13575,7 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                     b.pop('convert_existing', None)
             except Exception:
                 b.pop('convert_existing', None)
-        if fn_key == u'копировать_значения' and 'whole_sheet' in checks:
+        if fn_key == u'копировать_как_значения' and 'whole_sheet' in checks:
             try:
                 if checks['whole_sheet'].getState():
                     b['whole_sheet'] = True
@@ -13628,6 +13745,10 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                                     form_loading[0] = False
                             self._sync_params_to_block()
                         else:
+                            # Сменился лист-источник заголовков для columns_pick —
+                            # перечитать перечень столбцов (например «Лист-источник»).
+                            if fid in field_col_pick_sheet_src_fields and not form_loading[0]:
+                                _refresh_columns_pick_choices()
                             self._sync_params_to_block()
                         return
 
@@ -13654,6 +13775,13 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                 except Exception:
                     pass
                 self._sync_params_to_block()
+            elif unicode(fn_key or u'').casefold() == u'стиль_печати'.casefold() and (
+                src is checks.get(u'fit_width') or src_name == u'fit_widthChk'
+                or src is checks.get(u'print_title') or src_name == u'print_titleChk'
+            ):
+                _sync_print_style_ui()
+                self._sync_params_to_block()
+                return
             elif fn_key == u'градиент' and (src is checks.get('sort') or src_name == u'sortChk'):
                 try:
                     sort_on = bool(src.getState())
@@ -13725,6 +13853,11 @@ def _show_sheet_block_form_dialog(parent_dialog, fn_key, initial_text, doc=None,
                 )
                 self._sync_params_to_block()
             else:
+                if src_name in field_col_pick_sheet_src_controls:
+                    if not form_loading[0]:
+                        _refresh_columns_pick_choices()
+                    self._sync_params_to_block()
+                    return
                 cp_fid = _columns_pick_fid_for_control(src)
                 if cp_fid is not None:
                     if columns_pick_guard[0] or form_loading[0]:
@@ -22146,7 +22279,7 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
     lbl_w = 86
     lbl_gap = 6
     row_h = 22
-    list_h = 88
+    list_h = 96
     hint_h = 32
     dm.PositionX = 120
     dm.PositionY = 80
@@ -22157,6 +22290,7 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
         dm.Sizeable = True
     except Exception:
         pass
+    btn_h = _pw_cfg._INNER_BTN_H
     y = m
     _wizard_dlg_add_fixed(dm, 'HintLbl', u'Блоки по листам и ключи сортировки. Столбцы — из списка (накопление через запятую) или вручную. Направление: + (возр.) / - (убыв.).', m, y, dw - m * 2, hint_h, multiline=True)
     y += hint_h + 2
@@ -22171,8 +22305,8 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
     y2 = y + list_h + 6
     _wizard_dlg_add_fixed(dm, 'SheetLbl', u'Лист (пусто = все листы):', m, y2, left_w, 14)
     _wizard_dlg_add_combo(dm, 'SheetEd', m, y2 + 14, left_w, 18)
-    _wizard_dlg_add_button(dm, 'AddBlockBtn', u'+ Блок', m, y2 + 36, 80, 16)
-    _wizard_dlg_add_button(dm, 'DelBlockBtn', u'Удалить', m + 90, y2 + 36, 80, 16)
+    _wizard_dlg_add_button(dm, 'AddBlockBtn', u'+ Блок', m, y2 + 36, 80, btn_h)
+    btn_del_block = _wizard_dlg_add_button(dm, 'DelBlockBtn', u'Удалить', m + 90, y2 + 36, 80, btn_h)
     fy = y2
     _wizard_dlg_add_fixed(dm, 'KeyColLbl', u'Столбец:', rx, fy, lbl_w, 14)
     _wizard_dlg_add_combo(dm, 'KeyColCb', ctl_x, fy - 2, ctl_w, 18)
@@ -22180,14 +22314,35 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
     _wizard_dlg_add_fixed(dm, 'KeyDirLbl', u'Напр.:', rx, fy, lbl_w, 14)
     _wizard_dlg_add_combo(dm, 'KeyDirCb', ctl_x, fy - 2, min(120, ctl_w), 18)
     fy += row_h
-    left_block_bottom = y2 + 36 + 16
+    left_block_bottom = y2 + 36 + btn_h
     btn_y = max(fy + 6, left_block_bottom + 4)
-    btn_h = _pw_cfg._INNER_BTN_H
     _wizard_dlg_add_button(dm, 'OkButton', u'OK', m, btn_y, _pw_cfg._INNER_BTN_W, btn_h)
     _wizard_dlg_add_button(dm, 'CancelButton', u'Отмена', m + _pw_cfg._INNER_BTN_W + _pw_cfg._INNER_BTN_GAP, btn_y, _pw_cfg._INNER_BTN_W, btn_h)
-    _inner_dialog_insert_help_button(dm, m, dw, btn_y, btn_h, help_key=u'сортировка')
-    _wizard_dlg_add_button(dm, 'AddKeyBtn', u'+ Ключ', rx, btn_y, 80, btn_h)
-    _wizard_dlg_add_button(dm, 'DelKeyBtn', u'× Ключ', rx + 90, btn_y, 80, btn_h)
+    _inner_dialog_insert_help_button(dm, m, dw, btn_y, btn_h, help_key=u'сортировка', help_w=80)
+    key_btn_w = 86
+    btn_add_key = _wizard_dlg_add_button(dm, 'AddKeyBtn', u'+ Ключ', rx, btn_y, key_btn_w, btn_h)
+    btn_del_key = _wizard_dlg_add_button(dm, 'DelKeyBtn', u'× Ключ', rx + key_btn_w + 6, btn_y, key_btn_w, btn_h)
+    _wizard_dlg_add_button(dm, 'UpKeyBtn', u'↑', rx + (key_btn_w + 6) * 2, btn_y, 30, btn_h)
+    _wizard_dlg_add_button(dm, 'DownKeyBtn', u'↓', rx + (key_btn_w + 6) * 2 + 36, btn_y, 30, btn_h)
+    try:
+        import libre_macros_ui_theme as _ui_theme
+        _ui_theme.apply_token_button_font(btn_add_key, height=14)
+        _ui_theme.apply_token_button_font(btn_del_key, height=14)
+    except Exception:
+        pass
+    for _del_btn in (btn_del_block, btn_del_key):
+        if _del_btn is None:
+            continue
+        try:
+            _del_btn.TextColor = 0xCC0000
+        except Exception:
+            pass
+        try:
+            _del_fd = _del_btn.FontDescriptor
+            _del_fd.Color = 0xCC0000
+            _del_btn.FontDescriptor = _del_fd
+        except Exception:
+            pass
     try:
         dm.getByName('OkButton').DefaultButton = True
     except Exception:
@@ -22202,7 +22357,7 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
         pass
     json_y = btn_y + btn_h + 4
     _wizard_dlg_add_checkbox(dm, 'JsonChk', u'Сохранять как JSON', m, json_y, 200, _pw_cfg._INNER_CHK_H)
-    dm.Height = json_y + _pw_cfg._INNER_CHK_H + m
+    dm.Height = json_y + _pw_cfg._INNER_CHK_H + m + 6
     dlg = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialog', ctx)
     dlg.setModel(dm)
     _nested_subdialog_create_peer(
@@ -22215,6 +22370,15 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
     sheet_ed = dlg.getControl('SheetEd')
     key_col_cb = dlg.getControl('KeyColCb')
     key_dir_cb = dlg.getControl('KeyDirCb')
+    for _red_name in (u'DelBlockBtn', u'DelKeyBtn'):
+        try:
+            dlg.getControl(_red_name).TextColor = 0xCC0000
+        except Exception:
+            pass
+        try:
+            dlg.getControl(_red_name).Model.TextColor = 0xCC0000
+        except Exception:
+            pass
     try:
         dlg.getControl('JsonChk').setState(1)
     except Exception:
@@ -22370,12 +22534,28 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
             tokens = [unicode(t).strip() for t in _vlookup_split_token_list(col_text) if unicode(t).strip()]
             if len(tokens) == 0:
                 return
-            new_items = [{'column': t, 'desc': desc} for t in tokens]
-            if 0 <= ki < len(keys) and (not split_csv):
-                keys[ki] = new_items[0]
+            # Дубли не добавляем: ключ с таким столбцом уже есть в перечне.
+            replace_idx = ki if (0 <= ki < len(keys) and not split_csv) else -1
+            seen_cf = {}
+            for idx_k, it_k in enumerate(keys):
+                if idx_k == replace_idx:
+                    continue
+                seen_cf.setdefault(unicode(it_k.get('column') or u'').strip().casefold(), idx_k)
+            kept = []
+            for t in tokens:
+                t_cf = t.casefold()
+                if t_cf in seen_cf:
+                    continue
+                seen_cf[t_cf] = -1
+                kept.append(t)
+            if len(kept) == 0:
+                return
+            new_items = [{'column': t, 'desc': desc} for t in kept]
+            if replace_idx >= 0:
+                keys[replace_idx] = new_items[0]
                 j = 1
                 while j < len(new_items):
-                    keys.insert(ki + j, new_items[j])
+                    keys.insert(replace_idx + j, new_items[j])
                     j += 1
             else:
                 keys.extend(new_items)
@@ -22387,6 +22567,12 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
             # (накопление CSV коммитится кнопкой «+ Ключ»).
             if u',' in col:
                 return
+            col_cf = col.casefold()
+            for idx_k, it_k in enumerate(keys):
+                if idx_k == ki:
+                    continue
+                if unicode(it_k.get('column') or u'').strip().casefold() == col_cf:
+                    return
             if 0 <= ki < len(keys):
                 keys[ki] = {'column': col, 'desc': desc}
             else:
@@ -22452,6 +22638,34 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
         if block_index < 0 or block_index >= len(norm_blocks):
             return
         _inner_dialog_set_block_sheet(norm_blocks[block_index], _inner_dialog_sheet_text(sheet_ed))
+
+    def _move_selected_key(delta):
+        bi = _block_index_selected()
+        ki = _key_index_selected()
+        if bi < 0 or bi >= len(norm_blocks):
+            return
+        keys = list(norm_blocks[bi].get('keys') or [])
+        if ki < 0 or ki >= len(keys):
+            return
+        # Дописать текущее поле в выбранный ключ, затем переставить.
+        _flush_sort_block_from_form(bi, key_index=ki)
+        keys = list(norm_blocks[bi].get('keys') or [])
+        if ki >= len(keys):
+            return
+        nj = ki + delta
+        if nj < 0 or nj >= len(keys):
+            return
+        keys[ki], keys[nj] = keys[nj], keys[ki]
+        norm_blocks[bi]['keys'] = keys
+        form_loading[0] = True
+        _refresh_keys(bi)
+        try:
+            keys_lb.selectItemPos(nj, True)
+        except Exception:
+            pass
+        form_loading[0] = False
+        last_key_index[0] = nj
+        _load_key_fields(bi, nj)
 
     class _SortDialogHandler(unohelper.Base, XActionListener, XItemListener, XTextListener):
 
@@ -22579,6 +22793,17 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
                 except Exception:
                     pass
                 last_key_index[0] = -1
+                dup_idx = -1
+                for tok in _vlookup_split_token_list(_combo_edit_text(key_col_cb)):
+                    tok_cf = unicode(tok).strip().casefold()
+                    if tok_cf == u'':
+                        continue
+                    for idx_k, it_k in enumerate(norm_blocks[bi].get('keys') or []):
+                        if unicode(it_k.get('column') or u'').strip().casefold() == tok_cf:
+                            dup_idx = idx_k
+                            break
+                    if dup_idx >= 0:
+                        break
                 before = len(norm_blocks[bi].get('keys') or [])
                 _flush_sort_block_from_form(bi, key_index=-1, split_csv=True)
                 after = len(norm_blocks[bi].get('keys') or [])
@@ -22593,6 +22818,14 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
                     _apply_combo_selection(key_dir_cb, (u'+', u'-'), select_name=u'+')
                 except Exception:
                     pass
+                if after <= before and dup_idx >= 0:
+                    # Такой ключ уже есть — выделить его в списке.
+                    try:
+                        keys_lb.selectItemPos(dup_idx, True)
+                        last_key_index[0] = dup_idx
+                    except Exception:
+                        pass
+                    _load_key_fields(bi, dup_idx)
                 return
             if cmd == u'DelKeyBtn':
                 bi = _block_index_selected()
@@ -22604,8 +22837,23 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
                     del keys[ki]
                     norm_blocks[bi]['keys'] = keys
                     last_key_index[0] = -1
-                    _refresh_keys(bi)
                     _clear_key_col_field()
+                    _refresh_keys(bi)
+                    if len(keys) > 0:
+                        # После удаления фокус — на последний оставшийся ключ.
+                        new_ki = len(keys) - 1
+                        try:
+                            keys_lb.selectItemPos(new_ki, True)
+                        except Exception:
+                            pass
+                        last_key_index[0] = new_ki
+                        _load_key_fields(bi, new_ki)
+                return
+            if cmd == u'UpKeyBtn':
+                _move_selected_key(-1)
+                return
+            if cmd == u'DownKeyBtn':
+                _move_selected_key(1)
                 return
     h = _SortDialogHandler()
     try:
@@ -22617,7 +22865,7 @@ def _show_sort_param_dialog(parent_dialog, initial_text, doc=None):
         key_dir_cb.addItemListener(h)
     except Exception:
         pass
-    for btn in ('AddBlockBtn', 'DelBlockBtn', 'AddKeyBtn', 'DelKeyBtn', 'OkButton', 'CancelButton'):
+    for btn in ('AddBlockBtn', 'DelBlockBtn', 'AddKeyBtn', 'DelKeyBtn', 'UpKeyBtn', 'DownKeyBtn', 'OkButton', 'CancelButton'):
         try:
             ctl = dlg.getControl(btn)
             ctl.addActionListener(h)
@@ -26744,11 +26992,11 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
         _wizard_dlg_add_fixed(dm, u'LblHeaderRow', u'Строка заголовков (пусто=1):', m, y + 2, lbl_w, 14)
         _wizard_dlg_add_edit(dm, u'EdHeaderRow', x_f, y, hdr_w, 18)
         y = y + row_h + 2
-        _wizard_dlg_add_fixed(dm, u'LblRangeStart', u'Начало (A1):', m, y + 2, lbl_w, 14)
+        _wizard_dlg_add_fixed(dm, u'LblRangeStart', u'Начало (A1):', m, y + 5, lbl_w, 14)
         x_start = x_f
         _wizard_dlg_add_edit(dm, u'EdRangeStart', x_start, y, range_w, 18)
         x_end_lbl = x_start + range_w + gg
-        _wizard_dlg_add_fixed(dm, u'LblRangeEnd', u'Конец (K100):', x_end_lbl, y + 2, 78, 14)
+        _wizard_dlg_add_fixed(dm, u'LblRangeEnd', u'Конец (K100):', x_end_lbl, y + 5, 78, 14)
         x_end = x_end_lbl + 78 + g
         _wizard_dlg_add_edit(dm, u'EdRangeEnd', x_end, y, range_w, 18)
         y = y + row_h + 4
@@ -26759,7 +27007,7 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
         _wizard_dlg_add_fixed(dm, u'LblAvail', u'Доступные поля', m, y, left_w, 14)
         avail_list_y = y + 14
         _wizard_dlg_add_listbox(dm, u'LbAvail', m, avail_list_y, left_w, list_h)
-        # Средние кнопки — равномерно по высоте списка доступных полей.
+        # Средние кнопки центрируются по зонам справа; «Назад» — в ряд с «Данные».
         bx = m + left_w + 4
         mid_btns = (
             (u'BtnToFilter', u'→ Фильтры'),
@@ -26768,17 +27016,9 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
             (u'BtnToData', u'→ Данные'),
             (u'BtnFrom', u'← Назад'),
         )
-        n_btn = len(mid_btns)
         mid_btn_h = 20
-        if n_btn <= 1:
-            mid_step = 0.0
-        else:
-            mid_step = float(list_h - mid_btn_h) / float(n_btn - 1)
-        bi = 0
-        while bi < n_btn:
-            by = int(round(avail_list_y + mid_step * bi))
-            _wizard_dlg_add_button(dm, mid_btns[bi][0], mid_btns[bi][1], bx, by, mid_w, mid_btn_h)
-            bi = bi + 1
+        mid_btn_gap = 4
+        mid_btn_half_w = (mid_w - mid_btn_gap) // 2
         # Правые зоны: верх «Фильтры» = верх «Доступные поля»; низ = низ списка.
         rx = m + left_w + mid_w + 8
         right_zones = (
@@ -26796,6 +27036,23 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
         box_h = max(22, int(usable / n_z))
         used = n_z * (lbl_hh + box_h) + (n_z - 1) * zone_gap
         extra = right_bottom - right_top - used
+        # Центры полей зон — по ним выравниваются кнопки переноса.
+        zone_btn_ys = []
+        zi_geom = 0
+        ry_geom = right_top
+        while zi_geom < n_z:
+            h_geom = box_h + (extra if zi_geom == n_z - 1 else 0)
+            list_center = ry_geom + lbl_hh + h_geom / 2.0
+            zone_btn_ys.append(int(round(list_center - mid_btn_h / 2.0)))
+            ry_geom = ry_geom + lbl_hh + h_geom + zone_gap
+            zi_geom = zi_geom + 1
+        bi = 0
+        while bi < n_z:
+            b_w = mid_btn_half_w if mid_btns[bi][0] == u'BtnToData' else mid_w
+            _wizard_dlg_add_button(dm, mid_btns[bi][0], mid_btns[bi][1], bx, zone_btn_ys[bi], b_w, mid_btn_h)
+            bi = bi + 1
+        # «Назад» — в один ряд с «Данные», ширина вполовину, просвет mid_btn_gap.
+        _wizard_dlg_add_button(dm, mid_btns[4][0], mid_btns[4][1], bx + mid_btn_half_w + mid_btn_gap, zone_btn_ys[3], mid_btn_half_w, mid_btn_h)
         ry = right_top
         zi = 0
         while zi < n_z:
@@ -26808,13 +27065,13 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
         y3 = avail_list_y + list_h + 6
         x3 = m
         lbl_fn_w = 58
-        _wizard_dlg_add_fixed(dm, u'LblFn', u'Функция:', x3, y3 + 2, lbl_fn_w, 14)
+        _wizard_dlg_add_fixed(dm, u'LblFn', u'Функция:', x3, y3 + 5, lbl_fn_w, 14)
         x3 = x3 + lbl_fn_w + g
         cb_fn_w = 108
         _wizard_dlg_add_combo(dm, u'CbFn', x3, y3, cb_fn_w, 18)
         x3 = x3 + cb_fn_w + gg
         lbl_sheet_w = 98
-        _wizard_dlg_add_fixed(dm, u'LblSheet', u'Лист сводной:', x3, y3 + 2, lbl_sheet_w, 14)
+        _wizard_dlg_add_fixed(dm, u'LblSheet', u'Имя листа для сводной табл.:', x3, y3 + 5, lbl_sheet_w, 14)
         x3 = x3 + lbl_sheet_w + g
         _wizard_dlg_add_edit(dm, u'EdSheet', x3, y3, dw - m - x3, 18)
         y3 = y3 + row_h + 4
@@ -26849,19 +27106,22 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
         )
         y3 = y3 + 18
         # Компактные разделители.
-        _wizard_dlg_add_fixed(dm, u'LblNameSep', u'Имя↔знач.:', m, y3 + 2, 64, 14)
-        _wizard_dlg_add_edit(dm, u'EdNameSep', m + 64, y3, 56, 18)
-        _wizard_dlg_add_fixed(dm, u'LblRecSep', u'Записи:', m + 128, y3 + 2, 48, 14)
-        _wizard_dlg_add_edit(dm, u'EdRecSep', m + 176, y3, 72, 18)
-        _wizard_dlg_add_fixed(dm, u'LblSepHint', u'\\n = перенос строки', m + 256, y3 + 2, 140, 14)
+        _wizard_dlg_add_fixed(dm, u'LblNameSep', u'Разделитель Имя-знач.:', m, y3 + 5, 128, 14)
+        _wizard_dlg_add_edit(dm, u'EdNameSep', m + 128, y3, 48, 18)
+        _wizard_dlg_add_fixed(dm, u'LblRecSep', u'Разделит. Записей:', m + 128+48+24, y3 + 5, 128, 14)
+        _wizard_dlg_add_edit(dm, u'EdRecSep', m + 256+48+24, y3, 72, 18)
+        _wizard_dlg_add_fixed(dm, u'LblSepHint', u'\\n = перенос строки', m + 256+72+48+24, y3 + 5, 140, 14)
         y3 = y3 + 22
         chk_label = u'Как значения (в Постобработка_xml всегда материализация)' if force_as_values else u'Как значения (Список_строк требует материализации)'
         _wizard_dlg_add_checkbox(dm, u'ChkValues', chk_label, m, y3, dw - 2 * m, 16)
         btn_y = y3 + 20
         dm.Height = btn_y + btn_h + m
-        _wizard_dlg_add_button(dm, u'BtnOk', u'OK', dw - m - 180, btn_y, 80, btn_h)
-        _wizard_dlg_add_button(dm, u'BtnCancel', u'Отмена', dw - m - 90, btn_y, 80, btn_h)
-        _inner_dialog_insert_help_button(dm, m, dw, btn_y, btn_h, help_key=u'сводная_таблица', help_w=80)
+        foot_w = 80
+        foot_gap = 8
+        foot_ok_x = dw - m - (foot_w * 3 + foot_gap * 2)
+        _wizard_dlg_add_button(dm, u'BtnOk', u'OK', foot_ok_x, btn_y, foot_w, btn_h)
+        _wizard_dlg_add_button(dm, u'BtnCancel', u'Отмена', foot_ok_x + foot_w + foot_gap, btn_y, foot_w, btn_h)
+        _inner_dialog_insert_help_button(dm, m, dw, btn_y, btn_h, help_key=u'сводная_таблица', help_w=foot_w)
         dlg = sm.createInstanceWithContext('com.sun.star.awt.UnoControlDialog', ctx)
         dlg.setModel(dm)
         if not _nested_subdialog_create_peer(
@@ -27502,7 +27762,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         global_font_y = global_fmt_combo_y + _pw_cfg._CTRL_H + _pw_cfg._ui_v(12)
         global_prefix_y = global_font_y + _pw_cfg._ui_v(48)
         global_msg_chk_y = global_prefix_y + _pw_cfg._ui_v(48)
-        global_mirror_lbl_y = global_msg_chk_y + _pw_cfg._ui_v(28)
+        global_mirror_lbl_y = global_msg_chk_y + _pw_cfg._ui_v(48)
         global_mirror_edit_y = global_mirror_lbl_y + _pw_cfg._LBL_H
         global_vars_btn_y = global_mirror_edit_y + _pw_cfg._CTRL_H + _pw_cfg._GAP_S
         global_footer_y = _pw_cfg._BTN_Y
@@ -27523,6 +27783,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         _wizard_dlg_add_fixed(dialog_model, 'GlobalParamPrefixLabel', u'Префикс листа параметров:', _pw_cfg._M, global_prefix_y, content_w, _pw_cfg._LBL_H)
         _wizard_dlg_add_edit(dialog_model, 'GlobalParamPrefixEdit', _pw_cfg._M, global_prefix_y + _pw_cfg._ui_v(18), content_w, _pw_cfg._CTRL_H)
         _wizard_dlg_add_checkbox(dialog_model, 'GlobalSuppressParamMsgCheck', u'Не показывать сообщения после действий с параметрами', _pw_cfg._M, global_msg_chk_y, content_w, _pw_cfg._ui_v(20))
+        _wizard_dlg_add_checkbox(dialog_model, 'GlobalNoAutoOpenAllParamsCheck', u'Не открывать вкладку «Все параметры» при запуске визарда параметров', _pw_cfg._M, global_msg_chk_y + _pw_cfg._ui_v(22), content_w, _pw_cfg._ui_v(20))
         _wizard_dlg_add_fixed(dialog_model, 'GlobalMirrorPathLabel', u'Папка зеркала настроек (~/.config/libre-macros → бэкап):', _pw_cfg._M, global_mirror_lbl_y, content_w, _pw_cfg._LBL_H)
         _wizard_dlg_add_edit(dialog_model, 'GlobalMirrorPathEdit', _pw_cfg._M, global_mirror_edit_y, mirror_edit_w, _pw_cfg._CTRL_H)
         _wizard_dlg_add_button(dialog_model, 'GlobalMirrorBrowseBtn', u'…', _pw_cfg._M + mirror_edit_w + 6, global_mirror_edit_y, mirror_browse_w, _pw_cfg._CTRL_H)
@@ -27594,7 +27855,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
         presets = _wp_load_presets_list()
         param_tab_controls = ('LblParam', 'ParamCombo', 'ParamDisabledCheck', 'LblValue', 'ValueEdit', 'ValueCombo', 'LblTransfer', 'TransferCombo', 'BrowseButton', 'FilesClearLastBtn', 'FilesClearAllBtn', 'SourceExtraLbl', 'SourceExtraList', 'SourceExtraParamsBtn', 'LblExtra', 'LblPlugin', 'PluginEdit', 'PluginEditorBtn', 'ExtraEdit', 'PivotParamsBtn', 'ColCParamsBtn', 'ConditionBtn', 'LblDesc', 'DescField', 'RefreshSheetCheck', 'ProtectSheetCheck', 'HideSheetCheck', 'SaveParamBtn', 'DeleteParamBtn')
         preset_tab_controls = ('PresetListLabel', 'PresetCombo', 'PresetNameLabel', 'PresetNameEdit', 'PresetCommentLabel', 'PresetCommentField', 'PresetSummaryLabel', 'PresetSummaryField', 'SavePresetBtn', 'DeletePresetBtn', 'ExportPresetBtn', 'ImportPresetBtn', 'ApplyPresetBtn', 'ClearAllPresetsBtn')
-        global_tab_controls = ('GlobalTitleLabel', 'GlobalHintLabel', 'GlobalDateFormatLabel', 'GlobalDateFormatCombo', 'GlobalNumberFormatLabel', 'GlobalNumberFormatCombo', 'GlobalFontNameLabel', 'GlobalFontNameEdit', 'GlobalFontSizeLabel', 'GlobalFontSizeEdit', 'GlobalParamPrefixLabel', 'GlobalParamPrefixEdit', 'GlobalSuppressParamMsgCheck', 'GlobalMirrorPathLabel', 'GlobalMirrorPathEdit', 'GlobalMirrorBrowseBtn', 'GlobalVariablesBtn', 'GlobalFlagsBtn', 'SaveGlobalSettingsBtn', 'ResetGlobalSettingsBtn')
+        global_tab_controls = ('GlobalTitleLabel', 'GlobalHintLabel', 'GlobalDateFormatLabel', 'GlobalDateFormatCombo', 'GlobalNumberFormatLabel', 'GlobalNumberFormatCombo', 'GlobalFontNameLabel', 'GlobalFontNameEdit', 'GlobalFontSizeLabel', 'GlobalFontSizeEdit', 'GlobalParamPrefixLabel', 'GlobalParamPrefixEdit', 'GlobalSuppressParamMsgCheck', 'GlobalNoAutoOpenAllParamsCheck', 'GlobalMirrorPathLabel', 'GlobalMirrorPathEdit', 'GlobalMirrorBrowseBtn', 'GlobalVariablesBtn', 'GlobalFlagsBtn', 'SaveGlobalSettingsBtn', 'ResetGlobalSettingsBtn')
         mode_tab_controls = ('LblNewParamMode', 'NewParamModeBtn')
         gs_lib = _wp_import_global_settings_lib()
 
@@ -29535,6 +29796,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
             font_size_ctl = _dlg_control(dialog, 'GlobalFontSizeEdit')
             prefix_ctl = _dlg_control(dialog, 'GlobalParamPrefixEdit')
             suppress_ctl = _dlg_control(dialog, 'GlobalSuppressParamMsgCheck')
+            no_auto_open_ctl = _dlg_control(dialog, 'GlobalNoAutoOpenAllParamsCheck')
             mirror_ctl = _dlg_control(dialog, 'GlobalMirrorPathEdit')
             date_choices = tuple(gs_lib['DATE_FORMAT_CHOICES'])
             calc_fn = gs_lib.get('calc_number_format_choices')
@@ -29555,6 +29817,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
             if prefix_val == u'':
                 prefix_val = unicode(gs_lib.get('DEFAULT_PARAM_SHEET_PREFIX') or u'collect_params')
             suppress_msg = bool(settings.get('suppress_param_action_messages'))
+            no_auto_open_all_params = bool(settings.get('no_auto_open_all_params'))
             mirror_path = unicode(settings.get('settings_mirror_path') or u'').strip()
             if date_ctl is not None:
                 _set_combo_items(date_ctl, date_choices, date_val or date_choices[0])
@@ -29592,6 +29855,11 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                     suppress_ctl.setState(1 if suppress_msg else 0)
                 except Exception:
                     pass
+            if no_auto_open_ctl is not None:
+                try:
+                    no_auto_open_ctl.setState(1 if no_auto_open_all_params else 0)
+                except Exception:
+                    pass
             if mirror_ctl is not None:
                 try:
                     mirror_ctl.setText(mirror_path)
@@ -29609,6 +29877,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
             font_size_ctl = _dlg_control(dialog, 'GlobalFontSizeEdit')
             prefix_ctl = _dlg_control(dialog, 'GlobalParamPrefixEdit')
             suppress_ctl = _dlg_control(dialog, 'GlobalSuppressParamMsgCheck')
+            no_auto_open_ctl = _dlg_control(dialog, 'GlobalNoAutoOpenAllParamsCheck')
             mirror_ctl = _dlg_control(dialog, 'GlobalMirrorPathEdit')
             date_fmt = u''
             num_fmt = u''
@@ -29616,6 +29885,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
             font_size = gs_lib.get('DEFAULT_FONT_SIZE') or 11.0
             prefix_val = u''
             suppress_msg = False
+            no_auto_open_all_params = False
             mirror_path = u''
             if date_ctl is not None:
                 try:
@@ -29652,6 +29922,11 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                     suppress_msg = bool(suppress_ctl.getState())
                 except Exception:
                     pass
+            if no_auto_open_ctl is not None:
+                try:
+                    no_auto_open_all_params = bool(no_auto_open_ctl.getState())
+                except Exception:
+                    pass
             if mirror_ctl is not None:
                 try:
                     mirror_path = unicode(mirror_ctl.getText() or u'').strip()
@@ -29676,6 +29951,7 @@ def create_param_wizard_dialog(doc, sheet, catalog, initial=None, sheet_names=No
                 'font_size': font_size,
                 'param_sheet_prefix': prefix_val,
                 'suppress_param_action_messages': suppress_msg,
+                'no_auto_open_all_params': no_auto_open_all_params,
                 'merge_flags': merge_flags,
                 'settings_mirror_path': norm_mirror,
                 'global_variables': list(existing.get('global_variables') or []),
@@ -30197,14 +30473,21 @@ def set_merge_param(*args):
             else:
                 main_initial = dict(main_initial)
                 main_initial['new_param_mode'] = True
-        # Главный визард (не C/D) — сразу открыть и «Все параметры».
+        # Главный визард (не C/D) — при необходимости сразу открыть «Все параметры».
+        open_all_params = True
+        try:
+            gs_lib = _wp_import_global_settings_lib()
+            if gs_lib is not None:
+                open_all_params = not bool(gs_lib['load_global_settings']().get('no_auto_open_all_params'))
+        except Exception:
+            pass
         result = create_param_wizard_dialog(
             doc,
             sheet,
             catalog,
             main_initial,
             _list_param_sheet_names_for_wizard(doc),
-            auto_open_all_params=True,
+            auto_open_all_params=open_all_params,
         )
         if result is None or result[0] != 'ok':
             return

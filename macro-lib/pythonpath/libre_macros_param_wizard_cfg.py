@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.795"
+MACRO_VERSION = "3.10.798"
 import re
 
 try:
@@ -185,7 +185,7 @@ _FALLBACK_PP_RANGE_CHOICES = [
     u"транспонировать_таблицу",
     u"анкета_в_таблицу",
     u"таблица_в_анкету",
-    u"заполнение_вниз_вычислить", u"копировать_значения", u"замена_значений", u"текстовые_операции", u"переименовать_лист",
+    u"заполнение_вниз_вычислить", u"копировать_как_значения", u"замена_значений", u"текстовые_операции", u"переименовать_лист",
     u"переименовать_столбцы", u"переставить_столбцы",
     u"количество_значений", u"удалить_дубликаты", u"группировать_строки", u"копировать_переместить_лист",
     u"копирование_диапазонов", u"создать_лист",
@@ -580,8 +580,8 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u'[{"v":1,"fn":"автофильтр","sheets":["Заказы"],"action":"set"}]',
     ),
     u"стиль_печати": (
-        u"ориентация (landscape/portrait), вписать в N страниц по ширине",
-        u"landscape,1",
+        u"ориентация (Альбомная/Книжная); вписать в N страниц по ширине и по высоте; заголовок на каждой странице",
+        u'[{"v":1,"fn":"стиль_печати","orientation":"landscape","fit_pages":1,"fit_pages_height":0,"print_title":true,"print_title_rows":"1:1"}]',
     ),
     u"заполнение_вниз": (
         u"столбцы из списка заголовков ('ФИО'); индексы/буквы тоже ок",
@@ -616,7 +616,7 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u"JSON: columns + rules (column, formula, expand_to_right); кнопка «Параметры…»",
         u'[{"v":1,"fn":"заполнение_вниз_вычислить","columns":["A"],"rules":[{"column":"A","formula":"=A{row-1}"}]}]',
     ),
-    u"копировать_значения": (
+    u"копировать_как_значения": (
         u"столбцы из списка ('Сумма') или «весь лист»; пусто — весь лист",
         u"'Сумма','Количество'",
     ),
@@ -1738,6 +1738,26 @@ _SHEET_LIST_SPECIAL_TOKENS = (
 )
 _HEADER_PLUS_HEIGHT_HORI_CHOICES = (u"left", u"center", u"right")
 _HEADER_PLUS_HEIGHT_VERT_CHOICES = (u"top", u"center", u"bottom")
+# отступ: выравнивание — (код, подпись в combo)
+INDENT_H_ALIGN_CHOICES = (
+    (u"left", u"По левому краю"),
+    (u"center", u"По центру"),
+    (u"right", u"По правому краю"),
+)
+INDENT_H_ALIGN_LABEL = {code: label for code, label in INDENT_H_ALIGN_CHOICES}
+INDENT_H_ALIGN_CODE = {label.casefold(): code for code, label in INDENT_H_ALIGN_CHOICES}
+for _indent_align_code, _indent_align_label in INDENT_H_ALIGN_CHOICES:
+    INDENT_H_ALIGN_CODE[_indent_align_code.casefold()] = _indent_align_code
+# стиль печати: ориентация — (код, подпись в combo)
+PRINT_ORIENTATION_CHOICES = (
+    (u"landscape", u"Альбомная"),
+    (u"portrait", u"Книжная"),
+)
+PRINT_ORIENTATION_LABELS = tuple(_po_label for _po_code, _po_label in PRINT_ORIENTATION_CHOICES)
+PRINT_ORIENTATION_LABEL = {_po_code: _po_label for _po_code, _po_label in PRINT_ORIENTATION_CHOICES}
+PRINT_ORIENTATION_CODE = {_po_label.casefold(): _po_code for _po_code, _po_label in PRINT_ORIENTATION_CHOICES}
+for _po_code, _po_label in PRINT_ORIENTATION_CHOICES:
+    PRINT_ORIENTATION_CODE[_po_code.casefold()] = _po_code
 _SHEET_BLOCK_FIELD_GAP = 5
 def _header_plus_height_color_choices():
     """Именованные пресеты + hex для combo заливки/шрифта."""
@@ -2406,6 +2426,15 @@ HEADER_SEP_CODE = {label.casefold(): code for code, label in HEADER_SEP_CHOICES}
 for _hdr_sep_code, _hdr_sep_label in HEADER_SEP_CHOICES:
     HEADER_SEP_CODE[_hdr_sep_code.casefold()] = _hdr_sep_code
 
+_GRID_WIDTH_CHOICES = (
+    u"тонкая",
+    u"средняя",
+    u"толстая",
+    u"15",
+    u"25",
+    u"35",
+)
+
 _SHEET_BLOCK_FORM_SCHEMAS = {
     u"удаление_верхних_строк": {
         "title": u"Удаление верхних строк",
@@ -2810,13 +2839,30 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     u"сетка": {
         "title": u"Сетка",
         "hint": (
-            u"Толщина (тонкая/толстая/число) и цвет рамки. Пример: толстая/#666666. "
-            u"«Включая заголовок» — сетка и на строке заголовков (по умолчанию выкл.)."
+            u"Толщина — из списка (тонкая/средняя/толстая, числа 1/100 мм) или своё число.\n"
+            u"Цвет — пресет из списка или вручную (имя/ #hex). «Включая заголовок» — сетка и на строке заголовков."
         ),
         "hint_lines": 3,
         "fields": (
-            {"id": "width", "label": u"Толщина", "default": u"тонкая"},
-            {"id": "color", "label": u"Цвет", "default": u""},
+            {
+                "id": "width",
+                "label": u"Толщина",
+                "type": "combo",
+                "choices": u"_GRID_WIDTH_CHOICES",
+                "default": u"тонкая",
+                "row_group": u"grid_metrics",
+                "row_group_slot": 0,
+                "row_group_frac": 0.42,
+            },
+            {
+                "id": "color",
+                "label": u"Цвет",
+                "type": "combo",
+                "choices": u"_header_plus_height_color_choices",
+                "default": u"",
+                "row_group": u"grid_metrics",
+                "row_group_slot": 1,
+            },
             {
                 "id": "include_header",
                 "label": u"Включая заголовок",
@@ -2835,11 +2881,28 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     },
     u"отступ": {
         "title": u"Отступ",
-        "hint": u"Выравнивание left/center/right, шаги, столбцы через запятую (пусто — все).",
+        "hint": (
+            u"Выравнивание — из списка; шаги — сколько отступов добавить.\n"
+            u"Столбцы — выбор из заголовков листа блока ('кавычки', накопление, × / ××) "
+            u"или «Все»; индексы 1-based и буквы A тоже допустимы."
+        ),
+        "hint_lines": 3,
         "fields": (
-            {"id": "h_align", "label": u"Выравнивание", "default": u"left"},
+            {
+                "id": "h_align",
+                "label": u"Выравнивание",
+                "type": "combo",
+                "choices": tuple(label for _code, label in INDENT_H_ALIGN_CHOICES),
+                "default": u"По левому краю",
+            },
             {"id": "steps", "label": u"Шаги", "default": u"1"},
-            {"id": "columns", "label": u"Столбцы", "default": u""},
+            {
+                "id": "columns",
+                "label": u"Столбцы",
+                "type": "columns_pick",
+                "choices_from_headers": True,
+                "default": u"",
+            },
         ),
     },
     u"шрифт": {
@@ -3544,10 +3607,49 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
     },
     u"стиль_печати": {
         "title": u"Стиль печати",
-        "hint": u"landscape/portrait и число страниц по ширине (0 = не вписывать).",
+        "hint": (
+            u"Ориентация — из списка. «Вписать в N страниц по ширине/высоте» — как в диалоге печати "
+            u"(0 — авто, не ограничивать).\n"
+            u"«Вписать по ширине в страницу» — ровно 1 страница по ширине; поле ширины при этом блокируется.\n"
+            u"«Заголовок на каждой странице» — повторять строки заголовка; поле строк блокируется, "
+            u"если флаг снят (пусто — строка заголовков шага или первая строка листа)."
+        ),
+        "hint_lines": 4,
         "fields": (
-            {"id": "orientation", "label": u"Ориентация", "default": u"landscape"},
-            {"id": "fit_pages", "label": u"Вписать в страниц", "default": u"1"},
+            {
+                "id": "orientation",
+                "label": u"Ориентация",
+                "type": "combo",
+                "choices": u"PRINT_ORIENTATION_LABELS",
+                "default": u"landscape",
+            },
+            {
+                "id": "fit_width",
+                "label": u"Вписать по ширине в страницу",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "fit_pages",
+                "label": u"Вписать в указанное число страниц по ширине",
+                "default": u"1",
+            },
+            {
+                "id": "fit_pages_height",
+                "label": u"Вписать в указанное число страниц по высоте (0 — авто)",
+                "default": u"0",
+            },
+            {
+                "id": "print_title",
+                "label": u"Заголовок на каждой странице",
+                "type": "bool",
+                "default": False,
+            },
+            {
+                "id": "print_title_rows",
+                "label": u"Строки заголовка (1:1, 1:2; пусто — строка заголовков шага)",
+                "default": u"",
+            },
         ),
     },
     u"заполнение_вниз": {
@@ -3980,7 +4082,7 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
         ),
     },
     u"table_to_form": {"alias_of": u"таблица_в_анкету"},    
-    u"копировать_значения": {
+    u"копировать_как_значения": {
         "title": u"Копировать значения",
         "hint": (
             u"Столбцы для копирования содержимого как значений — выбор из заголовков "
@@ -4454,7 +4556,14 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
                 "row_group": u"anchor_pos",
                 "row_group_slot": 1,
             },
-            {"id": "columns", "label": u"Столбцы (опц.)", "default": u""},
+            {
+                "id": "columns",
+                "label": u"Столбцы (опц.)",
+                "type": "columns_pick",
+                "default": u"",
+                # Заголовки берём с листа, указанного в «Лист-источник».
+                "headers_sheet_field": u"source_sheet",
+            },
             {
                 "id": "skip_empty",
                 "label": u"Пропускать пустые строки",
@@ -4464,7 +4573,9 @@ _SHEET_BLOCK_FORM_SCHEMAS = {
             {
                 "id": "skip_empty_columns",
                 "label": u"Колонки для пустоты (опц.)",
+                "type": "columns_pick",
                 "default": u"",
+                "headers_sheet_field": u"source_sheet",
             },
             {"id": "header_row", "label": u"Строка заголовков", "default": u"1"},
         ),

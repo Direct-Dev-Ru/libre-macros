@@ -1,7 +1,7 @@
 # Архитектура макроса `collect_workbooks` / `collect_pack`
 
 **Файл:** `macro-lib/collect_workbooks.py`  
-**Версия:** **3.10.711**  
+**Версия:** **3.10.798**  
 **Связанные модули:** `pythonpath/libre_macros_lib.py`, `libre_macros_direct_lib.py`, `libre_macros_split_lib.py`, `libre_macros_header_lib.py`, `libre_macros_lambda_column_lib.py`, `libre_macros_pack_orchestrator_lib.py`, `libre_macros_final_lib.py`, `libre_macros_sanitize_lib.py`, `libre_macros_source_roots_*.py`, `libre_macros_allow_gate_lib.py`, `libre_macros_pre_shell_*.py`, `param_wizard.py`, `functions_pp.py`, `functions_final.py`
 
 Параметры — [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md); оркестратор — [18_ORCHESTRATOR.md](18_ORCHESTRATOR.md); постобработка — [05_POSTPROCESS.md](05_POSTPROCESS.md); `xml_excel_ods` — [17_POSTPROCESS_XML.md](17_POSTPROCESS_XML.md); визард — [06_PARAM_WIZARD.md](06_PARAM_WIZARD.md); безопасность — [19_SECURITY.md](19_SECURITY.md).
@@ -25,7 +25,9 @@
 | **libre_macros_lambda_column_lib.py** | `столбец_по_лямбде`, sugar `rows`/`upd_rows` |
 | **libre_macros_final_lib.py** / **values_lib** | Финальные шаги |
 | **libre_macros_param_codec.py** | JSON encode/decode колонки C |
-| **param_wizard.py** | Редактирование листа параметров |
+| **param_wizard.py** | Редактирование листа параметров (+ кнопка «Все параметры») |
+| **libre_macros_all_params_wizard_*.py** | Полноэкранный пайплайн листа (меню шагов как Power Query) |
+| **libre_macros_copy_ranges_lib.py** / **create_sheet_lib** / **unpivot_lib** | `копирование_диапазонов`, `создать_лист`, `развернуть_столбцы` |
 | **functions_pp.py** / **functions_final.py** | Плагины пользователя |
 
 ```mermaid
@@ -140,6 +142,12 @@ sequenceDiagram
 | `libre_macros_split_lib.py` | разделить_листы |
 | `libre_macros_pack_orchestrator_lib.py` | collect_pack UI |
 | `libre_macros_param_codec.py` | JSON C |
+| `libre_macros_all_params_wizard_cfg.py` / `_lib.py` | Визард «Все параметры» |
+| `libre_macros_copy_ranges_lib.py` | `копирование_диапазонов` |
+| `libre_macros_create_sheet_lib.py` | `создать_лист` |
+| `libre_macros_unpivot_lib.py` | `развернуть_столбцы` |
+| `libre_macros_unmerge_collapse_lib.py` / `add_merge_lib.py` | merge-блоки ячеек |
+| `libre_macros_atext_letters_lib.py` | `подготовка_писем` |
 | `libre_macros_pivot_lib.py` | Сводные |
 | `libre_macros_consent_lib.py` | Согласие перед запуском |
 | `libre_macros_sanitize_lib.py` | AST-санация B/C / лямбд (fail-closed) |
@@ -165,4 +173,4 @@ Entry-скрипты (`macro-lib/*.py`) при установке → `Scripts/p
 
 ---
 
-*Документ соответствует `MACRO_VERSION` **3.10.696**.*
+*Документ соответствует `MACRO_VERSION` **3.10.798**.*

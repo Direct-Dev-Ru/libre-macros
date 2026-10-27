@@ -467,6 +467,10 @@ def fn(doc, sheet, data_range, header_row_range, color_name):
 | Функция | Ключ в B | Параметр C | Назначение |
 |---------|----------|------------|------------|
 | `lm_pp_range_fill_down_empty` | `заполнение_вниз` | Столбцы через `,` или `;` | Пустые ячейки → копия из строки выше |
+| `lm_pp_range_fill_up_empty` / `lm_final_fill_up` | `заполнить_вверх` | JSON: `columns` | Пустые → значение снизу |
+| `lm_pp_range_unpivot_columns` / `lm_final_unpivot_columns` | `развернуть_столбцы` | JSON unpivot | Wide → long |
+| `lm_pp_range_create_sheet` / `lm_final_create_sheet` | `создать_лист` | JSON | Новая вкладка + данные |
+| `lm_final_atext_letters` | `подготовка_писем` | JSON AText | Файлы по шаблону |
 | `lm_pp_range_fill_down_calculate` | `заполнение_вниз_вычислить` | JSON: `columns` + `rules` | Пустые ячейки → формула/константа; опц. `expand_to_right` |
 | `lm_pp_range_replace_values` | `замена_значений` | JSON: `columns`, `find`, `replace`, флаги, `row_filter`, `match_pick`; `<<Переменные…>>` в find/replace | Замена подстрок в текстовых столбцах (один getDataArray/setDataArray) |
 | `lm_pp_range_add_column` / `lm_final_add_column` | `добавить_столбец` | JSON: `new_column`, `data_type`, `format`, `choices` / `data_validation`+`min`/`max` | Пустой столбец + формат + контроль данных (LIST / DECIMAL / DATE) |

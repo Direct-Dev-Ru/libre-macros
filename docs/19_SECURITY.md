@@ -1,7 +1,7 @@
 # Безопасность: гейты и доверенные пути
 
 Практическая сводка усилений безопасности макросов libre-macros  
-(состояние **`macro-lib/version.txt` → 3.10.711**).
+(состояние **`macro-lib/version.txt` → 3.10.798**).
 
 Полный аудит угроз: [SECURITY_AUDIT.md](SECURITY_AUDIT.md).  
 Санация Python: [16_CODE_SANITIZE.md](16_CODE_SANITIZE.md).

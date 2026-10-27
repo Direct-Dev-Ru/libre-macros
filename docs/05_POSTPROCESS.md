@@ -1,6 +1,6 @@
 # Руководство по функциям постобработки collect_workbooks
 
-**Версия макроса**: **3.10.696** (`macro-lib/version.txt`). Постобработка настраивается на листе группы `Параметры_Объединения*` (см. [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md); при `collect_pack` — на каждом листе плана).
+**Версия макроса**: **3.10.798** (`macro-lib/version.txt`). Постобработка настраивается на листе группы `Параметры_Объединения*` (см. [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md); при `collect_pack` — на каждом листе плана).
 
 ### Формат параметров (колонка C)
 
@@ -251,7 +251,7 @@ single_cell.NumberFormat = fmt_key       # Числовой формат
 | Удалить столбцы | `удалить_столбцы` | `#Путь,ФИО` | Удалить столбцы с этими подстроками |
 | Преобразовать числа | `преобразовать_числа` | `Сумма,Количество` | Только указанные столбцы |
 | Цвет текста по значению | `цвет_текста_по_значению` | `статус` | Столбец-источник для цвета |
-| Стиль печати | `стиль_печати` | `landscape,1` | Альбомная, вписать в 1 страницу |
+| Стиль печати | `стиль_печати` | `landscape,1` | Альбомная, вписать в 1 страницу по ширине |
 
 ---
 
@@ -1018,7 +1018,7 @@ Legacy (без JSON): имена через `,` / `;`. JSON с `sheets` обра
 
 **Не** путать с:
 
-- `копировать_значения` — материализация формул на **том же** диапазоне;
+- `копировать_как_значения` — материализация формул на **том же** диапазоне;
 - `копировать_лист` / `копировать_переместить_лист` — целая вкладка;
 - `разделить_листы` с `split_mode=copy_range` — разбиение по ключу.
 
@@ -1102,6 +1102,57 @@ Legacy (без JSON): имена через `,` / `;`. JSON с `sheets` обра
 
 ---
 
+### `подготовка_писем` — merge_final_atext_letters (только финал)
+
+**Назначение:** сформировать набор файлов писем/уведомлений по шаблону AText из листа-источника (плейсхолдеры `<<Столбец>>` и др.). Письма **не отправляются** сами — результат пишется в `out_dir`.
+
+**Ключ в B:** `подготовка_писем` (алиасы: `письма_по_шаблону`, `atext_letters`, `mail_merge_files`).
+
+Схема JSON — [13_JSON_PARAMS.md](13_JSON_PARAMS.md).
+
+---
+
+### `создать_лист` — merge_pp_range_create_sheet / merge_final_create_sheet
+
+**Назначение:** создать вкладку (`name_mode=manual|expr`) и при необходимости заполнить из другого листа или строк/`<<Переменные>>`.
+
+Пример:
+
+```json
+[{"v":1,"fn":"создать_лист","name_mode":"manual","sheet_name":"Отчет",
+  "columns":["Код","Сумма"],"header_row":1,"data_mode":"rows",
+  "rows":"<<Переменные.коды>>, 0"}]
+```
+
+---
+
+### `развернуть_столбцы` — merge_pp_range_unpivot_columns / merge_final_unpivot_columns
+
+**Назначение:** unpivot (wide → long). Алиасы: `unpivot`, `unpivot_columns`.
+
+```json
+[{"v":1,"fn":"развернуть_столбцы","unpivot_columns":["'Январь'","'Февраль'"],
+  "attribute_column":"Месяц","value_column":"Сумма","drop_empty_rows":true}]
+```
+
+---
+
+### `убрать_объединение` / `добавить_объединение`
+
+Схлопнуть / восстановить вертикальные merge-блоки (в т.ч. после Word). Алиасы: `снять_объединение` / `объединить_ячейки`. JSON — [13_JSON_PARAMS.md](13_JSON_PARAMS.md).
+
+---
+
+### `заполнить_вверх` — merge_pp_range_fill_up_empty / merge_final_fill_up
+
+Зеркало `заполнение_вниз`: пустые ячейки ← значение снизу. Алиасы: `заполнение_вверх`, `fill_up`.
+
+```json
+[{"v":1,"fn":"заполнить_вверх","columns":["'ФИО'","'Отдел'"]}]
+```
+
+---
+
 ### `отправить_по_почте` — merge_final_send_mail (только финал)
 
 **Назначение:** после сбора подготовить вложение (ODS/XLSX) во временный каталог и открыть окно «Новое сообщение» в почтовом клиенте ОС. Письмо **не отправляется** автоматически.
@@ -1158,15 +1209,29 @@ Legacy (без JSON): имена через `,` / `;`. JSON с `sheets` обра
 ### 26. `стиль_печати` — merge_pp_range_set_page_style
 **Назначение:** Настроить стиль страницы листа для печати.
 
-**Rest из C:** `orientation,fit_to_pages`
+**JSON из C:** `[{"v":1,"fn":"стиль_печати","orientation":"landscape","fit_pages":1}]`
+
+**Legacy-текст из C:** `ориентация[,страниц]`
+
+| Поле | Описание |
+|------|----------|
+| `orientation` | `landscape` («Альбомная») / `portrait` («Книжная»); русские подписи тоже принимаются |
+| `fit_pages` | Страниц по ширине: `N > 0` — вписать в N; `0` — не ограничивать |
+| `fit_pages_height` | Страниц по высоте (`fit_pages_y`): `M > 0` — вписать в M; `0` — авто |
+| `fit_width` | Вписать ровно в 1 страницу по ширине; приоритетнее `fit_pages` |
+| `print_title` | `true` — повторять строки заголовка на каждой странице (`PrintTitleRows`) |
+| `print_title_rows` | Строки заголовка: `1:1`, `1:2`; пусто — строка заголовков шага или первая строка листа |
 
 **Примеры:**
 | Колонка B | Колонка C | Описание |
 |-----------|-----------|----------|
-| `стиль_печати` | `landscape,1` | Альбомная, вписать в 1 страницу |
-| `стиль_печати` | `portrait,0` | Книжная, не менять масштаб |
+| `стиль_печати` | `landscape,1` | Альбомная, вписать в 1 страницу по ширине |
+| `стиль_печати` | `portrait,0` | Книжная, масштаб не менять |
+| `стиль_печати` | `[{"v":1,"fn":"стиль_печати","orientation":"portrait","fit_width":true}]` | Книжная, ровно 1 страница по ширине |
+| `стиль_печати` | `[{"v":1,"fn":"стиль_печати","fit_pages":2,"fit_pages_height":2}]` | Сетка 2×2 страницы |
+| `стиль_печати` | `[{"v":1,"fn":"стиль_печати","print_title":true,"print_title_rows":"1:2"}]` | Строки 1–2 на каждой странице |
 
-**Что меняет:** `Orientation` и `ScaleToPagesX/Y` стиля страницы.
+**Что меняет:** `IsLandscape` (и `Width`/`Height` бумаги), `ScaleToPages`/`ScaleToPagesX`/`ScaleToPagesY` стиля страницы листа и сквозные строки листа (`XPrintAreas.setTitleRows`).
 
 ---
 
@@ -1622,10 +1687,15 @@ Legacy-пары:
 | `закрепить_заголовок` | merge_pp_range_freeze_header | — |
 | `ширина_столбцов` | merge_pp_range_set_column_widths | `N` мм, `столбцы / N` (пусто = 30 мм) |
 | `автофильтр` | merge_pp_range_add_filter | — |
-| `стиль_печати` | merge_pp_range_set_page_style | `[ориентация[,страницы]]` |
+| `стиль_печати` | merge_pp_range_set_page_style | `[ориентация[,страницы]]` или JSON (`orientation`, `fit_pages`, `fit_width`) |
 | `сортировка` | merge_pp_range_sort_data | `колонка -> +/-` или `лист \| ключи ; …` |
 | `раскрасить_блоки` | merge_pp_range_colorize_data | `лист \| ключи -> цвета` ; `!граница` |
 | `копирование_диапазонов` | merge_pp_range_copy_ranges / merge_final_copy_ranges | JSON: `source_*` → `dest_*`; `mode`, `content`, `involve_dest` |
+| `создать_лист` | merge_pp_range_create_sheet / merge_final_create_sheet | JSON: `name_mode`, `sheet_name`, `data_mode`, … |
+| `развернуть_столбцы` | merge_pp_range_unpivot_columns / merge_final_unpivot_columns | JSON: unpivot wide→long |
+| `заполнить_вверх` | merge_pp_range_fill_up_empty / merge_final_fill_up | JSON: `columns` |
+| `убрать_объединение` / `добавить_объединение` | unmerge_collapse / add_merge | JSON: блоки merge |
+| `подготовка_писем` | merge_final_atext_letters | JSON: template AText → файлы |
 | `транспонировать_таблицу` | merge_pp_range_transpose_table / merge_final_transpose_table | JSON: `output`, `headers_from_column`, `result_headers`, … |
 | `анкета_в_таблицу` | merge_pp_range_form_to_table / merge_final_form_to_table | JSON: Q/A → wide |
 | `таблица_в_анкету` | merge_pp_range_table_to_form / merge_final_table_to_form | JSON: wide → Q/A |

@@ -2,7 +2,7 @@
 
 Единый реестр всех имён параметров, допустимых значений и колонок. Канонический источник имён в коде: `param_wizard._build_wizard_catalog()` и константы `P_MERGE_*` в `collect_workbooks.py`.
 
-**Версия макроса**: `MACRO_VERSION` в `macro-lib/collect_workbooks.py` / `macro-lib/version.txt` (**3.10.696**).
+**Версия макроса**: `MACRO_VERSION` в `macro-lib/collect_workbooks.py` / `macro-lib/version.txt` (**3.10.798**).
 
 Подробные описания поведения — в [04_DATA_COLLECTION.md](04_DATA_COLLECTION.md), оркестратор — [18_ORCHESTRATOR.md](18_ORCHESTRATOR.md), постобработка — [05_POSTPROCESS.md](05_POSTPROCESS.md), JSON — [13_JSON_PARAMS.md](13_JSON_PARAMS.md).
 
@@ -486,7 +486,7 @@ Legacy B–F (если ещё записан):
 | `формат_деньги` | — | список листов |
 | `формат_даты` | — | блок (`markers`, `convert_existing`) |
 | `формат_столбцы` | — | правила (`rules[]`) |
-| `подсветка_по_порогу` | `условное_форматирование` | блок (`marker`, `threshold`, `color`) |
+| `подсветка_по_порогу` | `условное_форматирование`, `подкрасить_пороги` | блок (`marker`, `threshold`, `color`) |
 | `градиент` | — | блок (`marker`, `color_min`, `color_max`, `whole_row`, `sort`) |
 | `удалить_столбцы` | — | блок (`markers`) |
 | `конкатенация_столбцов` | — | блок (`new_column`, `separator`, `columns`) |
@@ -498,10 +498,15 @@ Legacy B–F (если ещё записан):
 | `закрепить_заголовок` | — | список листов |
 | `ширина_столбцов` | — | блок (`width_mm`, `columns`) |
 | `автофильтр` | — | список листов |
-| `стиль_печати` | — | блок (`orientation`, `fit_pages`) |
+| `стиль_печати` | — | блок (`orientation`, `fit_pages`, `fit_pages_height`, `fit_width`, `print_title`, `print_title_rows`) |
 | `заполнение_вниз` | — | блок (`columns`) |
 | `заполнение_вниз_вычислить` | — | правила (`columns`, `rules[]`) |
-| `копировать_значения` | — | блок (`columns` / `whole_sheet`) |
+| `заполнить_вверх` | `заполнение_вверх`, `fill_up` | блок (`columns`) — пустые → значение из ближайшей снизу |
+| `развернуть_столбцы` | `unpivot`, `unpivot_columns` | блок (`unpivot_columns` / `exclude_columns`, `attribute_column`, `value_column`, `output`, `drop_empty_rows`) |
+| `убрать_объединение` | `снять_объединение`, `unmerge_collapse` | блок (`header_rows` / `header_anchor`, `marker` / `block_rows`, `sep`) — схлопнуть Word-merge в верхнюю строку блока |
+| `добавить_объединение` | `объединить_ячейки`, `add_merge` | блок (`columns`, `marker` / `block_rows`, `sep`) — вертикальный merge выбранных столбцов по блокам |
+| `создать_лист` | — | блок (`name_mode`, `sheet_name` / `sheet_name_expr`, `columns`, `header_row`, `data_mode`, …) |
+| `копировать_как_значения` | — | блок (`columns` / `whole_sheet`) |
 | `замена_значений` | — | блок (`columns`, `find`, `replace`, флаги, `row_filter`, `match_pick`; в find/replace — `<<Переменные…>>`, в `'…'` — литерал) |
 | `переименовать_лист` | — | блок (`new_name`) |
 | `переименовать_столбцы` | — | блок (`sheet`, `mappings[]`) |
@@ -554,6 +559,8 @@ Legacy B–F (если ещё записан):
 | `транспонировать_таблицу` | Строки ↔ столбцы (`output`, `headers_from_column`, `result_headers`, …) — [13](13_JSON_PARAMS.md), [05](05_POSTPROCESS.md) |
 | `анкета_в_таблицу` / `таблица_в_анкету` | Форма ↔ wide-таблица |
 | `отправить_по_почте` | Вложение (вся книга / выбранные листы / без файла) во временный файл + окно compose почтового клиента; алиасы `email`, `mailto`, `почта` |
+| `подготовка_писем` | Письма/файлы по шаблону AText (ACell): `template`, `source_sheet`/`sheet`, `out_dir`, `filename`, `block_rows`/`marker`, `format`; алиасы `письма_по_шаблону`, `atext_letters`, `mail_merge_files` |
+| `создать_лист` | Создать вкладку (имя вручную / expr) и опционально заполнить из листа/строк/`<<Переменные>>` |
 | `только_значения` | Преобразовать в значения (список листов в C) |
 | `вертикаль_центр` | Вертикальное выравнивание по центру (данные) |
 

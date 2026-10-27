@@ -4,8 +4,10 @@ __pycache__/
 *$py.class
 *.so
 .Python
-
+.apikey
 .gigaide/
+remote
+office_macros_context.*
 
 # IDE
 .vscode/

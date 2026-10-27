@@ -8,7 +8,7 @@ from __future__ import print_function
 Сводные таблицы:          libre_macros_pivot_lib (re-export lm_pp_pivot_*, lm_pp_range_pivot_table)
 
 """
-MACRO_VERSION = "3.10.795"
+MACRO_VERSION = "3.10.798"
 # Подробные логи исполнения постобработки (раскраска, границы и т.д.).
 LIBRE_MACROS_DEBUG = False
 import json
@@ -7073,10 +7073,26 @@ def _lm_pp_dim_mm_from_block(block, kind, default_mm):
 
 
 def _lm_pp_print_style_from_block(block):
+    """Блок «стиль_печати» → параметры печати (нормализованные)."""
     from libre_macros_param_codec import _normalize_print_style_block
 
     block = _normalize_print_style_block(block)
-    return block.get("orientation") or "landscape", int(block.get("fit_pages") or 1)
+
+    def _pages(key):
+        try:
+            value = int(block.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0
+        return value if value > 0 else 0
+
+    return {
+        "orientation": block.get("orientation") or "landscape",
+        "fit_pages": _pages("fit_pages"),
+        "fit_pages_height": _pages("fit_pages_height"),
+        "fit_width": bool(block.get("fit_width")),
+        "print_title": bool(block.get("print_title")),
+        "print_title_rows": unicode(block.get("print_title_rows") or "").strip(),
+    }
 
 
 def _lm_pp_row_height_extra_args(extra_raw):
@@ -9075,36 +9091,64 @@ def _lm_pp_parse_columns_param(columns, sheet, header_row_range, sc, ec):
 
     result = []
     header_names = None
+    unwrap = None
+    match_fn = None
+    try:
+        from libre_macros_param_codec import unwrap_column_name_token as unwrap
+        from libre_macros_param_codec import column_header_matches_token as match_fn
+    except Exception:
+        unwrap = None
+        match_fn = None
 
-    for part in parts:
+    for part_raw in parts:
+        if not part_raw:
+            continue
+        # 'Имя' / «Имя» — кавычки не часть заголовка (так визард пишет выбор из списка).
+        part = part_raw
+        quoted = False
+        if unwrap is not None:
+            try:
+                part, quoted = unwrap(part_raw)
+            except Exception:
+                part, quoted = part_raw, False
+        part = str(part or "").strip()
         if not part:
             continue
-        # Пробуем как число (индекс колонки, 1-based от пользователя → 0-based в коде)
-        try:
-            idx = int(part) - 1
-            result.append(idx)
-            continue
-        except ValueError:
-            pass
+        if not quoted:
+            # Пробуем как число (индекс колонки, 1-based от пользователя → 0-based в коде)
+            try:
+                idx = int(part) - 1
+                result.append(idx)
+                continue
+            except ValueError:
+                pass
 
-        # Буквы столбца Calc (A, AA…)
-        if is_col_letters(part):
-            result.append(col_letters_to_index(part))
-            continue
+            # Буквы столбца Calc (A, AA…)
+            if is_col_letters(part):
+                result.append(col_letters_to_index(part))
+                continue
 
         # Иначе это имя колонки — ищем в заголовках
         if header_names is None and header_row_range is not None:
             header_names = _lm_pp_header_titles(sheet, header_row_range)
 
         if header_names is not None:
-            # Ищем в заголовках (без учёта регистра); все совпадения по подстроке
             part_lower = part.lower()
             for col_idx, hname in enumerate(header_names):
+                if not hname:
+                    continue
                 abs_idx = sc + col_idx
-                hlower = hname.lower()
-                if hlower == part_lower or part_lower in hlower:
-                    if abs_idx not in result:
-                        result.append(abs_idx)
+                matched = None
+                if match_fn is not None:
+                    try:
+                        matched = bool(match_fn(hname, part_raw))
+                    except Exception:
+                        matched = None
+                if matched is None:
+                    hlower = hname.lower()
+                    matched = hlower == part_lower or part_lower in hlower
+                if matched and abs_idx not in result:
+                    result.append(abs_idx)
 
     return result if result else None
 
@@ -10922,6 +10966,178 @@ def lm_pp_range_hide_sheets(doc, sheet, data_range, header_row_range, *extra_arg
         _lm_log_postprocess(doc, getattr(sheet, "Name", ""), "диапазон", "скрытие_листов", "ошибка", str(err))
 
 
+def _lm_page_style_property_names(page_style):
+    """Имена свойств стиля страницы (None — перечень недоступен)."""
+    try:
+        props = page_style.getPropertySetInfo().getProperties()
+    except Exception:
+        return None
+    names = set()
+    for prop in props:
+        try:
+            names.add(prop.Name)
+        except Exception:
+            pass
+    return names
+
+
+def _lm_page_style_apply(page_style, name, value, names=None):
+    """Установить свойство стиля страницы, если оно есть. True — применено."""
+    if names is not None and name not in names:
+        return False
+    try:
+        page_style.setPropertyValue(name, value)
+        return True
+    except Exception:
+        pass
+    try:
+        setattr(page_style, name, value)
+        return True
+    except Exception:
+        return False
+
+
+def _lm_page_style_apply_orientation(page_style, names, landscape):
+    """Ориентация листа: IsLandscape + подгонка Width/Height под бумагу."""
+    landscape = bool(landscape)
+    applied = _lm_page_style_apply(page_style, "IsLandscape", landscape, names)
+    try:
+        width = int(page_style.Width)
+        height = int(page_style.Height)
+    except Exception:
+        return applied
+    if width <= 0 or height <= 0:
+        return applied
+    if (landscape and width < height) or (not landscape and width > height):
+        _lm_page_style_apply(page_style, "Width", height, names)
+        _lm_page_style_apply(page_style, "Height", width, names)
+    return applied
+
+
+def _lm_page_style_apply_scale(page_style, names, fit_pages, fit_width, fit_pages_height=0):
+    """Масштаб печати как в диалоге печати: сначала сброс ScaleToPages, затем X/Y.
+
+    fit_width — ровно 1 страница по ширине; fit_pages_height — страниц по высоте
+    (0 — авто). Возвращает (X, Y).
+    """
+    _lm_page_style_apply(page_style, "ScaleToPages", 0, names)
+    try:
+        pages_x = 1 if fit_width else int(fit_pages or 0)
+    except (TypeError, ValueError):
+        pages_x = 0
+    try:
+        pages_y = int(fit_pages_height or 0)
+    except (TypeError, ValueError):
+        pages_y = 0
+    if pages_x <= 0:
+        pages_x = 0
+    if pages_y <= 0:
+        pages_y = 0
+    _lm_page_style_apply(page_style, "ScaleToPagesX", pages_x, names)
+    _lm_page_style_apply(page_style, "ScaleToPagesY", pages_y, names)
+    return pages_x, pages_y
+
+
+def _lm_print_title_rows_span(header_row_range, explicit_rows=None):
+    """Строки заголовка (0-based, включительно).
+
+    explicit_rows — текст из визарда ('1:1', '$1:2'); пусто — строка заголовков шага
+    или первая строка листа.
+    """
+    text = unicode(explicit_rows or "").strip()
+    if text:
+        digits = re.findall(r"\d+", text)
+        if len(digits) >= 2:
+            first, last = int(digits[0]), int(digits[1])
+        elif len(digits) == 1:
+            first = last = int(digits[0])
+        else:
+            first = last = 1
+        if first <= 0:
+            first = 1
+        if last < first:
+            last = first
+        return first - 1, last - 1
+    if header_row_range is not None:
+        try:
+            _sc, start_row, _ec, end_row = _lm_pp_range_address(header_row_range)
+            if end_row >= start_row >= 0:
+                return start_row, end_row
+        except Exception:
+            pass
+    return 0, 0
+
+
+def _lm_print_title_rows_matches(sheet, start_row, end_row):
+    """Проверка, что сквозные строки применились. None — прочитать нельзя."""
+    try:
+        current = sheet.getTitleRows()
+    except Exception:
+        return None
+    if current is None:
+        return False
+    try:
+        addr = current.RangeAddress
+        return int(addr.StartRow) == start_row and int(addr.EndRow) == end_row
+    except Exception:
+        return None
+
+
+def _lm_print_title_rows_apply(sheet, header_row_range, explicit_rows, enabled):
+    """Сквозные строки на каждой странице (XPrintAreas.setTitleRows).
+
+    Возвращает описание применённых строк ('1:2') или '' — если выключено/не удалось.
+    """
+    if not enabled:
+        for clear in (
+            lambda s=sheet: s.setTitleRows(None),
+            lambda s=sheet: setattr(s, "TitleRows", None),
+            lambda s=sheet: s.setPropertyValue("PrintTitleRows", ""),
+        ):
+            try:
+                clear()
+            except Exception:
+                pass
+        return ""
+    start_row, end_row = _lm_print_title_rows_span(header_row_range, explicit_rows)
+    label = "%d:%d" % (start_row + 1, end_row + 1)
+    try:
+        last_col = int(sheet.getColumns().getCount()) - 1
+    except Exception:
+        last_col = 16383
+    if last_col < 0:
+        last_col = 0
+    problems = []
+    try:
+        title_range = sheet.getCellRangeByPosition(0, start_row, last_col, end_row)
+    except Exception as err:
+        title_range = None
+        problems.append("getCellRangeByPosition: %s" % err)
+    if title_range is not None:
+        try:
+            sheet.setTitleRows(title_range)
+            if _lm_print_title_rows_matches(sheet, start_row, end_row) is not False:
+                return label
+            problems.append("setTitleRows: диапазон не применился")
+        except Exception as err:
+            problems.append("setTitleRows: %s" % err)
+        try:
+            sheet.TitleRows = title_range.RangeAddress
+            sheet.PrintTitleRows = True
+            if _lm_print_title_rows_matches(sheet, start_row, end_row) is not False:
+                return label
+            problems.append("TitleRows: диапазон не применился")
+        except Exception as err:
+            problems.append("TitleRows: %s" % err)
+    if _lm_page_style_apply(sheet, "PrintTitleRows", "$%d:$%d" % (start_row + 1, end_row + 1), None):
+        return label
+    _lm_dbg(
+        u"стиль_печати: сквозные строки %s не заданы (%s)"
+        % (label, "; ".join(problems) or u"нет доступа")
+    )
+    return ""
+
+
 def lm_pp_range_set_page_style(doc, sheet, data_range, header_row_range, *extra_args):
     """
     Назначение:
@@ -10929,12 +11145,13 @@ def lm_pp_range_set_page_style(doc, sheet, data_range, header_row_range, *extra_
 
     Параметры:
         doc — SpreadsheetDocument (StyleFamilies PageStyles)
-        sheet — XSpreadsheet (sheet.PageStyle)
-        data_range, header_row_range — не используются
+        sheet — XSpreadsheet (sheet.PageStyle, PrintTitleRows)
+        data_range — не используется
+        header_row_range — строка заголовков шага (строки для повтора на страницах)
         *extra_args — rest из колонки C: orientation, fit_to_pages
 
-    JSON колонки C: [{"v":1,"fn":"стиль_печати","orientation":"landscape","fit_pages":1}].
-        *(пусто)* — landscape, 1 (по умолчанию)
+    JSON колонки C: [{"v":1,"fn":"стиль_печати","orientation":"landscape","fit_pages":1,"fit_pages_height":0,"print_title":false}].
+        *(пусто)* — landscape, 1 страница по ширине (по умолчанию)
 
     Карта: «стиль_печати».
 
@@ -10942,37 +11159,69 @@ def lm_pp_range_set_page_style(doc, sheet, data_range, header_row_range, *extra_
         Последним перед выдачей отчёта пользователю; не влияет на экранное отображение ячеек.
 
     Что меняет:
-        Orientation и ScaleToPagesX/Y стиля страницы листа.
+        IsLandscape и ScaleToPages/ScaleToPagesX/Y стиля страницы листа
+        (при landscape/portrait ещё и Width/Height бумаги),
+        PrintTitleRows (XPrintAreas.setTitleRows) листа — сквозные строки заголовка на каждой странице.
     """
     if _lm_pp_param_skip_sheet("стиль_печати", extra_args, doc, sheet):
         return
     block = _lm_pp_param_block_for_sheet("стиль_печати", extra_args, doc, sheet)
     if block is not None:
-        orientation, fit_to_pages = _lm_pp_print_style_from_block(block)
+        conf = _lm_pp_print_style_from_block(block)
     else:
         orientation = "landscape"
         fit_to_pages = 1
         if extra_args:
-            orientation = str(extra_args[0]).lower()
+            orientation = str(extra_args[0]).strip().lower()
+            if orientation in ("portrait", u"книжная", u"портрет"):
+                orientation = "portrait"
+            else:
+                orientation = "landscape"
         if len(extra_args) > 1:
             try:
                 fit_to_pages = int(extra_args[1])
             except (ValueError, TypeError):
                 fit_to_pages = 1
+        conf = {
+            "orientation": orientation,
+            "fit_pages": fit_to_pages,
+            "fit_pages_height": 0,
+            "fit_width": False,
+            "print_title": False,
+            "print_title_rows": "",
+        }
     
     try:
         page_style = doc.StyleFamilies.getByName("PageStyles").getByName(sheet.PageStyle)
-
-        if orientation == "landscape":
-            page_style.Orientation = 1  # LANDSCAPE
-        else:
-            page_style.Orientation = 0  # PORTRAIT
-
-        if fit_to_pages > 0:
-            page_style.ScaleToPagesX = fit_to_pages
-            page_style.ScaleToPagesY = 0  # высота — авто
-    except Exception:
-        pass
+    except Exception as err:
+        _lm_dbg(u"стиль_печати: стиль страницы %r: %s" % (getattr(sheet, "PageStyle", u""), err))
+        return
+    names = _lm_page_style_property_names(page_style)
+    landscape = conf.get("orientation") == "landscape"
+    _lm_page_style_apply_orientation(page_style, names, landscape)
+    pages_x, pages_y = _lm_page_style_apply_scale(
+        page_style,
+        names,
+        conf.get("fit_pages"),
+        conf.get("fit_width"),
+        conf.get("fit_pages_height"),
+    )
+    title_rows = u""
+    if block is not None:
+        title_rows = _lm_print_title_rows_apply(
+            sheet, header_row_range, conf.get("print_title_rows"), conf.get("print_title")
+        )
+    _lm_dbg(
+        u"стиль_печати: sheet=%r style=%r landscape=%s pages=%sx%s title_rows=%r"
+        % (
+            getattr(sheet, "Name", u""),
+            getattr(sheet, "PageStyle", u""),
+            landscape,
+            pages_x,
+            pages_y,
+            title_rows,
+        )
+    )
 
 
 def lm_pp_range_delete_columns( doc, sheet, data_range, header_row_range, *name_markers ):
@@ -21215,13 +21464,13 @@ def lm_pp_range_copy_values(doc, sheet, data_range, header_row_range, *extra_arg
     Пример: «Сумма,Количество» или «3,E,Итого».
     Пустая C — вся значащая область листа (как выделение в перекрестье заголовков).
 
-    Карта: «копировать_значения».
+    Карта: «копировать_как_значения».
     """
     sc, sr, ec, er = _lm_pp_range_address(data_range)
     sheet_name = sheet.Name if sheet is not None else ""
-    if _lm_pp_param_skip_sheet("копировать_значения", extra_args, doc, sheet):
+    if _lm_pp_param_skip_sheet("копировать_как_значения", extra_args, doc, sheet):
         return
-    block = _lm_pp_param_block_for_sheet("копировать_значения", extra_args, doc, sheet)
+    block = _lm_pp_param_block_for_sheet("копировать_как_значения", extra_args, doc, sheet)
     if block is not None and block.get("whole_sheet"):
         spec_text = ""
     elif block is not None:
@@ -21243,7 +21492,7 @@ def lm_pp_range_copy_values(doc, sheet, data_range, header_row_range, *extra_arg
             _lm_log_postprocess(
                 doc,
                 sheet_name,
-                "копировать_значения",
+                "копировать_как_значения",
                 "—",
                 "пропуск",
                 "нет данных на листе",
@@ -21254,7 +21503,7 @@ def lm_pp_range_copy_values(doc, sheet, data_range, header_row_range, *extra_arg
         _lm_log_postprocess(
             doc,
             sheet_name,
-            "копировать_значения",
+            "копировать_как_значения",
             "—",
             "ok" if ok else "ошибка",
             "весь лист (%d×%d)" % (c1 - c0 + 1, r1 - r0 + 1),
@@ -21266,7 +21515,7 @@ def lm_pp_range_copy_values(doc, sheet, data_range, header_row_range, *extra_arg
         _lm_log_postprocess(
             doc,
             sheet_name,
-            "копировать_значения",
+            "копировать_как_значения",
             spec_text,
             "ошибка",
             "не найдены столбцы",
@@ -21277,7 +21526,7 @@ def lm_pp_range_copy_values(doc, sheet, data_range, header_row_range, *extra_arg
         _lm_log_postprocess(
             doc,
             sheet_name,
-            "копировать_значения",
+            "копировать_как_значения",
             spec_text,
             "пропуск",
             "нет строк данных",
@@ -21302,7 +21551,7 @@ def lm_pp_range_copy_values(doc, sheet, data_range, header_row_range, *extra_arg
     _lm_log_postprocess(
         doc,
         sheet_name,
-        "копировать_значения",
+        "копировать_как_значения",
         spec_text,
         status,
         "групп столбцов: %d, успех: %d, ошибка: %d"

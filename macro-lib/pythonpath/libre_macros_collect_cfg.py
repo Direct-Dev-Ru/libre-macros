@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние collect_workbooks (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.795"
+MACRO_VERSION = "3.10.798"
 import re
 
 try:
@@ -718,8 +718,8 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         '[{"v":1,"fn":"автофильтр","sheets":["Заказы"]}]',
     ),
     "стиль_печати": (
-        "ориентация (landscape/portrait), вписать в N страниц по ширине",
-        "landscape,1",
+        "ориентация (Альбомная/Книжная), вписать в N страниц по ширине и высоте, заголовок на каждой странице",
+        '[{"v":1,"fn":"стиль_печати","orientation":"landscape","fit_pages":1,"fit_pages_height":0,"print_title":true}]',
     ),
     "заполнение_вниз": (
         "столбцы: номер (1-based), буква A или имя заголовка; через , или ;",
@@ -758,7 +758,7 @@ MERGE_POSTPROCESS_RANGE_REST_HINTS = {
         "JSON: columns + rules (column, formula, expand_to_right); кнопка «Параметры…»",
         '[{"v":1,"fn":"заполнение_вниз_вычислить","columns":["A"],"rules":[{"column":"A","formula":"=A{row-1}"}]}]',
     ),
-    "копировать_значения": (
+    "копировать_как_значения": (
         "столбцы через , или ; — номер (1-based), буква A или имя заголовка; пусто — весь лист; Copy → вставка значений",
         "Сумма,Количество",
     ),
@@ -1055,7 +1055,7 @@ _PP_RANGE_MAP_SPEC = (
     ("таблица_в_анкету", "merge_pp_range_table_to_form"),
     ("table_to_form", "merge_pp_range_table_to_form"),
     ("заполнение_вниз_вычислить", "merge_pp_range_fill_down_calculate"),
-    ("копировать_значения", "merge_pp_range_copy_values"),
+    ("копировать_как_значения", "merge_pp_range_copy_values"),
     ("замена_значений", "merge_pp_range_replace_values"),
     ("текстовые_операции", "merge_pp_range_normalize_text"),
     ("переименовать_лист", "merge_pp_range_rename_sheet"),
@@ -1229,7 +1229,7 @@ MERGE_FINAL_PROCESSING_REST_HINTS = {
     "заполнение_вниз_вычислить": MERGE_POSTPROCESS_RANGE_REST_HINTS[
         "заполнение_вниз_вычислить"
     ],
-    "копировать_значения": MERGE_POSTPROCESS_RANGE_REST_HINTS["копировать_значения"],
+    "копировать_как_значения": MERGE_POSTPROCESS_RANGE_REST_HINTS["копировать_как_значения"],
     "замена_значений": MERGE_POSTPROCESS_RANGE_REST_HINTS["замена_значений"],
     "текстовые_операции": MERGE_POSTPROCESS_RANGE_REST_HINTS["текстовые_операции"],
     "переименовать_лист": MERGE_POSTPROCESS_RANGE_REST_HINTS["переименовать_лист"],
@@ -1353,7 +1353,7 @@ _FINAL_MAP_SPEC = (
     ("таблица_в_анкету", "merge_final_table_to_form"),
     ("table_to_form", "merge_final_table_to_form"),
     ("заполнение_вниз_вычислить", "merge_final_fill_down_calculate"),
-    ("копировать_значения", "merge_final_copy_values"),
+    ("копировать_как_значения", "merge_final_copy_values"),
     ("замена_значений", "merge_final_replace_values"),
     ("текстовые_операции", "merge_final_normalize_text"),
     ("переименовать_лист", "merge_final_rename_sheet"),

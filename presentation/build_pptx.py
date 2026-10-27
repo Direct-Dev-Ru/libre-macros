@@ -589,6 +589,228 @@ def build_full(org: str, year: str, out: Path) -> Path:
     return out
 
 
+def build_import_xml(org: str, year: str, out: Path) -> Path:
+    prs = Presentation()
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
+    total = 2
+
+    def add_base(title: str):
+        slide = _blank_slide(prs)
+        _add_rect(slide, Inches(0), Inches(0), SLIDE_W, SLIDE_H, C_WHITE)
+        _accent_bar(slide)
+        _add_textbox(
+            slide, Inches(0.65), Inches(0.35), Inches(12.0), Inches(0.55),
+            title, size=26, bold=True, color=C_NAVY,
+        )
+        return slide
+
+    def add_flow_card(slide, left, top, width, label, *, fill=C_WHITE, table=False):
+        height = Inches(1.3)
+        _add_round_rect(slide, left, top, width, height, fill)
+        if table:
+            grid_left = left + width * 0.2
+            grid_top = top + Inches(0.12)
+            grid_width = width * 0.6
+            grid_height = Inches(0.62)
+            for row in range(3):
+                for col in range(3):
+                    cell = slide.shapes.add_shape(
+                        MSO_SHAPE.RECTANGLE,
+                        grid_left + grid_width * col / 3,
+                        grid_top + grid_height * row / 3,
+                        grid_width / 3,
+                        grid_height / 3,
+                    )
+                    cell.fill.solid()
+                    cell.fill.fore_color.rgb = C_WHITE
+                    cell.line.color.rgb = C_TEAL
+            _add_textbox(
+                slide, left + Inches(0.05), top + Inches(0.82), width - Inches(0.1), Inches(0.36),
+                label, size=13, bold=True, color=C_NAVY, align=PP_ALIGN.CENTER,
+            )
+        else:
+            _add_textbox(
+                slide, left + Inches(0.08), top + Inches(0.2),
+                width - Inches(0.16), Inches(0.48),
+                label, size=16, bold=True, color=C_NAVY, align=PP_ALIGN.CENTER,
+            )
+
+    def add_footer(slide, page: int):
+        _add_textbox(
+            slide, Inches(0.65), Inches(6.98), Inches(9.5), Inches(0.35),
+            f"Импорт XML в AlterOffice ACell · {org} · {year}",
+            size=9, color=C_MUTED,
+        )
+        _add_textbox(
+            slide, Inches(11.5), Inches(6.98), Inches(1.3), Inches(0.35),
+            f"{page} / {total}", size=9, color=C_MUTED, align=PP_ALIGN.RIGHT,
+        )
+
+    s = add_base("Простой импорт произвольного XML в ACell затруднён")
+    _add_textbox(
+        s, Inches(0.65), Inches(1.0), Inches(12.0), Inches(0.72),
+        "В MS Excel XML можно открыть как плоскую таблицу. В ACell встроенный импорт требует XML-схему (XSD) и настройки сопоставления структуры с ячейками.",
+        size=15, color=C_MUTED,
+    )
+
+    panel_y = Inches(1.95)
+    panel_h = Inches(3.65)
+    left_x, right_x, panel_w = Inches(0.65), Inches(6.85), Inches(5.85)
+    _add_round_rect(s, left_x, panel_y, panel_w, panel_h, C_LIGHT)
+    _add_round_rect(s, right_x, panel_y, panel_w, panel_h, C_LIGHT)
+    _add_textbox(
+        s, left_x + Inches(0.25), panel_y + Inches(0.2), Inches(5.3), Inches(0.42),
+        "MS Excel", size=19, bold=True, color=C_TEAL,
+    )
+    _add_textbox(
+        s, right_x + Inches(0.25), panel_y + Inches(0.2), Inches(5.3), Inches(0.42),
+        "AlterOffice ACell", size=19, bold=True, color=C_NAVY,
+    )
+
+    flow_y = panel_y + Inches(0.88)
+    add_flow_card(
+        s, left_x + Inches(0.25), flow_y, Inches(1.25), "XML-файл", fill=C_WHITE,
+    )
+    _add_textbox(
+        s, left_x + Inches(1.55), flow_y + Inches(0.25), Inches(0.45), Inches(0.55),
+        "→", size=27, bold=True, color=C_TEAL, align=PP_ALIGN.CENTER,
+    )
+    add_flow_card(
+        s, left_x + Inches(2.0), flow_y, Inches(1.65), "Открыть / импорт", fill=C_WHITE,
+    )
+    _add_textbox(
+        s, left_x + Inches(3.72), flow_y + Inches(0.25), Inches(0.4), Inches(0.55),
+        "→", size=27, bold=True, color=C_TEAL, align=PP_ALIGN.CENTER,
+    )
+    add_flow_card(
+        s, left_x + Inches(4.15), flow_y, Inches(1.4), "Таблица", fill=C_WHITE, table=True,
+    )
+    _add_textbox(
+        s, left_x + Inches(0.25), panel_y + Inches(2.52), Inches(5.3), Inches(0.55),
+        "XML-файл открывается в виде табличных данных.", size=14, color=C_DARK,
+    )
+
+    add_flow_card(
+        s, right_x + Inches(0.25), flow_y, Inches(1.25), "XML-файл", fill=C_WHITE,
+    )
+    _add_textbox(
+        s, right_x + Inches(1.55), flow_y + Inches(0.25), Inches(0.45), Inches(0.55),
+        "→", size=27, bold=True, color=C_WARN, align=PP_ALIGN.CENTER,
+    )
+    add_flow_card(
+        s, right_x + Inches(2.0), flow_y, Inches(1.8), "XSD + настройка", fill=C_WHITE,
+    )
+    _add_textbox(
+        s, right_x + Inches(3.87), flow_y + Inches(0.25), Inches(0.4), Inches(0.55),
+        "→", size=27, bold=True, color=C_WARN, align=PP_ALIGN.CENTER,
+    )
+    add_flow_card(
+        s, right_x + Inches(4.3), flow_y, Inches(1.25), "Лист ACell", fill=C_WHITE, table=True,
+    )
+    _add_textbox(
+        s, right_x + Inches(0.25), panel_y + Inches(2.52), Inches(5.3), Inches(0.55),
+        "Нужны схема данных и настройка импорта.", size=14, color=C_DARK,
+    )
+
+    _add_round_rect(s, Inches(0.65), Inches(5.85), Inches(12.05), Inches(0.72), C_ACCENT_SOFT)
+    _add_textbox(
+        s, Inches(0.95), Inches(6.0), Inches(11.45), Inches(0.45),
+        "Если готовой XSD нет, импорт становится отдельной технической задачей.",
+        size=16, bold=True, color=C_NAVY,
+    )
+    add_footer(s, 1)
+
+    s = add_base("Временное решение: Python-макрос для ACell")
+    _add_round_rect(s, Inches(0.65), Inches(1.05), Inches(12.05), Inches(0.72), C_LIGHT)
+    _add_textbox(
+        s, Inches(0.95), Inches(1.18), Inches(11.45), Inches(0.48),
+        "Обращение к разработчикам ACell через ТНТ направлено; штатная функция пока не реализована.",
+        size=15, bold=True, color=C_NAVY,
+    )
+
+    cards_y = Inches(2.2)
+    cards_h = Inches(2.75)
+    card_w = Inches(3.35)
+    card_xs = (Inches(0.8), Inches(5.0), Inches(9.2))
+    for x in card_xs:
+        _add_round_rect(s, x, cards_y, card_w, cards_h, C_LIGHT)
+
+    _add_round_rect(s, card_xs[0] + Inches(1.12), cards_y + Inches(0.25), Inches(1.1), Inches(0.82), C_ACCENT_SOFT)
+    _add_textbox(
+        s, card_xs[0] + Inches(1.17), cards_y + Inches(0.38), Inches(1.0), Inches(0.5),
+        "XML", size=24, bold=True, color=C_TEAL, align=PP_ALIGN.CENTER,
+    )
+    _add_textbox(
+        s, card_xs[0] + Inches(0.2), cards_y + Inches(1.25), Inches(2.95), Inches(0.45),
+        "Произвольный XML-файл", size=18, bold=True, color=C_NAVY, align=PP_ALIGN.CENTER,
+    )
+    _add_textbox(
+        s, card_xs[0] + Inches(0.3), cards_y + Inches(1.83), Inches(2.75), Inches(0.55),
+        "Источник данных", size=14, color=C_MUTED, align=PP_ALIGN.CENTER,
+    )
+
+    _add_round_rect(s, card_xs[1] + Inches(1.12), cards_y + Inches(0.25), Inches(1.1), Inches(0.82), C_ACCENT_SOFT)
+    _add_textbox(
+        s, card_xs[1] + Inches(1.17), cards_y + Inches(0.36), Inches(1.0), Inches(0.5),
+        "PY", size=24, bold=True, color=C_TEAL, align=PP_ALIGN.CENTER,
+    )
+    _add_textbox(
+        s, card_xs[1] + Inches(0.2), cards_y + Inches(1.25), Inches(2.95), Inches(0.45),
+        "Python-макрос", size=18, bold=True, color=C_NAVY, align=PP_ALIGN.CENTER,
+    )
+    _add_textbox(
+        s, card_xs[1] + Inches(0.3), cards_y + Inches(1.83), Inches(2.75), Inches(0.55),
+        "Обходной путь для импорта", size=14, color=C_MUTED, align=PP_ALIGN.CENTER,
+    )
+
+    grid_left = card_xs[2] + Inches(1.05)
+    grid_top = cards_y + Inches(0.23)
+    grid_w, grid_h = Inches(1.25), Inches(0.88)
+    for row in range(3):
+        for col in range(3):
+            cell = s.shapes.add_shape(
+                MSO_SHAPE.RECTANGLE,
+                grid_left + grid_w * col / 3,
+                grid_top + grid_h * row / 3,
+                grid_w / 3,
+                grid_h / 3,
+            )
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = C_WHITE
+            cell.line.color.rgb = C_TEAL
+    _add_textbox(
+        s, card_xs[2] + Inches(0.2), cards_y + Inches(1.25), Inches(2.95), Inches(0.45),
+        "Лист ACell", size=18, bold=True, color=C_NAVY, align=PP_ALIGN.CENTER,
+    )
+    _add_textbox(
+        s, card_xs[2] + Inches(0.3), cards_y + Inches(1.83), Inches(2.75), Inches(0.55),
+        "XML-данные на листе", size=14, color=C_MUTED, align=PP_ALIGN.CENTER,
+    )
+
+    for arrow_x in (Inches(4.22), Inches(8.42)):
+        _add_textbox(
+            s, arrow_x, cards_y + Inches(0.95), Inches(0.55), Inches(0.65),
+            "→", size=32, bold=True, color=C_TEAL, align=PP_ALIGN.CENTER,
+        )
+
+    _add_round_rect(s, Inches(0.65), Inches(5.45), Inches(12.05), Inches(1.05), C_ACCENT_SOFT)
+    _add_textbox(
+        s, Inches(0.95), Inches(5.57), Inches(11.45), Inches(0.32),
+        "Результат", size=14, bold=True, color=C_TEAL,
+    )
+    _add_textbox(
+        s, Inches(0.95), Inches(5.91), Inches(11.45), Inches(0.45),
+        "Произвольные XML-данные — на листе ACell; макрос служит обходным путём до штатного импорта.",
+        size=15, bold=True, color=C_NAVY,
+    )
+    add_footer(s, 2)
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    prs.save(str(out))
+    return out
+
+
 FULL_ASSETS = (
     "01_title_hero.png",
     "03_risk_gap.png",
@@ -804,8 +1026,10 @@ def build_short(org: str, year: str, out: Path) -> Path:
 STORYBOARDS: dict[str, tuple[Callable[..., Path], str, tuple[str, ...], str]] = {
     "full": (build_full, "libre_macros_import_substitution.pptx", FULL_ASSETS, "полная (14)"),
     "short": (build_short, "libre_macros_short.pptx", SHORT_ASSETS, "краткая (5)"),
+    "import_xml": (build_import_xml, "import_xml/import_xml.pptx", (), "импорт XML (2)"),
     "STORYBOARD.md": (build_full, "libre_macros_import_substitution.pptx", FULL_ASSETS, "полная (14)"),
     "STORYBOARD_short.md": (build_short, "libre_macros_short.pptx", SHORT_ASSETS, "краткая (5)"),
+    "storyboard_load_xml.md": (build_import_xml, "import_xml/import_xml.pptx", (), "импорт XML (2)"),
 }
 
 
@@ -831,7 +1055,7 @@ def resolve_storyboard(raw: str) -> tuple[Callable[..., Path], Path, tuple[str, 
     if low in STORYBOARDS:
         builder, default_name, assets, label = STORYBOARDS[low]
         return builder, HERE / default_name, assets, label, low
-    known = ", ".join(sorted({k for k in ("full", "short")}))
+    known = ", ".join(sorted({k for k in ("full", "short", "import_xml")}))
     raise SystemExit(f"Неизвестная раскадровка {raw!r}. Доступно: {known} или путь к .md")
 
 
@@ -843,7 +1067,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--storyboard",
         default="full",
-        help="Раскадровка: full | short | путь к STORYBOARD*.md (по умолчанию full)",
+        help="Раскадровка: full | short | import_xml | путь к STORYBOARD*.md (по умолчанию full)",
     )
     p.add_argument(
         "--out",

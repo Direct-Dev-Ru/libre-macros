@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.795"
+MACRO_VERSION = "3.10.798"
 import json
 import re
 
@@ -127,7 +127,7 @@ _SHEET_BLOCK_FORM_FNS = frozenset(
         "транспонировать_таблицу",
         "таблица_в_анкету",
         "анкета_в_таблицу",
-        "копировать_значения",
+        "копировать_как_значения",
         "замена_значений",
         "переименовать_лист",
         "переименовать_столбцы",
@@ -303,7 +303,7 @@ def _normalize_block_for_fn(fn_key, block):
         return _normalize_form_to_table_block(block)
     if fn_key == "заполнение_вниз_вычислить":
         return _normalize_fill_down_calculate_block(block)
-    if fn_key == "копировать_значения":
+    if fn_key == "копировать_как_значения":
         return _normalize_copy_values_block(block)
     if fn_key == "замена_значений":
         return _normalize_replace_values_block(block)
@@ -524,7 +524,7 @@ def _decode_json_blocks(fn_key, items):
         return [_normalize_form_to_table_block(b) for b in items]
     if fn_key == "заполнение_вниз_вычислить":
         return [_normalize_fill_down_calculate_block(b) for b in items]
-    if fn_key == "копировать_значения":
+    if fn_key == "копировать_как_значения":
         return [_normalize_copy_values_block(b) for b in items]
     if fn_key == "переименовать_лист":
         return [_normalize_rename_sheet_block(b) for b in items]
@@ -2469,14 +2469,43 @@ def _normalize_text_color_by_value_block(block):
 def _normalize_print_style_block(block):
     out = _normalize_block("стиль_печати", block)
     orient = unicode(out.get("orientation") or "landscape").strip().casefold()
-    if orient not in ("landscape", "portrait"):
+    if orient in (u"альбомная", u"landscape"):
+        orient = "landscape"
+    elif orient in (u"книжная", u"portrait"):
+        orient = "portrait"
+    else:
         orient = "landscape"
     out["orientation"] = orient
-    fit = out.get("fit_pages")
-    try:
-        out["fit_pages"] = int(fit) if fit is not None else 1
-    except (TypeError, ValueError):
-        out["fit_pages"] = 1
+
+    def _int_value(key, default, aliases=()):
+        for name in (key,) + tuple(aliases):
+            if name in out:
+                raw = out.pop(name)
+                if isinstance(raw, (str, unicode)) and unicode(raw).strip() == u"":
+                    raw = None
+                try:
+                    return int(raw) if raw is not None else default
+                except (TypeError, ValueError):
+                    return default
+        return default
+
+    def _bool_value(key, aliases=()):
+        for name in (key,) + tuple(aliases):
+            if name in out:
+                raw = out.pop(name)
+                if isinstance(raw, (str, unicode)):
+                    return unicode(raw).strip().casefold() not in (u"", u"0", u"false", u"нет", u"no")
+                return bool(raw)
+        return False
+
+    fit_pages = _int_value("fit_pages", 1)
+    out["fit_pages"] = fit_pages if fit_pages >= 0 else 0
+    fit_height = _int_value("fit_pages_height", 0, (u"fit_pages_y", u"fit_pages_vertical"))
+    out["fit_pages_height"] = fit_height if fit_height >= 0 else 0
+    out["fit_width"] = _bool_value("fit_width")
+    out["print_title"] = _bool_value("print_title", (u"repeat_header", u"print_headers"))
+    title_rows = out.pop(u"title_rows", None)
+    out["print_title_rows"] = unicode(out.get("print_title_rows") or title_rows or "").strip()
     return _attach_sheet(out, out.get("sheet"))
 def _normalize_fill_down_block(block):
     out = _normalize_block("заполнение_вниз", block)
@@ -2797,7 +2826,7 @@ def _normalize_fill_down_calculate_block(block):
     out["rules"] = norm_rules
     return _attach_sheet(out, out.get("sheet"))
 def _normalize_copy_values_block(block):
-    out = _normalize_block("копировать_значения", block)
+    out = _normalize_block("копировать_как_значения", block)
     if out.get("whole_sheet"):
         out["whole_sheet"] = True
         out["columns"] = []

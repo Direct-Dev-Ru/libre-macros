@@ -10,7 +10,7 @@
 """
 
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.795"
+MACRO_VERSION = "3.10.798"
 import calendar
 import os
 import re
@@ -10743,12 +10743,31 @@ def _direct_pp_ods_resolve_copy_columns(src_rows, hdr_row0, columns_spec):
         return None
     out = []
     seen = set()
+    # Визард пишет выбор из списка заголовков в кавычках ('Имя') — кавычки не часть имени.
+    unwrap = None
+    match_fn = None
+    try:
+        from libre_macros_param_codec import unwrap_column_name_token as unwrap
+        from libre_macros_param_codec import column_header_matches_token as match_fn
+    except Exception:
+        unwrap = None
+        match_fn = None
     for tok in columns_spec:
-        t = unicode(tok or u"").strip()
+        t_raw = unicode(tok or u"").strip()
+        if t_raw == u"":
+            continue
+        exact = False
+        t = t_raw
+        if unwrap is not None:
+            try:
+                t, exact = unwrap(t_raw)
+            except Exception:
+                t, exact = t_raw, False
+        t = unicode(t or u"").strip()
         if t == u"":
             continue
         # индекс 1-based
-        if t.isdigit():
+        if (not exact) and t.isdigit():
             try:
                 ci0 = int(t) - 1
             except Exception:
@@ -10766,7 +10785,7 @@ def _direct_pp_ods_resolve_copy_columns(src_rows, hdr_row0, columns_spec):
                 out.append((ci0, title))
                 seen.add(ci0)
             continue
-        if _is_col_letters(t):
+        if (not exact) and _is_col_letters(t):
             ci0 = _col_letters_to_index(t)
             if ci0 >= 0 and ci0 not in seen:
                 title = u""
@@ -10781,9 +10800,21 @@ def _direct_pp_ods_resolve_copy_columns(src_rows, hdr_row0, columns_spec):
             continue
         # по заголовку / шаблону
         for hc, h in header_pairs:
-            if hc in seen:
+            if hc in seen or h == u"":
                 continue
-            if h != u"" and (_merge_identity_key(h) == _merge_identity_key(t) or _text_match(h, t)):
+            if _merge_identity_key(h) == _merge_identity_key(t):
+                out.append((hc, h))
+                seen.add(hc)
+                break
+            matched = None
+            if match_fn is not None:
+                try:
+                    matched = bool(match_fn(h, t_raw))
+                except Exception:
+                    matched = None
+            if matched is None:
+                matched = bool(_text_match(h, t))
+            if matched:
                 out.append((hc, h))
                 seen.add(hc)
                 break
@@ -10830,12 +10861,30 @@ def _direct_pp_ods_copy_sheet_filtered( path, src_actual, target, header_row0, c
         while i < len(cols):
             h2i[_merge_identity_key(cols[i][1])] = i
             i += 1
+        unwrap = None
+        match_fn = None
+        try:
+            from libre_macros_param_codec import unwrap_column_name_token as unwrap
+            from libre_macros_param_codec import column_header_matches_token as match_fn
+        except Exception:
+            unwrap = None
+            match_fn = None
         out_idx = []
         for tok in tokens:
-            t = unicode(tok or u"").strip()
+            t_raw = unicode(tok or u"").strip()
+            if t_raw == u"":
+                continue
+            exact = False
+            t = t_raw
+            if unwrap is not None:
+                try:
+                    t, exact = unwrap(t_raw)
+                except Exception:
+                    t, exact = t_raw, False
+            t = unicode(t or u"").strip()
             if t == u"":
                 continue
-            if t.isdigit():
+            if (not exact) and t.isdigit():
                 try:
                     i0 = int(t) - 1
                 except Exception:
@@ -10843,7 +10892,7 @@ def _direct_pp_ods_copy_sheet_filtered( path, src_actual, target, header_row0, c
                 if 0 <= i0 < len(cols) and i0 not in out_idx:
                     out_idx.append(i0)
                 continue
-            if _is_col_letters(t):
+            if (not exact) and _is_col_letters(t):
                 i0 = _col_letters_to_index(t)
                 if 0 <= i0 < len(cols) and i0 not in out_idx:
                     out_idx.append(i0)
@@ -10853,6 +10902,25 @@ def _direct_pp_ods_copy_sheet_filtered( path, src_actual, target, header_row0, c
                 i0 = h2i[key]
                 if i0 not in out_idx:
                     out_idx.append(i0)
+                continue
+            # шаблон ('Имя*') / подстрока — первое совпадение в порядке результата
+            for i0, _pair in enumerate(cols):
+                if i0 in out_idx:
+                    continue
+                hdr = cols[i0][1]
+                if not hdr:
+                    continue
+                matched = None
+                if match_fn is not None:
+                    try:
+                        matched = bool(match_fn(hdr, t_raw))
+                    except Exception:
+                        matched = None
+                if matched is None:
+                    matched = bool(_text_match(hdr, t))
+                if matched:
+                    out_idx.append(i0)
+                    break
         return out_idx
 
     skip_res_idx = _resolve_skip_cols(skip_empty_columns)

@@ -1,0 +1,227 @@
+[01;34mmacro-lib/[0m
+├── [01;34mpythonpath[0m
+│   ├── [01;34m__pycache__[0m
+│   │   ├── inner_dialogs.cpython-312.pyc
+│   │   ├── ldap3_bundled.cpython-312.pyc
+│   │   ├── libre_macros_ad_cfg.cpython-312.pyc
+│   │   ├── libre_macros_ad_dn_lib.cpython-312.pyc
+│   │   ├── libre_macros_ad_lib.cpython-312.pyc
+│   │   ├── libre_macros_ad_ssl_stub.cpython-312.pyc
+│   │   ├── libre_macros_ad_winldap.cpython-312.pyc
+│   │   ├── libre_macros_allow_gate_lib.cpython-312.pyc
+│   │   ├── libre_macros_all_params_wizard_cfg.cpython-312.pyc
+│   │   ├── libre_macros_all_params_wizard_lib.cpython-312.pyc
+│   │   ├── libre_macros_atext_letters_lib.cpython-312.pyc
+│   │   ├── libre_macros_book_source_lib.cpython-312.pyc
+│   │   ├── libre_macros_bundle_paths.cpython-312.pyc
+│   │   ├── libre_macros_collect_cfg.cpython-312.pyc
+│   │   ├── libre_macros_consent_lib.cpython-312.pyc
+│   │   ├── libre_macros_context_menu_cfg.cpython-312.pyc
+│   │   ├── libre_macros_convert_tables_cfg.cpython-312.pyc
+│   │   ├── libre_macros_convert_tables_lib.cpython-312.pyc
+│   │   ├── libre_macros_copy_param_rows_lib.cpython-312.pyc
+│   │   ├── libre_macros_copy_ranges_lib.cpython-312.pyc
+│   │   ├── libre_macros_create_sheet_lib.cpython-312.pyc
+│   │   ├── libre_macros_csv_source_lib.cpython-312.pyc
+│   │   ├── libre_macros_direct_lib.cpython-312.pyc
+│   │   ├── libre_macros_file_list_cfg.cpython-312.pyc
+│   │   ├── libre_macros_file_list_lib.cpython-312.pyc
+│   │   ├── libre_macros_final_lib.cpython-312.pyc
+│   │   ├── libre_macros_form_table_lib.cpython-312.pyc
+│   │   ├── libre_macros_formula_builder_lib.cpython-312.pyc
+│   │   ├── libre_macros_formula_names_ru.cpython-312.pyc
+│   │   ├── libre_macros_global_settings_lib.cpython-312.pyc
+│   │   ├── libre_macros_group_by_rows_lib.cpython-312.pyc
+│   │   ├── libre_macros_header_lib.cpython-312.pyc
+│   │   ├── libre_macros_lambda_builder_lib.cpython-312.pyc
+│   │   ├── libre_macros_lambda_column_lib.cpython-312.pyc
+│   │   ├── libre_macros_lib.cpython-312.pyc
+│   │   ├── libre_macros_mail_lib.cpython-312.pyc
+│   │   ├── libre_macros_manual_var_dialog_lib.cpython-312.pyc
+│   │   ├── libre_macros_manual_var_store_lib.cpython-312.pyc
+│   │   ├── libre_macros_normalize_lib.cpython-312.pyc
+│   │   ├── libre_macros_pack_orchestrator_cfg.cpython-312.pyc
+│   │   ├── libre_macros_pack_orchestrator_lib.cpython-312.pyc
+│   │   ├── libre_macros_param_codec.cpython-312.pyc
+│   │   ├── libre_macros_param_wizard_cfg.cpython-312.pyc
+│   │   ├── libre_macros_pick_source_cfg.cpython-312.pyc
+│   │   ├── libre_macros_pivot_lib.cpython-312.pyc
+│   │   ├── libre_macros_pre_shell_cfg.cpython-312.pyc
+│   │   ├── libre_macros_pre_shell_lib.cpython-312.pyc
+│   │   ├── libre_macros_qa_lib.cpython-312.pyc
+│   │   ├── libre_macros_qr_codes_cfg.cpython-312.pyc
+│   │   ├── libre_macros_qr_codes_lib.cpython-312.pyc
+│   │   ├── libre_macros_qr_template_blob.cpython-312.pyc
+│   │   ├── libre_macros_runtime_env_lib.cpython-312.pyc
+│   │   ├── libre_macros_sanitize_lib.cpython-312.pyc
+│   │   ├── libre_macros_set_menu_cfg.cpython-312.pyc
+│   │   ├── libre_macros_set_menu_images_blob.cpython-312.pyc
+│   │   ├── libre_macros_set_menu_lib.cpython-312.pyc
+│   │   ├── libre_macros_sheet_filter_lib.cpython-312.pyc
+│   │   ├── libre_macros_source_extra_lib.cpython-312.pyc
+│   │   ├── libre_macros_source_roots_cfg.cpython-312.pyc
+│   │   ├── libre_macros_source_roots_lib.cpython-312.pyc
+│   │   ├── libre_macros_split_lib.cpython-312.pyc
+│   │   ├── libre_macros_step_condition_cfg.cpython-312.pyc
+│   │   ├── libre_macros_step_condition_dialog_lib.cpython-312.pyc
+│   │   ├── libre_macros_step_condition_lib.cpython-312.pyc
+│   │   ├── libre_macros_test_dialog_lib.cpython-312.pyc
+│   │   ├── libre_macros_test_pre_shell_cfg.cpython-312.pyc
+│   │   ├── libre_macros_test_pre_shell_lib.cpython-312.pyc
+│   │   ├── libre_macros_transpose_lib.cpython-312.pyc
+│   │   ├── libre_macros_ui_theme.cpython-312.pyc
+│   │   ├── libre_macros_unmerge_collapse_lib.cpython-312.pyc
+│   │   ├── libre_macros_unpivot_lib.cpython-312.pyc
+│   │   ├── libre_macros_value_join_lib.cpython-312.pyc
+│   │   ├── libre_macros_values_lib.cpython-312.pyc
+│   │   ├── libre_macros_version_lib.cpython-312.pyc
+│   │   ├── libre_macros_wizard_help_cfg.cpython-312.pyc
+│   │   ├── libre_macros_wizard_profile_lib.cpython-312.pyc
+│   │   ├── libre_macros_xml_source_lib.cpython-312.pyc
+│   │   ├── odf_bundled.cpython-312.pyc
+│   │   ├── openpyxl_bundled.cpython-312.pyc
+│   │   ├── segno_bundled.cpython-312.pyc
+│   │   ├── todo_task_cfg.cpython-312.pyc
+│   │   ├── todo_task_dialog_lib.cpython-312.pyc
+│   │   ├── todo_task_help_blob.cpython-312.pyc
+│   │   ├── todo_task_lib.cpython-312.pyc
+│   │   ├── todo_task_plan_cfg.cpython-312.pyc
+│   │   ├── todo_task_plan_dialog_lib.cpython-312.pyc
+│   │   ├── todo_task_plan_lib.cpython-312.pyc
+│   │   └── todo_task_settings_lib.cpython-312.pyc
+│   ├── inner_dialogs.py
+│   ├── libre_macros_add_merge_lib.py
+│   ├── libre_macros_allow_gate_lib.py
+│   ├── libre_macros_all_params_wizard_cfg.py
+│   ├── libre_macros_all_params_wizard_lib.py
+│   ├── libre_macros_atext_letters_lib.py
+│   ├── libre_macros_book_source_lib.py
+│   ├── libre_macros_bundle_paths.py
+│   ├── libre_macros_collect_cfg.py
+│   ├── libre_macros_consent_lib.py
+│   ├── libre_macros_context_menu_cfg.py
+│   ├── libre_macros_convert_tables_cfg.py
+│   ├── libre_macros_convert_tables_lib.py
+│   ├── libre_macros_copy_param_rows_lib.py
+│   ├── libre_macros_copy_ranges_lib.py
+│   ├── libre_macros_create_sheet_lib.py
+│   ├── libre_macros_csv_source_lib.py
+│   ├── libre_macros_direct_lib.py
+│   ├── libre_macros_file_list_cfg.py
+│   ├── libre_macros_file_list_lib.py
+│   ├── libre_macros_final_lib.py
+│   ├── libre_macros_form_table_lib.py
+│   ├── libre_macros_formula_builder_lib.py
+│   ├── libre_macros_formula_names_ru.py
+│   ├── libre_macros_global_settings_lib.py
+│   ├── libre_macros_group_by_rows_lib.py
+│   ├── libre_macros_header_lib.py
+│   ├── libre_macros_lambda_builder_lib.py
+│   ├── libre_macros_lambda_column_lib.py
+│   ├── libre_macros_lib.py
+│   ├── libre_macros_mail_lib.py
+│   ├── libre_macros_manual_var_dialog_lib.py
+│   ├── libre_macros_manual_var_store_lib.py
+│   ├── libre_macros_normalize_lib.py
+│   ├── libre_macros_pack_orchestrator_cfg.py
+│   ├── libre_macros_pack_orchestrator_lib.py
+│   ├── libre_macros_param_codec.py
+│   ├── libre_macros_param_wizard_cfg.py
+│   ├── libre_macros_pick_source_cfg.py
+│   ├── libre_macros_pivot_lib.py
+│   ├── libre_macros_pre_shell_cfg.py
+│   ├── libre_macros_pre_shell_lib.py
+│   ├── libre_macros_qa_lib.py
+│   ├── libre_macros_qr_codes_cfg.py
+│   ├── libre_macros_qr_codes_lib.py
+│   ├── libre_macros_qr_template_blob.py
+│   ├── libre_macros_runtime_env_lib.py
+│   ├── libre_macros_sanitize_lib.py
+│   ├── libre_macros_set_menu_cfg.py
+│   ├── libre_macros_set_menu_images_blob.py
+│   ├── libre_macros_set_menu_lib.py
+│   ├── libre_macros_sheet_filter_lib.py
+│   ├── libre_macros_sheet_protect_lib.py
+│   ├── libre_macros_source_extra_lib.py
+│   ├── libre_macros_source_roots_cfg.py
+│   ├── libre_macros_source_roots_lib.py
+│   ├── libre_macros_split_lib.py
+│   ├── libre_macros_step_condition_cfg.py
+│   ├── libre_macros_step_condition_dialog_lib.py
+│   ├── libre_macros_step_condition_lib.py
+│   ├── libre_macros_test_dialog_lib.py
+│   ├── libre_macros_test_pre_shell_cfg.py
+│   ├── libre_macros_test_pre_shell_lib.py
+│   ├── libre_macros_transpose_lib.py
+│   ├── libre_macros_ui_theme.py
+│   ├── libre_macros_unmerge_collapse_lib.py
+│   ├── libre_macros_unpivot_lib.py
+│   ├── libre_macros_value_join_lib.py
+│   ├── libre_macros_values_lib.py
+│   ├── libre_macros_version_lib.py
+│   ├── libre_macros_wizard_help_cfg.py
+│   ├── libre_macros_wizard_profile_lib.py
+│   ├── libre_macros_xml_source_lib.py
+│   ├── odf_bundled.py
+│   ├── openpyxl_bundled.py
+│   ├── segno_bundled.py
+│   ├── terms_of_use_ru.txt
+│   ├── todo_task_cfg.py
+│   ├── todo_task_dialog_lib.py
+│   ├── todo_task_help_blob.py
+│   ├── todo_task_lib.py
+│   ├── todo_task_plan_cfg.py
+│   ├── todo_task_plan_dialog_lib.py
+│   ├── todo_task_plan_lib.py
+│   └── todo_task_settings_lib.py
+├── [01;34msamples[0m
+│   └── [01;32mpre_shell_test.sh[0m
+├── [01;34mset_menu_assets[0m
+│   ├── [01;34mBitmaps[0m
+│   │   └── [01;35mlc_userimages.png[0m
+│   └── lc_imagelist.xml
+├── aoffice_compat_check.py
+├── aoffice_flatten_defs.py
+├── bundle_odfpy.py
+├── bundle_openpyxl.py
+├── bundle_python_lib.py
+├── [01;32mbundle_qr_template.py[0m
+├── bundle_segno.py
+├── bundle_set_menu_images.py
+├── bundle_todo_task_help.py
+├── collect_workbooks.py
+├── context_menu.py
+├── convert_tables_to_ranges.py
+├── copy_param_rows.py
+├── file_list_macro.py
+├── functions_final.py
+├── functions_pp.py
+├── generate_qr_codes.py
+├── generate_qr_template.ods
+├── install.cmd
+├── install.ps1
+├── [01;32minstall.sh[0m
+├── macro_ui.py
+├── param_wizard.py
+├── pick_source_file.py
+├── pull_macros_scp.ps1
+├── [01;32mpull_macros_scp.sh[0m
+├── qa_collect_run.py
+├── run_calc_sal_log_aoffice.cmd
+├── run_calc_sal_log.cmd
+├── run_calc_sal_log.ps1
+├── set_menu.py
+├── sync_macro_version.py
+├── test_custom_dialog.py
+├── test_odf.py
+├── test_openpyxl.py
+├── test_pre_shell.py
+├── test_segno.py
+├── test_sort.py
+├── test_vertical_alignment.py
+├── todo_task_help_ru.md
+├── todo_task.py
+├── version.py
+└── version.txt
+
+7 directories, 248 files

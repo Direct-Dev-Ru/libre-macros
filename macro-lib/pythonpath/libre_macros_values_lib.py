@@ -5,7 +5,7 @@ from __future__ import print_function
 
 Используется финальной обработкой (Только_значения) и постобработкой сводных (as_values).
 """
-MACRO_VERSION = "3.10.795"
+MACRO_VERSION = "3.10.798"
 import re
 import time
 
@@ -992,7 +992,7 @@ _LM_FINAL_RANGE_SPEC = (
         "fill_down_calculate",
         "lm_pp_range_fill_down_calculate",
     ),
-    ("копировать_значения", "copy_values", "lm_pp_range_copy_values"),
+    ("копировать_как_значения", "copy_values", "lm_pp_range_copy_values"),
     ("замена_значений", "replace_values", "lm_pp_range_replace_values"),
     ("текстовые_операции", "normalize_text", "lm_pp_range_normalize_text"),
     (

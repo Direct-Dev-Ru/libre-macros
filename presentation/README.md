@@ -6,6 +6,7 @@
 |-------------|---------|-----|------|
 | Полная | 14 | `full` | [STORYBOARD.md](STORYBOARD.md) |
 | Краткая | 5 (титул + 4 смысловых) | `short` | [STORYBOARD_short.md](STORYBOARD_short.md) |
+| Импорт XML в ACell | 2 смысловых | `import_xml` | [storyboard_load_xml.md](import_xml/storyboard_load_xml.md) |
 
 Картинки — в [assets/](assets/) (имена и промпты в раскадровках). Нет файла → заглушка; у `short` есть fallback на картинки полной версии.
 
@@ -24,6 +25,9 @@
 
 # краткая (killer: часть VBA не нужно переписывать с нуля)
 .venv/bin/python presentation/build_pptx.py --storyboard short --out libre_macros_short.pptx
+
+# импорт произвольного XML в AlterOffice ACell (2 слайда)
+.venv/bin/python presentation/build_pptx.py --storyboard import_xml
 ```
 
 Раскадровку можно указать файлом:
@@ -36,7 +40,7 @@
 
 | Флаг | Смысл | По умолчанию |
 |------|--------|--------------|
-| `--storyboard` | `full` / `short` или путь к `STORYBOARD*.md` | `full` |
+| `--storyboard` | `full` / `short` / `import_xml` или путь к `.md` | `full` |
 | `--out` | Имя или путь выходного `.pptx` | из раскадровки |
 | `--org` | Подпись организации в футере | `Предприятие` |
 | `--year` | Год на титуле | `2026` |
@@ -50,6 +54,8 @@
 | `build_pptx.py` | Генератор PPTX |
 | `STORYBOARD.md` | Полная раскадровка + промпты картинок |
 | `STORYBOARD_short.md` | Краткая (5 слайдов, акцент на VBA) |
+| `import_xml/storyboard_load_xml.md` | Двухслайдовая раскадровка про импорт XML в ACell |
+| `import_xml/import_xml.pptx` | Сборка презентации об импорте XML |
 | `assets/` | Картинки для вставки |
 | `requirements.txt` | `python-pptx` |
 | `*.pptx` | Собранные презентации (пересобрать скриптом) |
