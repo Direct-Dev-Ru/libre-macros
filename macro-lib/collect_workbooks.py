@@ -19447,8 +19447,10 @@ def _merge_run_final_processing_phase(doc, report=None):
 
     Порядок:
     1) очистка SheetN/ЛистN;
-    2) шаги листа параметров (в т.ч. можно работать с DataPilot в финале);
-    3) неявная материализация сводных (as_values) — до удаления/скрытия листов;
+    2) неявная материализация сводных (as_values) — до шагов финала:
+       у живого DataPilot строка 0 — служебная «Filter», а не заголовки,
+       и шаги вроде «удалить_столбцы» не находят столбцы по маркерам;
+    3) шаги листа параметров;
     4) снова очистка мусорных листов;
     5) удаление/скрытие листов (всегда в конце).
     """
@@ -19474,6 +19476,9 @@ def _merge_run_final_processing_phase(doc, report=None):
     sheets, data_ranges, header_row_ranges = _merge_final_collect_workbook_collections(doc, header_row=0)
     merge_ui_set_phase('Финальная обработка', 'книга', journal=False)
     merge_ui_yield(force=True)
+    # Сводные с as_values=true материализуем ДО шагов финала: иначе шаг видит
+    # живой DataPilot (строка 0 «Filter», заголовки ниже) и пропускает маркеры.
+    _merge_run_pending_pivot_as_values(doc, report)
     _merge_run_final_processing_entries(doc, report, pre_layout, sheets, data_ranges, header_row_ranges)
     _merge_pp_pivot_cleanup_garbage_sheets(doc)
     _merge_run_split_sheets_deferred_phase(doc, 'after_final', report=report)
@@ -25549,6 +25554,35 @@ def _merge_xml_save_as_doc(doc, dest_path):
     return dest_path
 
 
+def _merge_xml_store_to_path(doc, path, overwrite=True):
+    """
+    Записать открытую книгу в path, не меняя её location (storeToURL).
+
+    Если path — текущий файл документа, делаем обычное сохранение: storeToURL
+    поверх открытого файла в AlterOffice небезопасен.
+    """
+    if doc is None:
+        raise ValueError('xml_excel_ods: store_to_path: нет документа')
+    path = os.path.abspath(str(path or '').strip())
+    if path == '':
+        raise ValueError('xml_excel_ods: store_to_path: пустой путь')
+    current = os.path.abspath(str(_merge_doc_system_path(doc) or '').strip())
+    if current != '' and _merge_paths_same(current, path):
+        _merge_xml_save_doc(doc)
+        return path
+    url = uno.systemPathToFileUrl(path)
+    props = (
+        make_load_prop('FilterName', _merge_xml_store_filter_for_path(path)),
+        make_load_prop('Overwrite', bool(overwrite)),
+    )
+    merge_debug(
+        'xml_excel_ods',
+        'storeToURL: %s (Overwrite=%s)' % (path, bool(overwrite)),
+    )
+    doc.storeToURL(url, props)
+    return path
+
+
 def _merge_xml_alloc_work_path(original_path):
     """Путь /tmp/libre_macros_xml_*.ext под UNO Save As (файл ещё не создан)."""
     import tempfile
@@ -25792,8 +25826,8 @@ def _merge_run_collect_direct_xml_excel_ods(doc, settings, report):
         before_names = set()
         try:
             bi = 0
-            while bi < result_doc.Sheets.getCount():
-                sh0 = result_doc.Sheets.getByIndex(bi)
+            while bi < doc.Sheets.getCount():
+                sh0 = doc.Sheets.getByIndex(bi)
                 if sh0 is not None:
                     before_names.add(str(getattr(sh0, 'Name', '') or ''))
                 bi += 1
@@ -25801,7 +25835,7 @@ def _merge_run_collect_direct_xml_excel_ods(doc, settings, report):
             before_names = set()
         try:
             copied_ok = merge_on_copy_sheets(
-                result_doc,
+                doc,
                 (settings or {}).get('files') or [],
                 (settings or {}).get('is_current_book_flags', []),
                 (settings or {}).get('per_file_sheet_specs', []),
@@ -25817,15 +25851,12 @@ def _merge_run_collect_direct_xml_excel_ods(doc, settings, report):
             if not copied_ok:
                 raise ValueError('нет скопированных листов по заданным фильтрам')
         except Exception as err:
-            try:
-                _merge_xml_close_doc(result_doc, save=False)
-            except Exception:
-                pass
+            merge_debug('xml_excel_ods', 'copy_sheets failed: %s' % err)
             raise ValueError('xml_excel_ods: copy_sheets (UNO) ошибка: %s' % err)
         try:
             ai = 0
-            while ai < result_doc.Sheets.getCount():
-                sh1 = result_doc.Sheets.getByIndex(ai)
+            while ai < doc.Sheets.getCount():
+                sh1 = doc.Sheets.getByIndex(ai)
                 ai += 1
                 if sh1 is None:
                     continue
@@ -25844,7 +25875,10 @@ def _merge_run_collect_direct_xml_excel_ods(doc, settings, report):
             merge_debug('xml_excel_ods', 'sync copy_sheets to: %s' % sync_dst)
             merge_ui_yield(force=True)
         except Exception as err:
-            merge_debug('xml_excel_ods', 'sync copy_sheets failed: %s' % err)
+            raise ValueError(
+                'xml_excel_ods: не удалось записать скопированные листы в файл '
+                'результата (%s): %s' % (sync_dst, err)
+            )
     _merge_flush_console_log_buffer(doc)
     set_run_target_doc(doc)
     _merge_set_debug_log_doc(doc)
