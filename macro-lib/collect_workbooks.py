@@ -9742,6 +9742,14 @@ def ask_yes_no(text, doc=None):
     Связь:
         maybe_clear_sheets, prepare_target_sheet (очистка листа перед сбором).
     """
+    return bool(_merge_ask_yes_no_state(text, doc))
+
+def _merge_ask_yes_no_state(text, doc=None):
+    """
+    Ответ на «Да/Нет» с различением «нет диалога».
+
+    Возвращает True (YES), False (NO) или None, если диалог показать не удалось.
+    """
     write_status_log(doc, '[вопрос] ' + text)
     if _cw_get('_MERGE_QA_HEADLESS', False):
         merge_debug('ask_yes_no', 'headless auto-yes')
@@ -9757,7 +9765,7 @@ def ask_yes_no(text, doc=None):
     if answer is not None:
         return answer == YES
     print(text)
-    return False
+    return None
 
 
 def _merge_ui_dialog_ask_yes_no(doc, text, settings=None, yes_label=u'Да', no_label=u'Нет'):
@@ -11644,13 +11652,26 @@ def _merge_source_column_related_param_keys():
     )
 
 
+def _merge_param_vals_source_col_count(vals):
+    """
+    Сколько логических колонок источников задаёт строка параметра.
+
+    B = «смотри в С» — маркер визарда: значения для файлов начинаются с C,
+    поэтому сам маркер не создаёт отдельный логический источник.
+    """
+    vals = list(vals or [])
+    if len(vals) > 0 and _merge_param_b_is_col_c_marker(vals[0]):
+        return max(1, len(vals) - 1)
+    return len(vals)
+
 def _merge_infer_sparse_source_col_count(doc, table, raw_files):
     """Сколько логических колонок источников реально используется в параметрах."""
     max_cols = len(raw_files or [])
     for key in _merge_source_column_related_param_keys():
         vals = _merge_param_row_sparse_values(doc, key, min_cols=0)
-        if len(vals) > max_cols:
-            max_cols = len(vals)
+        n_vals = _merge_param_vals_source_col_count(vals)
+        if n_vals > max_cols:
+            max_cols = n_vals
     if max_cols < 1 and len(list_value(table, _cw_cfg.P_MERGE_FILES, [])) > 0:
         max_cols = len(list_value(table, _cw_cfg.P_MERGE_FILES, []))
     return max_cols
@@ -11694,8 +11715,10 @@ def _merge_expand_sparse_source_files(doc, table, raw_files):
         vals = _merge_param_row_sparse_values(doc, key, min_cols=n_cols)
         if not vals:
             continue
+        if _merge_param_b_is_col_c_marker(vals[0]):
+            vals = vals[1:]
         i = 0
-        while i < n_cols:
+        while i < n_cols and i < len(vals):
             if str(vals[i] or '').strip() != '':
                 used[i] = True
             i = i + 1
@@ -17031,6 +17054,7 @@ def prepare_target_sheet(target_doc, tname, cleared_names):
     Назначение:
         insertNewByName при отсутствии листа; ensure_service_headers;
         при наличии данных — ask_yes_no об очистке (один раз на tname);
+        недоступный диалог = очистка (без молчаливого дописывания);
         поиск первой пустой строки в колонке «#Путь».
 
     Параметры:
@@ -17058,9 +17082,21 @@ def prepare_target_sheet(target_doc, tname, cleared_names):
         return (None, 1)
     ensure_service_headers(ts)
     _merge_restore_param_sheet_if_safe(target_doc)
-    if tname not in cleared_names and ~target_sheet_has_data(ts):
+    has_old_rows = target_sheet_has_data(ts)
+    if not has_old_rows:
+        try:
+            has_old_rows = int(get_sheet_used_bounds(ts)[1]) > 0
+        except Exception:
+            has_old_rows = False
+    if tname not in cleared_names and has_old_rows:
         msg = 'На листе «%s» уже есть данные. Очистить перед сбором?\n«Нет» — дописать в конец.' % tname
-        if ask_yes_no(msg, target_doc):
+        answered = _merge_ask_yes_no_state(msg, target_doc)
+        if answered is None:
+            write_status_log(
+                target_doc,
+                'лист «%s»: диалог подтверждения недоступен — прежние данные очищены' % tname,
+            )
+        if answered is None or answered:
             try:
                 old_index = ts.getRangeAddress().Sheet
                 target_doc.Sheets.removeByName(tname)
@@ -17068,6 +17104,11 @@ def prepare_target_sheet(target_doc, tname, cleared_names):
                 ts = get_sheet(target_doc, tname)
             except Exception:
                 clear_target_sheet_data(ts)
+        else:
+            write_status_log(
+                target_doc,
+                'лист «%s»: прежние данные оставлены — новые строки дописаны в конец' % tname,
+            )
         cleared_names.add(tname)
         _merge_restore_param_sheet_if_safe(target_doc)
     out_row = _merge_resolve_out_row(ts, start=1)
