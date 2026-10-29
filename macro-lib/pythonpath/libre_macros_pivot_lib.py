@@ -5,7 +5,7 @@ from __future__ import print_function
 
 Подключается из libre_macros_lib.py; публичный API — lm_pp_pivot_* и lm_pp_range_pivot_table.
 """
-MACRO_VERSION = "3.10.798"
+MACRO_VERSION = "3.10.800"
 import json
 import re
 
@@ -160,7 +160,10 @@ def lm_pp_pivot_register_as_values_pending(sheet_name, list_rows_meta=None):
         return
     if name not in _LM_PP_PIVOT_AS_VALUES_PENDING:
         _LM_PP_PIVOT_AS_VALUES_PENDING.append(name)
-    if list_rows_meta and list_rows_meta.get("active"):
+    if list_rows_meta and (
+        list_rows_meta.get("active")
+        or _lm_pp_pivot_has_enabled_row_subtotals(list_rows_meta)
+    ):
         _LM_PP_PIVOT_LIST_ROWS_PENDING[name] = dict(list_rows_meta)
 
 
@@ -725,6 +728,22 @@ _LM_PP_PIVOT_GRAND_TOTAL_MARKERS = frozenset(
         "всего",
     }
 )
+_LM_PP_PIVOT_SUBTOTAL_MARKERS = (
+    "subtotal",
+    "total",
+    "sum",
+    "count",
+    "average",
+    "maximum",
+    "minimum",
+    "промежуточный итог",
+    "итог",
+    "сумма",
+    "количество",
+    "среднее",
+    "максимум",
+    "минимум",
+)
 
 
 def _lm_pp_pivot_apply_row_bold(sheet, sc, ec, row):
@@ -774,6 +793,102 @@ def _lm_pp_pivot_row_looks_like_grand_total(sheet, sc, row):
         return False
     raw = _lm_pp_pivot_header_cell_raw(sheet.getCellByPosition(int(sc), int(row)))
     return _lm_pp_pivot_cell_looks_like_grand_total_label(raw)
+
+
+def _lm_pp_pivot_cell_looks_like_subtotal_label(text):
+    raw = " ".join(str(text or "").split()).casefold()
+    if raw == "" or _lm_pp_pivot_cell_looks_like_grand_total_label(raw):
+        return False
+    for marker in _LM_PP_PIVOT_SUBTOTAL_MARKERS:
+        if re.search(
+            r"(^|[\s:()\-–—])%s($|[\s:()\-–—])" % re.escape(marker),
+            raw,
+        ):
+            return True
+    return False
+
+
+def _lm_pp_pivot_row_is_subtotal_output_row( sheet, sc, ec, row, row_fields, row_subtotals ):
+    if sheet is None or not row_fields:
+        return False
+    enabled = _lm_pp_pivot_row_subtotal_map({"row_subtotals": row_subtotals})
+    if not _lm_pp_pivot_has_enabled_row_subtotals(
+        {"row_subtotals": row_subtotals}
+    ) or _lm_pp_pivot_row_looks_like_grand_total(sheet, sc, row):
+        return False
+    row_field_count = len(row_fields)
+    field_index = 0
+    while field_index < row_field_count:
+        field_name = str(row_fields[field_index] or "").strip()
+        if field_name.casefold() in enabled and enabled[field_name.casefold()].get(
+            "enabled"
+        ):
+            cell = sheet.getCellByPosition(int(sc) + field_index, int(row))
+            text = _lm_pp_pivot_header_cell_raw(cell)
+            if _lm_pp_pivot_cell_looks_like_subtotal_label(text):
+                return True
+            if field_index < row_field_count - 1:
+                descendants_empty = True
+                child_index = field_index + 1
+                while child_index < row_field_count:
+                    child_text = _lm_pp_pivot_header_cell_raw(
+                        sheet.getCellByPosition(int(sc) + child_index, int(row))
+                    )
+                    if child_text != "":
+                        descendants_empty = False
+                        break
+                    child_index = child_index + 1
+                if descendants_empty:
+                    try:
+                        is_bold = float(cell.CharWeight) >= float(
+                            getattr(lm, "_LM_FMT_CHAR_WEIGHT_BOLD", 150)
+                        )
+                    except Exception:
+                        is_bold = False
+                    if is_bold:
+                        return True
+        field_index = field_index + 1
+    return False
+
+
+def _lm_pp_pivot_apply_subtotal_format(sheet, dp_table, config):
+    row_fields = list((config or {}).get("row_fields") or [])
+    row_subtotals = list((config or {}).get("row_subtotals") or [])
+    if not row_fields or not _lm_pp_pivot_has_enabled_row_subtotals(
+        {"row_subtotals": row_subtotals}
+    ):
+        return 0
+    try:
+        out = dp_table.getOutputRange()
+        sc = int(out.StartColumn)
+        sr = int(out.StartRow)
+        ec = int(out.EndColumn)
+        er = int(out.EndRow)
+    except Exception:
+        sc, sr, ec, er = lm._lm_vlookup_sheet_used_area(sheet)
+    if er < sr or ec < sc:
+        return 0
+    header_row = config.get("_output_header_row")
+    if header_row is None:
+        header_row = _lm_pp_pivot_detect_data_header_row(
+            sheet, sc, sr, ec, er, config
+        )
+    formatted = 0
+    row = max(int(sr), int(header_row) + 1)
+    while row <= int(er):
+        if _lm_pp_pivot_row_is_subtotal_output_row(
+            sheet, sc, ec, row, row_fields, row_subtotals
+        ):
+            try:
+                row_range = sheet.getCellRangeByPosition(sc, row, ec, row)
+                row_range.CharWeight = getattr(lm, "_LM_FMT_CHAR_WEIGHT_BOLD", 150)
+                row_range.IsCellBackgroundTransparent = False
+                row_range.CellBackColor = 0xE6E6E6
+                formatted = formatted + 1
+            except Exception:
+                pass
+        row = row + 1
+    return formatted
 
 
 def _lm_pp_pivot_detect_row_field_cols_after_collapse( sheet, sc, ec, header_row, config=None ):
@@ -1097,6 +1212,18 @@ def lm_pp_pivot_post_values_format(doc, pivot_sheet):
     )
 
 
+def lm_pp_pivot_apply_subtotal_format_values(pivot_sheet, meta, header_row=None):
+    if not meta or not _lm_pp_pivot_has_enabled_row_subtotals(meta):
+        return 0
+    config = {
+        "row_fields": list(meta.get("row_fields") or []),
+        "row_subtotals": list(meta.get("row_subtotals") or []),
+        "filter_fields": list(meta.get("filter_fields") or []),
+        "_output_header_row": header_row,
+    }
+    return _lm_pp_pivot_apply_subtotal_format(pivot_sheet, None, config)
+
+
 def _lm_pp_pivot_apply_as_values(doc, pivot_sheet):
     """
     as_values (устар. прямой вызов): inplace + post_values_format + сводная_пп.
@@ -1117,6 +1244,10 @@ def _lm_pp_pivot_apply_as_values(doc, pivot_sheet):
             )
             if lr_note:
                 fmt_note = "%s; LIST_ROWS: %s" % (fmt_note, lr_note)
+        if lr_meta and lr_meta.get("row_subtotals"):
+            lm_pp_pivot_apply_subtotal_format_values(
+                pivot_sheet, lr_meta, header_row=header_row
+            )
     except Exception as err:
         fmt_note = "%s; LIST_ROWS: %s" % (fmt_note, err)
     lm_pp_pivot_register_materialized_sheet(pivot_name, header_row)
@@ -1149,7 +1280,51 @@ def _lm_pp_pivot_set_field_property(field, prop_name, value):
             return True
     except Exception:
         pass
+    try:
+        setattr(field, prop_name, value)
+        return True
+    except Exception:
+        return False
+
+
+def _lm_pp_pivot_set_field_subtotals(field, functions):
+    values = tuple(functions or ())
+    try:
+        typed_values = uno.Any(
+            "[]com.sun.star.sheet.GeneralFunction", values
+        )
+    except Exception:
+        typed_values = None
+    candidates = (typed_values, values) if typed_values is not None else (values,)
+    for value in candidates:
+        if _lm_pp_pivot_set_field_property(field, "Subtotals", value):
+            return True
     return False
+
+
+def _lm_pp_pivot_apply_row_subtotals(fields, config, header_names=None):
+    row_subtotals = _lm_pp_pivot_row_subtotal_map(config)
+    failures = []
+    for name in (config or {}).get("row_fields") or []:
+        field_name = str(name or "").strip()
+        field = _lm_pp_pivot_resolve_field(
+            fields, field_name, header_names=header_names
+        )
+        if field is None:
+            continue
+        setting = row_subtotals.get(field_name.casefold()) or {}
+        enabled = bool(setting.get("enabled"))
+        function = _lm_pp_pivot_function(
+            setting.get("function") or "SUM"
+        ) if enabled else _lm_pp_pivot_function("NONE")
+        sequence = (function,) if enabled else ()
+        subtotal_ok = _lm_pp_pivot_set_field_subtotals(field, sequence)
+        function_ok = _lm_pp_pivot_set_field_property(
+            field, "Function", function
+        )
+        if not subtotal_ok and not function_ok:
+            failures.append(field_name)
+    return failures
 
 
 def _lm_pp_pivot_set_field_repeat_item_labels(field):
@@ -1345,6 +1520,7 @@ _LM_PP_PIVOT_ORIENTATION = {
 _LM_PP_PIVOT_FUNCTION = {
     "SUM": 1,
     "COUNT": 2,
+    "COUNT2": 12,
     "AVERAGE": 3,
     "MAX": 4,
     "MIN": 5,
@@ -1399,6 +1575,7 @@ def lm_pp_pivot_default_config(field_names=None):
         "list_rows_include_names": True,
         "list_rows_name_sep": _LM_PP_PIVOT_LIST_ROWS_NAME_SEP,
         "list_rows_record_sep": _LM_PP_PIVOT_LIST_ROWS_RECORD_SEP,
+        "row_subtotals": [],
         "row_fields": [],
         "column_fields": [],
         "filter_fields": [],
@@ -1438,6 +1615,7 @@ def lm_pp_pivot_config_from_json(text):
         "list_rows_include_names",
         "list_rows_name_sep",
         "list_rows_record_sep",
+        "row_subtotals",
         "row_fields",
         "column_fields",
         "filter_fields",
@@ -1448,6 +1626,9 @@ def lm_pp_pivot_config_from_json(text):
     if "v" in data:
         cfg["v"] = data["v"]
     cfg["data_fields"] = _lm_pp_pivot_normalize_data_fields(cfg.get("data_fields"))
+    cfg["row_subtotals"] = _lm_pp_pivot_normalize_row_subtotals(
+        cfg.get("row_subtotals")
+    )
     if _lm_pp_pivot_config_has_list_rows(cfg):
         cfg["as_values"] = True
     cfg["list_rows_expand"] = bool(cfg.get("list_rows_expand"))
@@ -1515,6 +1696,13 @@ def _lm_pp_pivot_extract_list_fields(item):
     return []
 
 
+def _lm_pp_pivot_text(value):
+    try:
+        return unicode(value or "")
+    except NameError:
+        return str(value or "")
+
+
 def _lm_pp_pivot_normalize_data_fields(data_fields):
     out = []
     if not isinstance(data_fields, (list, tuple)):
@@ -1527,12 +1715,81 @@ def _lm_pp_pivot_normalize_data_fields(data_fields):
             continue
         fn = _lm_pp_pivot_normalize_fn_code(item.get("function") or "SUM")
         norm = {"field": field, "function": fn}
+        custom_name = _lm_pp_pivot_text(item.get("name")).strip()
+        if custom_name:
+            norm["name"] = custom_name
         list_fields = _lm_pp_pivot_extract_list_fields(item)
         if fn == "LIST_ROWS" or list_fields:
             if list_fields:
                 norm["list_fields"] = list_fields
         out.append(norm)
     return out
+
+
+def _lm_pp_pivot_normalize_row_subtotals(value):
+    if isinstance(value, dict):
+        raw_items = []
+        for field, item in value.items():
+            if isinstance(item, dict):
+                entry = dict(item)
+                entry.setdefault("field", field)
+            else:
+                entry = {"field": field, "function": item, "enabled": True}
+            raw_items.append(entry)
+    elif isinstance(value, (list, tuple)):
+        raw_items = list(value)
+    else:
+        return []
+    aliases = {
+        "sum": "SUM",
+        "count": "COUNT2",
+        "count2": "COUNT2",
+        "counta": "COUNT2",
+        "average": "AVERAGE",
+        "avg": "AVERAGE",
+        "min": "MIN",
+        "max": "MAX",
+        "сумма": "SUM",
+        "количество": "COUNT2",
+        "среднее": "AVERAGE",
+        "минимум": "MIN",
+        "максимум": "MAX",
+    }
+    normalized = {}
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        field = str(item.get("field") or "").strip()
+        if field == "":
+            continue
+        fn_raw = str(item.get("function") or item.get("type") or "SUM").strip()
+        fn = aliases.get(fn_raw.casefold(), fn_raw.upper().replace("-", "_"))
+        if fn not in ("SUM", "COUNT2", "AVERAGE", "MIN", "MAX"):
+            fn = "SUM"
+        normalized[field.casefold()] = {
+            "field": field,
+            "enabled": bool(item.get("enabled", True)),
+            "function": fn,
+        }
+    return list(normalized.values())
+
+
+def _lm_pp_pivot_row_subtotal_map(config):
+    out = {}
+    for item in (config or {}).get("row_subtotals") or []:
+        if not isinstance(item, dict):
+            continue
+        field = str(item.get("field") or "").strip()
+        if field:
+            out[field.casefold()] = item
+    return out
+
+
+def _lm_pp_pivot_has_enabled_row_subtotals(config):
+    for item in _lm_pp_pivot_row_subtotal_map(config).values():
+        if item.get("enabled"):
+            return True
+    return False
 
 
 def _lm_pp_pivot_config_has_list_rows(config):
@@ -1657,6 +1914,7 @@ def _lm_pp_pivot_prepare_list_rows(config, header_names=None):
         "count_field": count_field,
         "list_fields": list_fields,
         "row_fields": list(cfg.get("row_fields") or []),
+        "row_subtotals": list(cfg.get("row_subtotals") or []),
         "column_fields": list(cfg.get("column_fields") or []),
         "filter_fields": list(cfg.get("filter_fields") or []),
         "source_sheet": str(cfg.get("source_sheet") or "").strip(),
@@ -2100,7 +2358,7 @@ def _lm_pp_pivot_sheet_replace_if_old_output(doc, sheet_name):
         pass
 
 
-def _lm_pp_pivot_set_field(fields, field_name, orientation_key, func_name=None, header_names=None):
+def _lm_pp_pivot_set_field(fields, field_name, orientation_key, func_name=None, header_names=None, data_field_name=None):
     if fields is None:
         return False
     name = str(field_name or "").strip()
@@ -2141,6 +2399,15 @@ def _lm_pp_pivot_set_field(fields, field_name, orientation_key, func_name=None, 
                 field.setPropertyValue("Function", int(fn))
             except Exception:
                 pass
+        custom_name = _lm_pp_pivot_text(data_field_name).strip()
+        if custom_name:
+            try:
+                field.setName(custom_name)
+            except Exception:
+                try:
+                    field.Name = custom_name
+                except Exception:
+                    pass
     return True
 
 
@@ -2297,6 +2564,9 @@ def _lm_pp_pivot_create_table(doc, source_sheet, source_range, config):
             fields, nm, "ROW", header_names=header_names
         ):
             set_row = set_row + 1
+    subtotal_failures = _lm_pp_pivot_apply_row_subtotals(
+        fields, config, header_names=header_names
+    )
 
     for item in data_fields:
         if isinstance(item, dict):
@@ -2306,6 +2576,7 @@ def _lm_pp_pivot_create_table(doc, source_sheet, source_range, config):
                 "DATA",
                 item.get("function") or "SUM",
                 header_names=header_names,
+                data_field_name=item.get("name"),
             ):
                 set_data = set_data + 1
 
@@ -2427,6 +2698,13 @@ def _lm_pp_pivot_create_table(doc, source_sheet, source_range, config):
                 dp_table, config, header_names=header_names
             )
             try:
+                table_fields = dp_table.getDataPilotFields()
+                subtotal_failures = _lm_pp_pivot_apply_row_subtotals(
+                    table_fields, config, header_names=header_names
+                )
+            except Exception:
+                pass
+            try:
                 doc.calculateAll()
             except Exception:
                 pass
@@ -2484,6 +2762,10 @@ def _lm_pp_pivot_create_table(doc, source_sheet, source_range, config):
                 pass
 
     _lm_pp_format_pivot_output_sheet(doc, pivot_sheet)
+    try:
+        _lm_pp_pivot_apply_subtotal_format(pivot_sheet, dp_table, config)
+    except Exception:
+        pass
 
     mat_suffix = ""
     if config.get("as_values"):
@@ -2495,6 +2777,12 @@ def _lm_pp_pivot_create_table(doc, source_sheet, source_range, config):
                 ).strip() or list_rows_meta.get("source_sheet")
             except Exception:
                 pass
+        elif _lm_pp_pivot_has_enabled_row_subtotals(config):
+            list_rows_meta = {"active": False}
+        if list_rows_meta is not None:
+            list_rows_meta["row_fields"] = list(config.get("row_fields") or [])
+            list_rows_meta["row_subtotals"] = list(config.get("row_subtotals") or [])
+            list_rows_meta["filter_fields"] = list(config.get("filter_fields") or [])
         lm_pp_pivot_register_as_values_pending(
             pivot_sheet.Name, list_rows_meta=list_rows_meta
         )
@@ -2503,15 +2791,21 @@ def _lm_pp_pivot_create_table(doc, source_sheet, source_range, config):
         else:
             mat_suffix = "; as_values→финал"
 
+    subtotal_note = ""
+    if subtotal_failures:
+        subtotal_note = "; подытоги не применены для: %s" % ", ".join(
+            subtotal_failures
+        )
     return (
         pivot_sheet,
         table_name,
-        "ok%s; источник %s; поля данных %d, строк %d"
+        "ok%s; источник %s; поля данных %d, строк %d%s"
         % (
             mat_suffix,
             _lm_pp_pivot_format_addr(src_addr),
             set_data,
             set_row,
+            subtotal_note,
         ),
     )
 
@@ -2980,7 +3274,14 @@ def lm_pp_pivot_apply_list_rows(doc, pivot_sheet, meta=None):
     warned = 0
     r = int(header_row) + 1
     while r <= int(per):
-        if _lm_pp_pivot_row_looks_like_grand_total(pivot_sheet, psc, r):
+        if _lm_pp_pivot_row_looks_like_grand_total(pivot_sheet, psc, r) or _lm_pp_pivot_row_is_subtotal_output_row(
+            pivot_sheet,
+            psc,
+            pec,
+            r,
+            row_fields,
+            meta.get("row_subtotals") or [],
+        ):
             r = r + 1
             continue
         row_key_parts = []

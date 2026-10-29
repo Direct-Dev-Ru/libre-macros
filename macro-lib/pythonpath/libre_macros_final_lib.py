@@ -5,7 +5,7 @@ from __future__ import print_function
 
 Подключается из libre_macros_lib.py; публичный API — lm_final_*.
 """
-MACRO_VERSION = "3.10.798"
+MACRO_VERSION = "3.10.800"
 import re
 
 import libre_macros_lib as lm
@@ -677,6 +677,10 @@ def lm_final_apply_pending_pivot_as_values(doc):
                     ok_parts.append("%s LIST_ROWS: %s" % (name, lr_note))
                 elif lr_note and lr_note not in ("нет LIST_ROWS meta",):
                     err_parts.append("%s LIST_ROWS: %s" % (name, lr_note))
+            if lr_meta and lr_meta.get("row_subtotals"):
+                pl.lm_pp_pivot_apply_subtotal_format_values(
+                    sheet, lr_meta, header_row=header_row
+                )
         except Exception as err:
             err_parts.append("%s LIST_ROWS: %s" % (name, err))
 

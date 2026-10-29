@@ -8,7 +8,7 @@ from __future__ import print_function, unicode_literals
 Назначение: диалог выбора параметра, подсказки, выпадающие списки и запись значений
 на лист параметров. Точка входа: set_merge_param().
 """
-MACRO_VERSION = "3.10.798"
+MACRO_VERSION = "3.10.800"
 import ast
 import glob
 import json
@@ -26959,6 +26959,24 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                     config = lm.lm_pp_pivot_default_config()
         if force_as_values:
             config[u'as_values'] = True
+        row_subtotal_state = {}
+        data_field_names = []
+        for _subtotal_item in config.get(u'row_subtotals') or []:
+            if not isinstance(_subtotal_item, dict):
+                continue
+            _subtotal_field = unicode(_subtotal_item.get(u'field') or u'').strip()
+            if _subtotal_field == u'':
+                continue
+            _subtotal_fn = unicode(
+                _subtotal_item.get(u'function') or u'SUM'
+            ).strip().upper()
+            if _subtotal_fn not in (u'SUM', u'COUNT2', u'AVERAGE', u'MIN', u'MAX'):
+                _subtotal_fn = u'SUM'
+            row_subtotal_state[_subtotal_field.casefold()] = {
+                u'field': _subtotal_field,
+                u'enabled': bool(_subtotal_item.get(u'enabled', True)),
+                u'function': _subtotal_fn,
+            }
         source_hint = unicode(config.get(u'source_sheet') or u'').strip()
         config_header_row = config.get(u'header_row')
         config_data_start = unicode(config.get(u'data_start') or u'').strip()
@@ -27053,13 +27071,76 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
             bi = bi + 1
         # «Назад» — в один ряд с «Данные», ширина вполовину, просвет mid_btn_gap.
         _wizard_dlg_add_button(dm, mid_btns[4][0], mid_btns[4][1], bx + mid_btn_half_w + mid_btn_gap, zone_btn_ys[3], mid_btn_half_w, mid_btn_h)
+        row_list_w = max(120, int(right_w * 0.42))
+        row_auto_x = rx + row_list_w + 4
+        row_auto_w = max(84, int(right_w * 0.27))
+        row_fn_x = row_auto_x + row_auto_w + 3
+        row_fn_w = max(72, rx + right_w - row_fn_x)
+        data_list_w = max(150, int(right_w * 0.54))
+        data_alias_x = rx + data_list_w + 4
+        data_alias_w = max(80, rx + right_w - data_alias_x)
         ry = right_top
         zi = 0
         while zi < n_z:
             z = right_zones[zi]
             h = box_h + (extra if zi == n_z - 1 else 0)
-            _wizard_dlg_add_fixed(dm, z[0], z[1], rx, ry, right_w, lbl_hh)
-            _wizard_dlg_add_listbox(dm, z[2], rx, ry + lbl_hh, right_w, h)
+            if z[2] == u'LbRow':
+                _wizard_dlg_add_fixed(dm, z[0], z[1], rx, ry, row_list_w, lbl_hh)
+                _wizard_dlg_add_fixed(
+                    dm, u'LblRowSubtotalFn', u'Тип итога', row_fn_x, ry, row_fn_w, lbl_hh
+                )
+                row_model = _wizard_dlg_add_listbox(
+                    dm, z[2], rx, ry + lbl_hh, row_list_w, h
+                )
+                try:
+                    from libre_macros_ui_theme import apply_listbox_font
+                    apply_listbox_font(row_model, height=10)
+                except Exception:
+                    pass
+                control_h = min(18, h)
+                control_y = ry + lbl_hh + max(0, int((h - control_h) / 2))
+                _wizard_dlg_add_checkbox(
+                    dm, u'ChkRowSubtotal', u'Авт. итоги', row_auto_x, control_y, row_auto_w, control_h
+                )
+                row_fn_model = _wizard_dlg_add_combo(
+                    dm, u'CbRowSubtotalFn', row_fn_x, control_y, row_fn_w, control_h
+                )
+                try:
+                    row_fn_model.Dropdown = True
+                    row_fn_model.LineCount = len(
+                        _pw_cfg._PIVOT_ROW_SUBTOTAL_FUNCTIONS
+                    )
+                except Exception:
+                    pass
+
+            elif z[2] == u'LbData':
+                _wizard_dlg_add_fixed(dm, z[0], z[1], rx, ry, data_list_w, lbl_hh)
+                _wizard_dlg_add_fixed(
+                    dm, u'LblDataAliasHdr', u'Имя заголовка', data_alias_x, ry, data_alias_w, lbl_hh
+                )
+                list_model = _wizard_dlg_add_listbox(
+                    dm, z[2], rx, ry + lbl_hh, data_list_w, h
+                )
+                try:
+                    from libre_macros_ui_theme import apply_listbox_font
+                    apply_listbox_font(list_model, height=10)
+                except Exception:
+                    pass
+                alias_h = min(18, h)
+                alias_y = ry + lbl_hh + max(0, int((h - alias_h) / 2))
+                _wizard_dlg_add_edit(
+                    dm, u'EdDataAlias', data_alias_x, alias_y, data_alias_w, alias_h
+                )
+            else:
+                _wizard_dlg_add_fixed(dm, z[0], z[1], rx, ry, right_w, lbl_hh)
+                list_model = _wizard_dlg_add_listbox(
+                    dm, z[2], rx, ry + lbl_hh, right_w, h
+                )
+                try:
+                    from libre_macros_ui_theme import apply_listbox_font
+                    apply_listbox_font(list_model, height=10)
+                except Exception:
+                    pass
             ry = ry + lbl_hh + h + zone_gap
             zi = zi + 1
         y3 = avail_list_y + list_h + 6
@@ -27132,6 +27213,11 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
         _wizard_wire_help_button(dlg, doc=doc, help_key=u'сводная_таблица')
         result = {u'cancel': True}
         lb_avail = _dlg_control(dlg, u'LbAvail')
+        lb_row = _dlg_control(dlg, u'LbRow')
+        chk_row_subtotal = _dlg_control(dlg, u'ChkRowSubtotal')
+        cb_row_subtotal_fn = _dlg_control(dlg, u'CbRowSubtotalFn')
+        lb_data = _dlg_control(dlg, u'LbData')
+        ed_data_alias = _dlg_control(dlg, u'EdDataAlias')
         ed_sheet = _dlg_control(dlg, u'EdSheet')
         cb_source = _dlg_control(dlg, u'CbSourceSheet')
         ed_header = _dlg_control(dlg, u'EdHeaderRow')
@@ -27163,12 +27249,132 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
             ed_sheet.setText(unicode(config.get(u'sheet_name') or u''))
         _pivot_listbox_set_items(_dlg_control(dlg, u'LbFilter'), config.get(u'filter_fields') or [])
         _pivot_listbox_set_items(_dlg_control(dlg, u'LbColumn'), config.get(u'column_fields') or [])
-        _pivot_listbox_set_items(_dlg_control(dlg, u'LbRow'), config.get(u'row_fields') or [])
+        _pivot_listbox_set_items(lb_row, config.get(u'row_fields') or [])
+        if cb_row_subtotal_fn is not None:
+            try:
+                cb_row_subtotal_fn.Model.StringItemList = tuple(
+                    label for _code, label in _pw_cfg._PIVOT_ROW_SUBTOTAL_FUNCTIONS
+                )
+            except Exception:
+                pass
+        row_subtotal_loading = [False]
+
+        def _pivot_selected_row_subtotal_field():
+            indices = _pivot_listbox_selected_indices(lb_row)
+            if len(indices) != 1:
+                return u''
+            try:
+                return unicode(lb_row.getItem(int(indices[0]))).strip()
+            except Exception:
+                return u''
+
+        def _pivot_sync_row_subtotal_controls():
+            field_name = _pivot_selected_row_subtotal_field()
+            row_subtotal_loading[0] = True
+            try:
+                state = row_subtotal_state.get(field_name.casefold()) if field_name else None
+                if state is None and field_name:
+                    state = {
+                        u'field': field_name,
+                        u'enabled': False,
+                        u'function': u'SUM',
+                    }
+                    row_subtotal_state[field_name.casefold()] = state
+                function = (state or {}).get(u'function') or u'SUM'
+                label = _pw_cfg._PIVOT_ROW_SUBTOTAL_FN_LABEL.get(
+                    function, _pw_cfg._PIVOT_ROW_SUBTOTAL_FN_LABEL[u'SUM']
+                )
+                if chk_row_subtotal is not None:
+                    chk_row_subtotal.Model.State = 1 if state and state.get(u'enabled') else 0
+                    chk_row_subtotal.Model.Enabled = bool(field_name)
+                if cb_row_subtotal_fn is not None:
+                    enabled = bool(field_name and state and state.get(u'enabled'))
+                    cb_row_subtotal_fn.setText(label)
+                    cb_row_subtotal_fn.Model.Enabled = enabled
+                    try:
+                        cb_row_subtotal_fn.setEnable(enabled)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            finally:
+                row_subtotal_loading[0] = False
+
+        def _pivot_update_row_subtotal_state(control_name):
+            if row_subtotal_loading[0]:
+                return
+            field_name = _pivot_selected_row_subtotal_field()
+            if field_name == u'':
+                _pivot_sync_row_subtotal_controls()
+                return
+            key = field_name.casefold()
+            state = row_subtotal_state.get(key) or {
+                u'field': field_name,
+                u'enabled': False,
+                u'function': u'SUM',
+            }
+            if control_name == u'ChkRowSubtotal' and chk_row_subtotal is not None:
+                state[u'enabled'] = int(chk_row_subtotal.Model.State) == 1
+            elif control_name == u'CbRowSubtotalFn' and cb_row_subtotal_fn is not None:
+                code = _pw_cfg._PIVOT_ROW_SUBTOTAL_FN_CODE.get(
+                    unicode(cb_row_subtotal_fn.getText()).strip().casefold()
+                )
+                if code:
+                    state[u'function'] = code
+            row_subtotal_state[key] = state
+            if control_name != u'CbRowSubtotalFn':
+                _pivot_sync_row_subtotal_controls()
+
+        data_alias_loading = [False]
+        data_alias_current_index = [None]
+
+        def _pivot_store_current_data_alias():
+            if data_alias_loading[0] or ed_data_alias is None:
+                return
+            index = data_alias_current_index[0]
+            if index is None or index < 0 or index >= len(data_field_names):
+                return
+            try:
+                data_field_names[index] = unicode(ed_data_alias.getText() or u'').strip()
+            except Exception:
+                pass
+
+        def _pivot_sync_data_alias_control():
+            if ed_data_alias is None or data_alias_loading[0]:
+                return
+            _pivot_store_current_data_alias()
+            indices = _pivot_listbox_selected_indices(lb_data)
+            index = int(indices[0]) if len(indices) == 1 else None
+            enabled = False
+            alias = u''
+            if index is not None and 0 <= index < len(data_field_names):
+                try:
+                    parsed = _pivot_parse_data_field_item(lb_data.getItem(index))
+                    enabled = parsed.get(u'function') != u'LIST_ROWS'
+                    alias = data_field_names[index] if enabled else u''
+                except Exception:
+                    index = None
+            data_alias_loading[0] = True
+            try:
+                ed_data_alias.setText(alias)
+                ed_data_alias.Model.Enabled = enabled
+                try:
+                    ed_data_alias.setEnable(enabled)
+                except Exception:
+                    pass
+                data_alias_current_index[0] = index if enabled else None
+            finally:
+                data_alias_loading[0] = False
+
+        _pivot_sync_row_subtotal_controls()
         data_items = []
+        data_field_names[:] = []
         for item in config.get(u'data_fields') or []:
             if isinstance(item, dict):
                 data_items.append(_pivot_data_field_label(item.get(u'field', u''), item.get(u'function', u'SUM')))
-        _pivot_listbox_set_items(_dlg_control(dlg, u'LbData'), data_items)
+                data_field_names.append(unicode(item.get(u'name') or u'').strip())
+        _pivot_listbox_set_items(lb_data, data_items)
+        _pivot_sync_data_alias_control()
         init_list_fields = _pivot_extract_list_fields_from_config(config)
         _pivot_listbox_set_items(_dlg_control(dlg, u'LbListFields'), init_list_fields)
         chk_expand = _dlg_control(dlg, u'ChkListExpand')
@@ -27266,6 +27472,12 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                         _pivot_dialog_refresh_avail_fields(dlg, lm, doc, lb_avail, config_header=None)
                     except Exception as exc:
                         print(u'сводная: itemChanged: %s' % exc)
+                elif nm == u'LbRow':
+                    _pivot_sync_row_subtotal_controls()
+                elif nm == u'LbData':
+                    _pivot_sync_data_alias_control()
+                elif nm in (u'ChkRowSubtotal', u'CbRowSubtotalFn'):
+                    _pivot_update_row_subtotal_state(nm)
 
             def textChanged(self, event):
                 try:
@@ -27275,7 +27487,9 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                         nm = event.Source.Model.Name
                     except Exception:
                         nm = u''
-                if nm in (u'CbSourceSheet', u'EdHeaderRow', u'EdRangeStart', u'EdRangeEnd'):
+                if nm == u'EdDataAlias':
+                    _pivot_store_current_data_alias()
+                elif nm in (u'CbSourceSheet', u'EdHeaderRow', u'EdRangeStart', u'EdRangeEnd'):
                     try:
                         _pivot_dialog_refresh_avail_fields(dlg, lm, doc, lb_avail, config_header=None)
                     except Exception as exc:
@@ -27314,12 +27528,17 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                 elif btn == u'BtnToCol':
                     _pivot_listbox_move_selected(lb_avail, _dlg_control(dlg, u'LbColumn'))
                 elif btn == u'BtnToRow':
-                    _pivot_listbox_move_selected(lb_avail, _dlg_control(dlg, u'LbRow'))
+                    _pivot_listbox_move_selected(lb_avail, lb_row)
+                    _pivot_sync_row_subtotal_controls()
                 elif btn == u'BtnToData':
+                    _pivot_store_current_data_alias()
+                    data_alias_current_index[0] = None
+                    data_alias_loading[0] = True
                     indices = sorted(_pivot_listbox_selected_indices(lb_avail), reverse=True)
-                    dst = _dlg_control(dlg, u'LbData')
+                    dst = lb_data
                     if fn_code == u'LIST_ROWS':
                         # Список_строк — псевдомера: не забирает поле из «Доступные».
+                        data_field_names[:] = [u'']
                         _pivot_listbox_set_items(
                             dst, [_pivot_data_field_label(u'', u'LIST_ROWS')]
                         )
@@ -27342,21 +27561,35 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                         dst_items = _pivot_listbox_items(dst)
                         # Убрать прежний LIST_ROWS при добавлении обычной меры.
                         cleaned = []
-                        for it in dst_items:
+                        cleaned_names = []
+                        for item_index, it in enumerate(dst_items):
                             if _pivot_parse_data_field_item(it).get(u'function') != u'LIST_ROWS':
                                 cleaned.append(it)
+                                cleaned_names.append(
+                                    data_field_names[item_index]
+                                    if item_index < len(data_field_names) else u''
+                                )
                         dst_items = cleaned
+                        data_field_names[:] = cleaned_names
                         for idx in indices:
                             try:
                                 nm = unicode(lb_avail.getItem(idx))
                                 dst_items.append(_pivot_data_field_label(nm, fn_code))
+                                data_field_names.append(u'')
                                 lb_avail.removeItems(idx, 1)
                             except Exception:
                                 pass
                         _pivot_listbox_set_items(dst, dst_items)
+                        if dst_items:
+                            try:
+                                dst.selectItemPos(len(dst_items) - 1, True)
+                            except Exception:
+                                pass
                         _pivot_dialog_sync_list_rows_as_values(
                             dlg, force_as_values=force_as_values
                         )
+                    data_alias_loading[0] = False
+                    _pivot_sync_data_alias_control()
                 elif btn == u'BtnListAdd':
                     lb_lf = _dlg_control(dlg, u'LbListFields')
                     if lb_lf is None:
@@ -27381,6 +27614,9 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                         except Exception:
                             pass
                 elif btn == u'BtnFrom':
+                    _pivot_store_current_data_alias()
+                    data_alias_current_index[0] = None
+                    data_alias_loading[0] = True
                     for src_name in (u'LbFilter', u'LbColumn', u'LbRow', u'LbData'):
                         src = _dlg_control(dlg, src_name)
                         indices = sorted(_pivot_listbox_selected_indices(src), reverse=True)
@@ -27390,8 +27626,12 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                                 if src_name == u'LbData':
                                     parsed = _pivot_parse_data_field_item(text)
                                     if parsed.get(u'function') == u'LIST_ROWS':
+                                        if idx < len(data_field_names):
+                                            data_field_names.pop(idx)
                                         src.removeItems(idx, 1)
                                         continue
+                                    if idx < len(data_field_names):
+                                        data_field_names.pop(idx)
                                     text = parsed[u'field']
                                     if text == u'':
                                         src.removeItems(idx, 1)
@@ -27406,12 +27646,22 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                     _pivot_dialog_sync_list_rows_as_values(
                         dlg, force_as_values=force_as_values
                     )
+                    _pivot_sync_row_subtotal_controls()
+                    data_alias_loading[0] = False
+                    _pivot_sync_data_alias_control()
         handler = _PivotHandler()
         source_listener = _PivotSourceListener()
         for nm in (u'BtnOk', u'BtnCancel', u'BtnToFilter', u'BtnToCol', u'BtnToRow', u'BtnToData', u'BtnFrom', u'BtnListAdd', u'BtnListDel'):
             ctl = _dlg_control(dlg, nm)
             if ctl is not None:
                 ctl.addActionListener(handler)
+        for _pivot_listener_name in (u'LbRow', u'LbData', u'ChkRowSubtotal', u'CbRowSubtotalFn'):
+            _pivot_listener_control = _dlg_control(dlg, _pivot_listener_name)
+            if _pivot_listener_control is not None:
+                try:
+                    _pivot_listener_control.addItemListener(source_listener)
+                except Exception:
+                    pass
         if cb_source is not None:
             try:
                 cb_source.addTextListener(source_listener)
@@ -27421,7 +27671,7 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
                 cb_source.addItemListener(source_listener)
             except Exception:
                 pass
-        for _ed in (ed_header, ed_rstart, ed_rend):
+        for _ed in (ed_header, ed_rstart, ed_rend, ed_data_alias):
             if _ed is not None:
                 try:
                     _ed.addTextListener(source_listener)
@@ -27433,8 +27683,32 @@ def show_pivot_table_param_dialog(parent_dialog=None, initial=None, doc=None, pa
         out = lm.lm_pp_pivot_default_config()
         out[u'filter_fields'] = _pivot_listbox_items(_dlg_control(dlg, u'LbFilter'))
         out[u'column_fields'] = _pivot_listbox_items(_dlg_control(dlg, u'LbColumn'))
-        out[u'row_fields'] = _pivot_listbox_items(_dlg_control(dlg, u'LbRow'))
-        out[u'data_fields'] = [_pivot_parse_data_field_item(x) for x in _pivot_listbox_items(_dlg_control(dlg, u'LbData'))]
+        out[u'row_fields'] = _pivot_listbox_items(lb_row)
+        out[u'row_subtotals'] = []
+        for _row_field in out[u'row_fields']:
+            _row_subtotal = row_subtotal_state.get(_row_field.casefold()) or {
+                u'field': _row_field,
+                u'enabled': False,
+                u'function': u'SUM',
+            }
+            out[u'row_subtotals'].append(
+                {
+                    u'field': _row_field,
+                    u'enabled': bool(_row_subtotal.get(u'enabled')),
+                    u'function': _row_subtotal.get(u'function') or u'SUM',
+                }
+            )
+        _pivot_store_current_data_alias()
+        out[u'data_fields'] = []
+        for _data_index, _data_text in enumerate(_pivot_listbox_items(lb_data)):
+            _data_item = _pivot_parse_data_field_item(_data_text)
+            if (
+                _data_index < len(data_field_names)
+                and data_field_names[_data_index]
+                and _data_item.get(u'function') != u'LIST_ROWS'
+            ):
+                _data_item[u'name'] = data_field_names[_data_index]
+            out[u'data_fields'].append(_data_item)
         list_fields = _pivot_listbox_items(_dlg_control(dlg, u'LbListFields'))
         has_list_rows = False
         for item in out[u'data_fields']:

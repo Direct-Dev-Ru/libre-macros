@@ -6,7 +6,7 @@ param_decode(fn_key, raw_text) -> list[dict]
 param_encode(fn_key, blocks) -> str
 """
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.798"
+MACRO_VERSION = "3.10.800"
 import json
 import re
 
@@ -190,6 +190,7 @@ _PIVOT_FIELDS = (
     "list_rows_include_names",
     "list_rows_name_sep",
     "list_rows_record_sep",
+    "row_subtotals",
     "row_fields",
     "column_fields",
     "filter_fields",
@@ -579,6 +580,54 @@ def _decode_pivot_json(items):
     return [_normalize_pivot_block(items[0])]
 def _pivot_empty_block():
     return {"v": PARAM_CODEC_VERSION, "fn": "сводная_таблица"}
+def _normalize_pivot_row_subtotals(value):
+    if isinstance(value, dict):
+        raw_items = []
+        for field, item in value.items():
+            if isinstance(item, dict):
+                entry = dict(item)
+                entry.setdefault("field", field)
+            else:
+                entry = {"field": field, "function": item, "enabled": True}
+            raw_items.append(entry)
+    elif isinstance(value, (list, tuple)):
+        raw_items = list(value)
+    else:
+        return []
+    aliases = {
+        "sum": "SUM",
+        "count": "COUNT2",
+        "count2": "COUNT2",
+        "counta": "COUNT2",
+        "average": "AVERAGE",
+        "avg": "AVERAGE",
+        "min": "MIN",
+        "max": "MAX",
+        "сумма": "SUM",
+        "количество": "COUNT2",
+        "среднее": "AVERAGE",
+        "минимум": "MIN",
+        "максимум": "MAX",
+    }
+    normalized = {}
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        field = unicode(item.get("field") or "").strip()
+        if field == "":
+            continue
+        fn_raw = unicode(item.get("function") or item.get("type") or "SUM").strip()
+        fn = aliases.get(fn_raw.casefold(), fn_raw.upper().replace("-", "_"))
+        if fn not in ("SUM", "COUNT2", "AVERAGE", "MIN", "MAX"):
+            fn = "SUM"
+        normalized[field.casefold()] = {
+            "field": field,
+            "enabled": bool(item.get("enabled", True)),
+            "function": fn,
+        }
+    return list(normalized.values())
+
+
 def _normalize_pivot_block(block):
     out = _pivot_empty_block()
     if not isinstance(block, dict):
@@ -590,6 +639,9 @@ def _normalize_pivot_block(block):
         out["as_values"] = True
     if block.get("list_rows_expand"):
         out["list_rows_expand"] = True
+    row_subtotals = _normalize_pivot_row_subtotals(block.get("row_subtotals"))
+    if row_subtotals:
+        out["row_subtotals"] = row_subtotals
     if "list_rows_include_names" in block:
         out["list_rows_include_names"] = bool(block.get("list_rows_include_names"))
     for sep_key in ("list_rows_name_sep", "list_rows_record_sep"):
@@ -626,6 +678,9 @@ def _normalize_pivot_block(block):
             if fn == u"LIST_ROWS":
                 has_list_rows = True
             entry = {u"field": field, u"function": fn}
+            custom_name = unicode(item.get(u"name") or u"").strip()
+            if custom_name:
+                entry[u"name"] = custom_name
             list_fields = None
             for lk in list_keys:
                 if lk not in item:

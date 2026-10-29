@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Константы и состояние param_wizard (AlterOffice 2026)."""
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.798"
+MACRO_VERSION = "3.10.800"
 import re
 
 try:
@@ -707,8 +707,9 @@ _FALLBACK_PP_RANGE_REST_HINTS = {
         u'[{"v":1,"fn":"скрытие_листов","sheets":["Сбор_книг_лог*"]}]',
     ),
     u"сводная_таблица": (
-        u"JSON (кнопка «Параметры»). source_sheet — только для указанного листа результата (* — шаблон).",
-        u"{\"v\":1,\"source_sheet\":\"Merge\",\"sheet_name\":\"Сводная\",\"as_values\":false,\"row_fields\":[\"Отдел\"],\"column_fields\":[],\"filter_fields\":[],\"data_fields\":[{\"field\":\"Сумма\",\"function\":\"SUM\"}]}",
+        u"JSON (кнопка «Параметры»). source_sheet — только для указанного листа результата (* — шаблон). "
+        u"Промежуточные итоги задаются отдельно для поля строки: row_subtotals=[{field, enabled, function}]. Для поля данных можно задать имя заголовка через name.",
+        u"{\"v\":1,\"source_sheet\":\"Merge\",\"sheet_name\":\"Сводная\",\"as_values\":false,\"row_fields\":[\"Отдел\"],\"row_subtotals\":[{\"field\":\"Отдел\",\"enabled\":true,\"function\":\"SUM\"}],\"column_fields\":[],\"filter_fields\":[],\"data_fields\":[{\"field\":\"Сумма\",\"function\":\"SUM\",\"name\":\"Итого\"}]}",
     ),
     PLUGIN_FUNCTION_KEY: _FALLBACK_PP_PLUGIN_REST,
 }
@@ -5603,6 +5604,21 @@ _PIVOT_DATA_FUNCTIONS = (
 )
 _PIVOT_FN_LABEL = {code: label for code, label in _PIVOT_DATA_FUNCTIONS}
 _PIVOT_FN_CODE = {label.casefold(): code for code, label in _PIVOT_DATA_FUNCTIONS}
+_PIVOT_ROW_SUBTOTAL_FUNCTIONS = (
+    (u"SUM", u"Сумма"),
+    (u"COUNT2", u"Количество"),
+    (u"AVERAGE", u"Среднее"),
+    (u"MIN", u"Минимум"),
+    (u"MAX", u"Максимум"),
+)
+_PIVOT_ROW_SUBTOTAL_FN_LABEL = {
+    code: label for code, label in _PIVOT_ROW_SUBTOTAL_FUNCTIONS
+}
+_PIVOT_ROW_SUBTOTAL_FN_CODE = {
+    label.casefold(): code for code, label in _PIVOT_ROW_SUBTOTAL_FUNCTIONS
+}
+for _pivot_subtotal_code, _pivot_subtotal_label in _PIVOT_ROW_SUBTOTAL_FUNCTIONS:
+    _PIVOT_ROW_SUBTOTAL_FN_CODE[_pivot_subtotal_code.casefold()] = _pivot_subtotal_code
 # Синонимы псевдофункции Список_строк (не UNO GeneralFunction).
 for _alias in (
     u"list_rows",

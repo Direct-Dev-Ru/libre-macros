@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
-MACRO_VERSION = "3.10.798"
+MACRO_VERSION = "3.10.800"
 """
 Доп. параметры источника (книга ODS / XLS / XLSX / XLSM): prepare_source_in_memory и субключи.
 
